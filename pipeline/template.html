@@ -107,7 +107,7 @@
   .eyebrow {
     font-family: var(--mono); font-size: 0.53rem; font-weight: 500;
     letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-3);
-    margin: 0 0 7px; white-space: nowrap;
+    margin: 0 0 7px; white-space: nowrap; text-align: center;
   }
   h1 {
     font-size: 1.44rem; line-height: 1.08; letter-spacing: -0.03em;
@@ -269,6 +269,37 @@
   }
 
   /* ---------- gaveta com tabela e método ---------- */
+  /* ---------- painel "Sobre" ---------- */
+  .sobre {
+    position: fixed; top: 16px; right: 68px; z-index: 3;
+    width: 268px; max-width: calc(100vw - 100px);
+  }
+  .sobre-topo {
+    width: 100%; justify-content: space-between;
+    background: linear-gradient(115deg, rgba(255, 255, 255, .045), transparent 25%);
+    backdrop-filter: blur(14px); box-shadow: var(--sombra);
+    border-radius: 2px; text-transform: none; font-family: var(--sans);
+    font-size: 0.8rem; font-weight: 550; letter-spacing: 0; padding: 9px 13px;
+  }
+  .sobre-corpo {
+    display: none; margin-top: 6px; padding: 13px 15px;
+    background: linear-gradient(115deg, rgba(255, 255, 255, .045), transparent 25%);
+    backdrop-filter: blur(14px); box-shadow: var(--sombra);
+    border: 1px solid var(--rule); border-radius: 3px;
+    max-height: calc(100dvh - 90px); overflow-y: auto;
+  }
+  .sobre-corpo.on { display: block; }
+  .sobre-corpo h3 {
+    font-family: var(--mono); font-size: 0.58rem; font-weight: 500; margin: 13px 0 6px;
+    text-transform: uppercase; letter-spacing: 0.1em; color: var(--ink-3);
+  }
+  .sobre-corpo h3:first-child { margin-top: 0; }
+  .sobre-corpo .linha { font-size: 0.76rem; }
+  .sobre-corpo .rodape {
+    font-size: 0.7rem; color: var(--ink-3); line-height: 1.5;
+    margin: 11px 0 0; padding-top: 10px; border-top: 1px solid var(--rule);
+  }
+
   .gaveta {
     position: fixed; top: 0; right: 0; bottom: 0; z-index: 6;
     width: min(430px, 100vw); background: linear-gradient(115deg, rgba(255, 255, 255, .045), transparent 25%);
@@ -357,6 +388,7 @@
     h1 { font-size: 1.28rem; }
     .zoom { top: auto; bottom: 76px; right: 12px; }
     .abrir { bottom: auto; top: 12px; right: 12px; }
+    .sobre { top: 62px; right: 12px; width: calc(100vw - 24px); max-width: 300px; }
     .gaveta { width: 100vw; padding: 18px 18px 40px; }
     .vazio { top: 32%; }
     button { min-height: 42px; }
@@ -379,6 +411,13 @@
 </div>
 
 <button class="abrir" id="btSobre">Tabela e método</button>
+
+<div class="sobre" id="sobre">
+  <button class="sobre-topo" id="btSobreNums" aria-expanded="false">
+    <span>Sobre os dados</span><span class="estado" id="sobreSeta">▾</span>
+  </button>
+  <div class="sobre-corpo" id="sobreCorpo"></div>
+</div>
 
 <div class="hud" id="hud">
   <button class="puxador" id="puxador" aria-expanded="true" aria-controls="hud">
@@ -1177,6 +1216,9 @@
       (u.vert != null ? linha('Vertida', fmt(u.vert) + ' m³/s') : '') +
       (u.aflu != null ? linha('Afluência', fmt(u.aflu) + ' m³/s') : '') +
       (u.vol != null ? linha('Volume atual', fmt(u.vol, 1) + '%') : '') +
+      (u.gwh ? linha('Geração anual', fmt(u.gwh) + ' GWh') : '') +
+      (u.mwmed ? linha('Potência média', fmt(u.mwmed) + ' MW') : '') +
+      (u.prop ? linha('Concessionária', u.prop) : '') +
       '<div class="selo usina">reservatório' + (u.uf ? ' · ' + u.uf : '') +
       (u.ini ? ' · média ' + u.ini + '–' + u.fim : '') + '</div>';
   }
@@ -1429,6 +1471,45 @@
     agendar(false);
     abrirGaveta(false);
     if (window.matchMedia('(max-width: 760px)').matches) abrirHud();
+  });
+
+  // painel "Sobre": o que existe na fonte contra o que entrou no mapa
+  const nVar = s => { let n = 0; for (let i = 0; i < s.length; i++) if ((IDX[s.charCodeAt(i)] & 32) === 0) n++; return n; };
+  (function montaSobre() {
+    const f = D.fonte || {};
+    const ancorados = nVar(D.medido), fora = nVar(D.fora);
+    const comGer = RES.filter(u => u.gwh).length;
+    const gwh = RES.reduce((s, u) => s + (u.gwh || 0), 0);
+    document.getElementById('sobreCorpo').innerHTML =
+      '<h3>No mapa</h3>' +
+      linha('Trechos de rio', fmt(N)) +
+      linha('Rios distintos', fmt(f.rios || 0)) +
+      linha('Estações com série', fmt(D.estacoes.length)) +
+      linha('Trechos com medição', fmt(ancorados)) +
+      linha('Trechos fora do Brasil', fmt(fora)) +
+      linha('Reservatórios', fmt(RES.length)) +
+      '<h3>Na fonte</h3>' +
+      linha('Estações fluviométricas', fmt(f.estacoes_total || 0)) +
+      linha('… que medem vazão', fmt(f.estacoes_vazao || 0)) +
+      linha('… com série coletada', fmt(f.estacoes_serie || 0)) +
+      linha('Medições mensais', fmt(f.medicoes || 0)) +
+      '<h3>Sistema elétrico</h3>' +
+      linha('Reservatórios com operação', fmt(RES.filter(u => u.turb != null).length)) +
+      linha('… com geração conhecida', fmt(comGer)) +
+      linha('Geração somada', fmt(gwh) + ' GWh/ano') +
+      '<h3>Qualidade</h3>' +
+      linha('Dentro de 2× do medido', (val.dentro2x || 0) + '%') +
+      linha('Dentro de 1,5×', (val.dentro15x || 0) + '%') +
+      linha('Viés mediano', '×' + String(val.vies).replace('.', ',')) +
+      '<p class="rodape">Vazões da ANA, ' + anoIni + '–' + anoFim +
+      '. Rede: Base Hidrográfica Ottocodificada 2017. Reservatórios: SAR/ANA, ' +
+      'operação diária 2000–2022. Geração: cobrança pelo uso da água, ANA.</p>';
+  })();
+  const btSobreNums = document.getElementById('btSobreNums');
+  btSobreNums.addEventListener('click', () => {
+    const on = document.getElementById('sobreCorpo').classList.toggle('on');
+    btSobreNums.setAttribute('aria-expanded', String(on));
+    document.getElementById('sobreSeta').textContent = on ? '▴' : '▾';
   });
 
   const preenche = (sel, v) => document.querySelectorAll(sel).forEach(el => { el.textContent = v; });

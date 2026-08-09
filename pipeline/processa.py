@@ -107,6 +107,9 @@ def feicoes(caminho):
 
 def carrega_estacoes():
     completo = S / "estacoes_completo.parquet"
+    inv_bruto = pl.read_parquet(completo) if completo.exists() else pl.DataFrame({"x": []})
+    inv_flu = (inv_bruto.filter(pl.col("TipoEstacaoDescLiquida") == "1")
+               if "TipoEstacaoDescLiquida" in inv_bruto.columns else inv_bruto)
     if completo.exists():
         # inventário fluviométrico inteiro (não só as telemétricas)
         est = pl.read_parquet(completo).filter(
@@ -173,7 +176,7 @@ def carrega_estacoes():
         & (pl.col("qmlt") > 0)
     ).with_columns((pl.col("qmlt") * 1000 / pl.col("area_km2")).alias("qesp"))
     est = est.filter(pl.col("qesp").is_between(QESP_MIN, QESP_MAX))
-    return est, reg
+    return est, reg, (len(inv_bruto), len(inv_flu), vaz['codigo'].n_unique(), len(vaz))
 
 
 def main():
@@ -184,7 +187,7 @@ def main():
         raise SystemExit("nenhum arquivo da BHO em bho/")
     print(f"  usando {arqs[0].name} ({arqs[0].stat().st_size / 1e6:.0f} MB)")
 
-    est, regime_mensal = carrega_estacoes()
+    est, regime_mensal, (inv_total, inv_vazao, serie_unicas, serie_linhas) = carrega_estacoes()
     print(f"estações válidas para regionalização: {len(est)}")
     print(
         f"  Qesp (L/s/km²): p10={est['qesp'].quantile(0.1):.1f} "
@@ -441,6 +444,14 @@ def main():
     dados = {
         "periodo": [est["mes_ini"].min()[:4], est["mes_fim"].max()[:4]],
         "meses_total": int(est["n_meses"].sum()),
+        # contagens da fonte, para o painel "Sobre" não depender de número escrito à mão
+        "fonte": {
+            "rios": len(set(rio_id)),
+            "estacoes_total": int(inv_total),
+            "estacoes_vazao": int(inv_vazao),
+            "estacoes_serie": int(serie_unicas),
+            "medicoes": int(serie_linhas),
+        },
         "validacao": dados_val,
         "esc": ESC_FINO,
         "escGrosso": ESC,
