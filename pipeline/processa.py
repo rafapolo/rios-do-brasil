@@ -421,7 +421,7 @@ def main():
         k = len(geo)
         vertices += len(pts)
         geo.append(codifica(flat))
-        qs.append(int(round(float(q_final[i]) * 100)))
+        qs.append(int(round(float(q_final[i]) * 1000)))   # milésimos de m³/s
         ars.append(int(round(p["NUAREAMONT"])))
         cmp_.append(int(round((p.get("NUCOMPTREC") or 0) * 10)))   # décimos de km
         rios.append(rio_id[i])
@@ -460,7 +460,7 @@ def main():
         "terra": json.loads((S / "terra.json").read_text()),
         "n": len(geo),
         "geo": ".".join(geo),
-        "q": codifica(qs),            # vazão × 100
+        "q": codifica(qs),            # vazão × 1000
         "area": codifica(ars),
         "comp": codifica(cmp_),   # comprimento em décimos de km
         "rio": codifica(rios),    # trechos do mesmo rio compartilham o id
@@ -506,7 +506,7 @@ def main():
         f"  geometria {len(dados['geo']) / 1e6:.1f} MB, atributos "
         f"{(len(dados['q']) + len(dados['area']) + len(dados['strahler']) + len(dados['nome'])) / 1e6:.1f} MB"
     )
-    arr = np.array(out) / 100.0
+    arr = np.array(out) / 1000.0
     print(
         f"vazão estimada m³/s: mediana={np.median(arr):.1f} "
         f"p99={np.percentile(arr, 99):.0f} max={arr.max():.0f}"

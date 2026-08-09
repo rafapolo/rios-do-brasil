@@ -674,7 +674,7 @@
   D.geo = null;
 
   // atributos: também varint, exceto a ordem de Strahler (um dígito por trecho)
-  const q = Float32Array.from(varints(D.q, 0, D.q.length), v => v / 100);
+  const q = Float32Array.from(varints(D.q, 0, D.q.length), v => v / 1000);
   const nomeIdx = Int32Array.from(varints(D.nome, 0, D.nome.length));
   const acumula = s => {
     const v = varints(s, 0, s.length), r = new Set();
@@ -1143,6 +1143,10 @@
   /* ---------- fichas ---------- */
   const fmt = (v, d = 0) => v.toLocaleString('pt-BR', { maximumFractionDigits: d });
   const linha = (r, v) => '<div class="linha"><span>' + r + '</span><em>' + v + '</em></div>';
+  // Fio d'água fica ilegível em m³/s: 0,004 diz menos que 4 L/s. A vazão é
+  // guardada em milésimos, então o número existe mesmo nos menores trechos.
+  const vazao = v => v < 0.1 ? fmt(v * 1000, v < 0.01 ? 1 : 0) + ' L/s'
+    : fmt(v, v < 10 ? 1 : 0) + ' m³/s';
 
   function fichaTrecho(i) {
     const grupo = trechosDoRio(i);
@@ -1159,8 +1163,8 @@
     fichaEl.className = 'cartao ficha';
     fichaEl.innerHTML =
       '<div class="nome">' + (nome || 'Curso d’água sem nome na base') + '</div>' +
-      linha('Vazão aqui', fmt(q[i], q[i] < 10 ? 1 : 0) + ' m³/s') +
-      (foz !== i ? linha('Na foz', fmt(q[foz], q[foz] < 10 ? 1 : 0) + ' m³/s') : '') +
+      linha('Vazão aqui', vazao(q[i])) +
+      (foz !== i ? linha('Na foz', vazao(q[foz])) : '') +
       linha('Área de drenagem', fmt(areas[i]) + ' km²') +
       (comps && grupo.length > 1
         ? linha('Extensão do rio', fmt(comp / 10, 1) + ' km em ' + grupo.length + ' trechos')
@@ -1195,7 +1199,7 @@
       (e.mun ? linha('Onde', e.mun + (e.uf ? ' · ' + e.uf : '')) : '') +
       (e.op ? linha('Operada por', e.op) : '') +
       linha('Rio', e.rio || '—') +
-      linha('Vazão média', fmt(e.q, e.q < 10 ? 1 : 0) + ' m³/s') +
+      linha('Vazão média', vazao(e.q)) +
       linha('Faixa mensal', fmt(e.qmin, 1) + ' – ' + fmt(e.qmax) + ' m³/s') +
       linha('Área de drenagem', fmt(e.area) + ' km²') +
       (e.alt != null ? linha('Altitude', fmt(e.alt) + ' m') : '') +
@@ -1321,9 +1325,9 @@
     const html = a.u
       ? '<b>' + a.u.nome + '</b><div class="linha">Turbinada <em>' + fmt(a.u.turb || 0) + ' m³/s</em></div>'
       : a.e
-        ? '<b>' + a.e.nome + '</b><div class="linha">Vazão média <em>' + fmt(a.e.q, a.e.q < 10 ? 1 : 0) + ' m³/s</em></div>'
+        ? '<b>' + a.e.nome + '</b><div class="linha">Vazão média <em>' + vazao(a.e.q) + '</em></div>'
         : '<b>' + (D.nomes[nomeIdx[a.i]] || 'Curso d’água sem nome') + '</b>' +
-          '<div class="linha">Vazão média <em>' + fmt(q[a.i], q[a.i] < 10 ? 1 : 0) + ' m³/s</em></div>';
+          '<div class="linha">Vazão média <em>' + vazao(q[a.i]) + '</em></div>';
     mostrarTip(html, ev);
   }
 
