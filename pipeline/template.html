@@ -25,6 +25,13 @@
     --ramp-0: #cde2fb; --ramp-1: #9ec5f4; --ramp-2: #6da7ec; --ramp-3: #3987e5;
     --ramp-4: #256abf; --ramp-5: #184f95; --ramp-6: #0d366b;
     --fluxo:  #0d366b;
+    /* Efluente: a cor sobe com a fração do rio que é esgoto. O tom mais claro é
+       o rio quase limpo, o mais escuro é o rio que virou o próprio efluente. */
+    --pol-0: #ffe9a3; --pol-1: #fed36f; --pol-2: #feb44c; --pol-3: #fd8d3c;
+    --pol-4: #f65330; --pol-5: #d82424; --pol-6: #a3061d;
+    --pol-ind: #7b5bd6;
+    --rede-fria: #ccd6da;
+    --sem-dado: #9aa9af;
     --sombra: 0 6px 26px rgba(11, 20, 22, .13);
     --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     --mono: "Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -35,8 +42,6 @@
       --panel:    #10161a;
       --leito:    #1f1f26;
       --uf-line:  #1e282d;
-    --terra:    #141a1e;
-    --divisa:   #2b383f;
       --terra:    #141a1e;
       --divisa:   #2b383f;
       --rule:     #26333a;
@@ -48,6 +53,12 @@
       --ramp-0: #0d366b; --ramp-1: #184f95; --ramp-2: #256abf; --ramp-3: #3987e5;
       --ramp-4: #6da7ec; --ramp-5: #9ec5f4; --ramp-6: #cde2fb;
       --fluxo:  #dbeafd;
+      /* No escuro a rampa acende em vez de escurecer: quanto pior, mais brilha. */
+      --pol-0: #4a2f16; --pol-1: #6f4319; --pol-2: #96511e; --pol-3: #bd5824;
+      --pol-4: #dd542c; --pol-5: #f24634; --pol-6: #ff5f4d;
+      --pol-ind: #a894ee;
+      --rede-fria: #2b363c;
+      --sem-dado: #64757c;
       --sombra: 0 6px 26px rgba(0, 0, 0, .45);
     }
   }
@@ -56,6 +67,10 @@
     --panel:    #10161a;
     --leito:    #1f1f26;
     --uf-line:  #1e282d;
+    /* terra e divisa faltavam aqui: quem forçava o tema escuro num sistema
+       claro ficava com o mapa de fundo claro e os painéis escuros */
+    --terra:    #141a1e;
+    --divisa:   #2b383f;
     --rule:     #26333a;
     --ink:      #eef5f6;
     --ink-2:    #a4b7bd;
@@ -65,6 +80,11 @@
     --ramp-0: #0d366b; --ramp-1: #184f95; --ramp-2: #256abf; --ramp-3: #3987e5;
     --ramp-4: #6da7ec; --ramp-5: #9ec5f4; --ramp-6: #cde2fb;
     --fluxo:  #dbeafd;
+    --pol-0: #4a2f16; --pol-1: #6f4319; --pol-2: #96511e; --pol-3: #bd5824;
+    --pol-4: #dd542c; --pol-5: #f24634; --pol-6: #ff5f4d;
+    --pol-ind: #a894ee;
+    --rede-fria: #2b363c;
+    --sem-dado: #64757c;
     --sombra: 0 6px 26px rgba(0, 0, 0, .45);
   }
 
@@ -103,6 +123,15 @@
     padding: 14px 16px; box-shadow: var(--sombra);
     pointer-events: auto;
   }
+
+  /* Ponte para a página de séries históricas (series.html). O mapa mostra a
+     vazão média; a mudança ao longo do tempo mora lá. */
+  .ir-series {
+    margin: 11px 0 0; padding-top: 10px; border-top: 1px solid var(--rule);
+    font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.04em;
+  }
+  .ir-series a { color: var(--accent); text-decoration: none; }
+  .ir-series a:hover { text-decoration: underline; }
 
   .eyebrow {
     font-family: var(--mono); font-size: 0.53rem; font-weight: 500;
@@ -187,6 +216,16 @@
   .classe { display: flex; align-items: center; gap: 8px; font-size: 0.73rem; color: var(--ink-2); }
   .amostra { width: 26px; border-radius: 99px; flex: none; }
   .nota { font-size: 0.72rem; color: var(--ink-3); margin: 8px 0 0; line-height: 1.5; }
+
+  /* ---------- seletor do que a cor mostra ---------- */
+  .modos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+  .modos .modo {
+    justify-content: center; text-align: center; padding: 8px 4px;
+    min-height: 34px; font-size: 0.6rem;
+  }
+  .modos .modo[aria-pressed="true"] {
+    border-color: var(--ink); color: var(--ink); background: var(--rule);
+  }
 
   /* ---------- controle de detalhe ---------- */
   .faixa { display: flex; flex-direction: column; gap: 7px; }
@@ -425,12 +464,23 @@
 
   <div class="cartao titulo-cartao">
     <p class="eyebrow">Rede de drenagem · Agência Nacional de Águas</p>
-    <h1>Os rios do Brasil, por vazão</h1>
+    <h1 id="titulo">Os rios do Brasil, por vazão</h1>
     <div class="stats" id="stats"></div>
+    <p class="ir-series"><a href="series.html">Estes rios estão secando? →</a></p>
   </div>
 
   <div class="cartao ficha vazia" id="ficha">
     Toque num rio, numa estação ou num reservatório para ver a vazão.
+  </div>
+
+  <div class="cartao">
+    <h2>O que pintar</h2>
+    <div class="modos" role="group" aria-label="O que a cor mostra">
+      <button class="modo" data-modo="vazao" aria-pressed="true">Vazão</button>
+      <button class="modo" data-modo="esgoto" aria-pressed="false">Esgoto</button>
+      <button class="modo" data-modo="industria" aria-pressed="false">Indústria</button>
+    </div>
+    <p class="nota" id="notaModo"></p>
   </div>
 
   <div class="cartao">
@@ -684,6 +734,13 @@
   };
   const medidos = acumula(D.medido);
   const foraBr = acumula(D.fora);
+  // Efluente acumulado a montante, como fração da vazão do próprio trecho —
+  // vem em décimos de milésimo, 10000 = o rio inteiro é efluente.
+  const fEsg = D.esg ? Float32Array.from(varints(D.esg, 0, D.esg.length), v => v / 10000) : null;
+  const fInd = D.ind ? Float32Array.from(varints(D.ind, 0, D.ind.length), v => v / 10000) : null;
+  // Cidades que coletam esgoto e não têm outorga de lançamento nenhuma: o rio
+  // delas não está limpo, está sem registro. Sem isso o branco viraria atestado.
+  const semDado = D.semDado ? acumula(D.semDado) : new Set();
   const ordem = Array.from({ length: N }, (_, i) => i).sort((a, b) => q[b] - q[a]);
 
   /* ---------- índice espacial para acerto do cursor/toque ---------- */
@@ -749,15 +806,26 @@
   const L0 = Math.log10(QMIN), L1 = Math.log10(QMAX);
   const t01 = v => (Math.log10(Math.max(QMIN, Math.min(QMAX, v))) - L0) / (L1 - L0);
 
+  /* Escala da poluição: fração do rio que é efluente, de 0,1% a 100%. É log
+     porque a diluição é multiplicativa — cada afluente que entra divide a
+     concentração, e é essa queda que o desbote da cor mostra. */
+  const PMIN = 0.001, PMAX = 1.0;
+  const P0 = Math.log10(PMIN), P1 = Math.log10(PMAX);
+  const p01 = v => (Math.log10(Math.max(PMIN, Math.min(PMAX, v))) - P0) / (P1 - P0);
+
   const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-  let RAMPA = [], COR_FLUXO = '', COR_UF = '', COR_ACC = '', COR_USINA = '', COR_LEITO = '', COR_TERRA = '', COR_DIVISA = '';
+  let RAMPA = [], POL = [], COR_FLUXO = '', COR_UF = '', COR_ACC = '', COR_USINA = '', COR_LEITO = '', COR_TERRA = '', COR_DIVISA = '';
+  let COR_FRIA = '', COR_IND = '', COR_SEM = '';
   const lerCores = () => {
     RAMPA = [0, 1, 2, 3, 4, 5, 6].map(i => css('--ramp-' + i));
+    POL = [0, 1, 2, 3, 4, 5, 6].map(i => css('--pol-' + i));
     COR_FLUXO = css('--fluxo'); COR_UF = css('--uf-line'); COR_ACC = css('--accent');
     COR_USINA = css('--usina'); COR_LEITO = css('--leito');
     COR_TERRA = css('--terra'); COR_DIVISA = css('--divisa');
+    COR_FRIA = css('--rede-fria'); COR_IND = css('--pol-ind'); COR_SEM = css('--sem-dado');
   };
   const cor = v => RAMPA[Math.max(0, Math.min(6, Math.round(t01(v) * 6)))];
+  const corPol = v => POL[Math.max(0, Math.min(6, Math.round(p01(v) * 6)))];
   const largura = (v, z) => (0.35 + 3.4 * Math.pow(t01(v), 2.1)) * (1 + 0.5 * Math.log2(z));
 
   /* ---------- estado ---------- */
@@ -782,6 +850,25 @@
   // ordem 1 e sumiriam do mapa junto com os córregos.
   const LIMIARES = [0, 0.5, 2, 8, 30, 120, 500];   // m³/s
   let qMinUsuario = LIMIARES[0];   // nasce mostrando a rede inteira
+  // 'vazao' pinta a água que passa; 'esgoto' e 'industria' pintam a fração dela
+  // que é efluente. O mapa nasce no modo de sempre.
+  let modo = 'vazao';
+  const fracDe = i => modo === 'esgoto' ? (fEsg ? fEsg[i] : 0)
+    : modo === 'industria' ? (fInd ? fInd[i] : 0) : 0;
+  /* O desenho normal prioriza por vazão, e o teto por quadro corta os menores
+     primeiro. Na poluição isso apagaria exatamente o que interessa: os trechos
+     mais sujos do país são córregos urbanos de vazão baixa. Daí uma ordem
+     própria, por quanto o trecho está poluído, usada só na passada colorida. */
+  const ordemPol = {};
+  if (fEsg || fInd) {
+    for (const [m, arr] of [['esgoto', fEsg], ['industria', fInd]]) {
+      if (!arr) continue;
+      const lista = [];
+      for (let i = 0; i < N; i++) if (arr[i] >= PMIN) lista.push(i);
+      lista.sort((a, b) => arr[b] - arr[a]);
+      ordemPol[m] = lista;
+    }
+  }
   let animando = false;
   let estaticoSujo = true;
   let realce = -1, estRealce = null, resRealce = null, fixado = false, selecao = null;
@@ -818,14 +905,52 @@
     [0, 2, 'até 2 m³/s'], [2, 10, '2 – 10'], [10, 40, '10 – 40'],
     [40, 150, '40 – 150'], [150, 500, '150 – 500'], [500, 1e6, 'acima de 500'],
   ];
+  // a legenda da poluição fala em % do rio que é efluente, que é a própria métrica
+  const CLASSES_POL = [
+    [0.0015, '0,1 – 0,3%'], [0.005, '0,3 – 1%'], [0.017, '1 – 3%'],
+    [0.055, '3 – 10%'], [0.18, '10 – 30%'], [0.55, 'acima de 30%'],
+  ];
   function montaLegenda() {
-    document.getElementById('classes').innerHTML = CLASSES.map(([a, b, rot]) => {
-      const ref = a === 0 ? 1 : Math.sqrt(a * Math.min(b, a * 25));
-      const esp = Math.max(2, Math.min(9, largura(ref, 1) * 1.9));
-      return '<div class="classe"><span class="amostra" style="height:' + esp.toFixed(1) +
-        'px;background:' + cor(ref) + '"></span>' + rot + '</div>';
-    }).join('');
+    const el = document.getElementById('classes');
+    if (modo === 'vazao') {
+      el.innerHTML = CLASSES.map(([a, b, rot]) => {
+        const ref = a === 0 ? 1 : Math.sqrt(a * Math.min(b, a * 25));
+        const esp = Math.max(2, Math.min(9, largura(ref, 1) * 1.9));
+        return '<div class="classe"><span class="amostra" style="height:' + esp.toFixed(1) +
+          'px;background:' + cor(ref) + '"></span>' + rot + '</div>';
+      }).join('');
+      return;
+    }
+    const linhas = CLASSES_POL.map(([ref, rot]) => {
+      const est = modo === 'industria'
+        ? 'background:' + COR_IND + ';opacity:' + ((2 + Math.round(p01(ref) * 6)) / 8).toFixed(2)
+        : 'background:' + corPol(ref);
+      return '<div class="classe"><span class="amostra" style="height:4px;' + est +
+        '"></span>' + rot + '</div>';
+    });
+    if (semDado.size) {
+      linhas.push('<div class="classe"><span class="amostra" style="height:0;border-top:2px dashed ' +
+        COR_SEM + '"></span>sem outorga</div>');
+    }
+    el.innerHTML = linhas.join('');
   }
+
+  const NOTA_MODO = {
+    vazao: 'A cor e a espessura seguem a vazão média de longo termo.',
+    esgoto: 'Quanto do rio é esgoto, no ponto em que ele passa. A cor desbota sozinha rio abaixo, ' +
+      'conforme a água que chega dilui o que foi lançado — não há decaimento embutido na conta. ' +
+      'Vem das outorgas de lançamento vigentes no SNIRH, que cobrem pouco mais de dois terços do ' +
+      'esgoto coletado do país. O tracejado é o outro terço: 246 cidades que coletam esgoto e não ' +
+      'têm outorga nenhuma na base — entre elas Porto Alegre, Belo Horizonte, Brasília e Recife. ' +
+      'Ali o rio não está limpo, está sem registro (o que não quer dizer sem licença ambiental, ' +
+      'que é outro balcão e não entra aqui).',
+    industria: 'Efluente industrial, de mineração e de termelétrica, pela mesma conta do esgoto.',
+  };
+  const TITULO_MODO = {
+    vazao: 'Os rios do Brasil, por vazão',
+    esgoto: 'Os rios do Brasil, por esgoto',
+    industria: 'Os rios do Brasil, por efluente industrial',
+  };
 
   const contadores = () => {
     document.getElementById('nEst').textContent = '(' + D.estacoes.length + ')';
@@ -926,26 +1051,98 @@
     }
     visiveisSet = new Set(visiveis);
 
-    // Duas passadas: o que está fora do Brasil vai esmaecido. São bacias
-    // compartilhadas de verdade — a água do Solimões nasce no Peru — mas ali
-    // não há posto brasileiro medindo, e o traço mais fraco diz isso.
-    for (const passo of [0, 1]) {
-      octx.globalAlpha = passo === 0 ? 0.34 : 1;
-      let corAtual = '', larAtual = -1;
+    if (modo === 'vazao') {
+      // Duas passadas: o que está fora do Brasil vai esmaecido. São bacias
+      // compartilhadas de verdade — a água do Solimões nasce no Peru — mas ali
+      // não há posto brasileiro medindo, e o traço mais fraco diz isso.
+      for (const passo of [0, 1]) {
+        octx.globalAlpha = passo === 0 ? 0.34 : 1;
+        let corAtual = '', larAtual = -1;
+        octx.beginPath();
+        for (const i of visiveis) {
+          if (foraBr.has(i) !== (passo === 0)) continue;
+          // cor e largura em degraus: trechos vizinhos em vazão caem no mesmo
+          // degrau e entram num único stroke()
+          const c = cor(q[i]), lw = Math.round(largura(q[i], z) * 3) / 3;
+          if (c !== corAtual || lw !== larAtual) {
+            octx.stroke(); octx.beginPath();
+            octx.strokeStyle = c; octx.lineWidth = lw;
+            corAtual = c; larAtual = lw;
+          }
+          traca(octx, i);
+        }
+        octx.stroke();
+      }
+    } else {
+      /* Modo poluição. A rede inteira vai primeiro em cinza — a geografia do
+         rio não muda com o modo, e sem ela os trechos sujos ficariam soltos no
+         vazio. Por cima entra só quem passa do piso, na rampa quente.
+
+         A largura continua saindo da vazão, nunca da poluição: engrossar o
+         traço pelo efluente faria um córrego imundo parecer um rio grande. */
+      octx.globalAlpha = 0.5;
+      octx.strokeStyle = COR_FRIA;
+      let larFria = -1;
       octx.beginPath();
       for (const i of visiveis) {
-        if (foraBr.has(i) !== (passo === 0)) continue;
-        // cor e largura em degraus: trechos vizinhos em vazão caem no mesmo
-        // degrau e entram num único stroke()
-        const c = cor(q[i]), lw = Math.round(largura(q[i], z) * 3) / 3;
-        if (c !== corAtual || lw !== larAtual) {
+        const lw = Math.round(largura(q[i], z) * 3) / 3;
+        if (lw !== larFria) {
           octx.stroke(); octx.beginPath();
-          octx.strokeStyle = c; octx.lineWidth = lw;
-          corAtual = c; larAtual = lw;
+          octx.lineWidth = lw; larFria = lw;
         }
         traca(octx, i);
       }
       octx.stroke();
+      octx.globalAlpha = 1;
+
+      // Onde a cidade coleta esgoto e não há outorga nenhuma: não é rio limpo,
+      // é rio sem registro. Vai antes da rampa para nunca cobrir um dado real.
+      if (semDado.size) {
+        octx.save();
+        octx.setLineDash([3, 4]);
+        octx.strokeStyle = COR_SEM;
+        octx.beginPath();
+        let larSem = -1;
+        for (const i of visiveis) {
+          if (!semDado.has(i)) continue;
+          const lw = Math.max(1.2, Math.round(largura(q[i], z) * 3) / 3);
+          if (lw !== larSem) {
+            octx.stroke(); octx.beginPath();
+            octx.lineWidth = lw; larSem = lw;
+          }
+          traca(octx, i);
+        }
+        octx.stroke();
+        octx.restore();
+      }
+
+      /* No modo indústria a intensidade vem da opacidade, não do tom — é uma
+         cor só, para não competir com a rampa do esgoto na leitura. Os dois
+         casos batem em degraus (cor+opacidade+largura) pelo mesmo motivo de
+         sempre: trechos no mesmo degrau saem num stroke() único. */
+      let corAtual = '', larAtual = -1, alfaAtual = -1;
+      octx.beginPath();
+      for (const i of (ordemPol[modo] || [])) {
+        // o filtro de detalhe do usuário continua valendo; o que não vale aqui
+        // é o teto por quadro, que comeria os córregos mais sujos
+        if (q[i] < corteQ) continue;
+        if (bbox[i * 4 + 2] < w0x || bbox[i * 4] > w1x ||
+            bbox[i * 4 + 3] < w0y || bbox[i * 4 + 1] > w1y) continue;
+        const f = fracDe(i);
+        if (f < PMIN) continue;
+        const t = p01(f);
+        const c = modo === 'industria' ? COR_IND : corPol(f);
+        const alfa = modo === 'industria' ? (2 + Math.round(t * 6)) / 8 : 1;
+        const lw = Math.round(largura(q[i], z) * 3) / 3;
+        if (c !== corAtual || lw !== larAtual || alfa !== alfaAtual) {
+          octx.stroke(); octx.beginPath();
+          octx.strokeStyle = c; octx.lineWidth = lw; octx.globalAlpha = alfa;
+          corAtual = c; larAtual = lw; alfaAtual = alfa;
+        }
+        traca(octx, i);
+      }
+      octx.stroke();
+      octx.globalAlpha = 1;
     }
     octx.globalAlpha = 1;
 
@@ -1172,8 +1369,26 @@
       linha('Ordem de Strahler', strahler[i]) +
       linha('Estações no rio', String(postos)) +
       (fora ? linha('Território', 'fora do Brasil') : '') +
+      efluenteHTML(i) +
       '<div class="selo' + (medido ? '' : ' neutro') + '">' +
       (medido ? 'vazão medida em estação' : 'vazão estimada') + '</div>';
+  }
+
+  /* Quanto do que passa aqui é efluente lançado rio acima. A vazão de efluente
+     sai da própria fração — assim o número da ficha e a cor do traço não têm
+     como divergir. */
+  const pct = f => f >= 0.1 ? fmt(100 * f, 0) + '%'
+    : f >= 0.001 ? fmt(100 * f, f < 0.01 ? 2 : 1) + '%' : 'menos de 0,1%';
+  function efluenteHTML(i) {
+    if (!fEsg) return '';
+    const e = fEsg[i], n = fInd ? fInd[i] : 0;
+    if (e < 0.001 && n < 0.001) {
+      return semDado.has(i)
+        ? '<div class="selo neutro">a cidade daqui coleta esgoto e não tem outorga de lançamento</div>'
+        : '';
+    }
+    return (e >= 0.001 ? linha('Esgoto na água', pct(e) + ' — ' + vazao(e * q[i])) : '') +
+      (n >= 0.001 ? linha('Efluente industrial', pct(n) + ' — ' + vazao(n * q[i])) : '');
   }
 
   const MESES = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
@@ -1365,12 +1580,13 @@
     enquadrar(); fixado = false; aplicar(null); agendar(false);
   });
 
+  // cada interruptor guarda aqui como se liga, para que o modo também possa mexer
+  const trocaCamada = {};
+  const defineCamada = (id, v) => { if (trocaCamada[id]) trocaCamada[id](v); };
   const alterna = (id, ler, escrever) => {
     const b = document.getElementById(id);
-    b.addEventListener('click', () => {
-      escrever(!ler());
-      b.setAttribute('aria-pressed', String(ler()));
-    });
+    trocaCamada[id] = v => { escrever(v); b.setAttribute('aria-pressed', String(ler())); };
+    b.addEventListener('click', () => trocaCamada[id](!ler()));
   };
   alterna('btEst', () => mostrarEst, v => {
     mostrarEst = v;
@@ -1404,6 +1620,36 @@
     textoOrdem();
     agendar(false);
   });
+
+  const notaModo = document.getElementById('notaModo');
+  const botoesModo = [...document.querySelectorAll('.modo')];
+  /* Estações e reservatórios são quase dois mil marcadores; sobre a camada de
+     poluição eles cobrem justamente os córregos que ela tem a mostrar. Saem de
+     cena ao entrar no modo e voltam como estavam ao sair — o usuário continua
+     podendo religá-los à mão, e nesse caso a escolha dele é que prevalece. */
+  let camadasAntes = null;
+  function aplicaModo(novo) {
+    const eraVazao = modo === 'vazao';
+    modo = novo;
+    if (novo !== 'vazao' && eraVazao) {
+      camadasAntes = [mostrarEst, mostrarRes];
+      defineCamada('btEst', false);
+      defineCamada('btRes', false);
+    } else if (novo === 'vazao' && !eraVazao && camadasAntes) {
+      defineCamada('btEst', camadasAntes[0]);
+      defineCamada('btRes', camadasAntes[1]);
+      camadasAntes = null;
+    }
+    for (const b of botoesModo) b.setAttribute('aria-pressed', String(b.dataset.modo === novo));
+    document.getElementById('titulo').textContent = TITULO_MODO[novo] || TITULO_MODO.vazao;
+    notaModo.textContent = NOTA_MODO[novo] || '';
+    montaLegenda();
+    if (selecao) aplicar(selecao);   // a ficha aberta reescreve com a leitura do modo
+    agendar(false);
+  }
+  for (const b of botoesModo) b.addEventListener('click', () => aplicaModo(b.dataset.modo));
+  // sem os dados de poluição embutidos o mapa segue funcionando só com a vazão
+  if (!fEsg) for (const b of botoesModo) if (b.dataset.modo !== 'vazao') b.remove();
 
   const gaveta = document.getElementById('gaveta');
   const veu = document.getElementById('veu');
@@ -1528,6 +1774,7 @@
 
   /* ---------- início ---------- */
   lerCores();
+  notaModo.textContent = NOTA_MODO[modo] || '';
   montaLegenda();
   textoOrdem();
   window.__contadores = () => contadores();

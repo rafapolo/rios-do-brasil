@@ -18,7 +18,7 @@ def embutir(nome):
 
 
 tpl = (S / "template.html").read_text()
-pagina = tpl.replace("/*__FONTE__*/", (S / "mono_b64.txt").read_text().strip())
+pagina = tpl.replace("/*__FONTE__*/", (S / "fonte_mono.txt").read_text().strip())
 pagina = pagina.replace("/*__RESERV__*/", embutir("reservatorios.json"))
 pagina = pagina.replace("/*__DADOS__*/", embutir("rede_vazao.json"))
 out = S / "rios_brasil.html"

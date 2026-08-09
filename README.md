@@ -24,12 +24,37 @@ ela vem pronta na topologia da base da ANA.
 - **Controle de detalhe** para filtrar a rede por vazão mínima
 - Passar o cursor acende o **rio inteiro**, não o trecho de poucos quilômetros
 
+## A segunda página: os rios estão secando?
+
+O mapa mostra a vazão **média**. Média não tem direção — uma estação estável e outra em queda
+contínua há quarenta anos aparecem iguais se a média bater. `series.html` responde o que falta,
+sobre a série histórica inteira da ANA: **3.954 estações, 1901 a 2023, 68 mil anos de medição**.
+
+- **404 estações** com tendência comprovada — 303 em queda e 101 em alta — por Mann-Kendall
+  com inclinação de Theil-Sen, em % da própria vazão média por década
+- **530 mil dias de rio seco** registrados em 609 estações, um sinal que só existe na série
+  diária: a média mensal de um rio que secou vinte dias e voltou é baixa, não é zero
+- **Q7,10**, a vazão que rege a outorga de água no país, comparada entre 1961–1990 e 1994–2023:
+  500 das 785 estações comparáveis entregam hoje menos no seu pior momento
+- O **deslocamento do mês de cheia** entre as mesmas janelas, por média circular
+- E a barra de erro de tudo isso: a ANA consistiu 1.931 estações em 2014 e **uma** em 2022
+
+Quedas e altas não são o mesmo fenômeno em espelho. As quedas se concentram no semiárido e no
+Sudeste sob estresse hídrico; as altas aparecem no arco de desmatamento do Maranhão, onde menos
+floresta significa menos evapotranspiração e mais escoamento, e em bacias urbanizadas como o
+Barigui em Curitiba e o Capivari em Campinas — mais asfalto, mais água chegando ao rio.
+
+O ranking padrão exclui estações em barragem, açude ou canal: ali a "tendência" costuma ser a
+data da obra, não o clima. A maior alta do país sem esse filtro era o Uruguai no barramento da
+UHE Itá, com +70% por década, que é o enchimento do reservatório.
+
 ## De onde vem cada número
 
 | Camada | Fonte |
 |---|---|
 | Rede de drenagem, área de drenagem, topologia | [Base Hidrográfica Ottocodificada 2017 (1:5.000)](https://dadosabertos.ana.gov.br), ANA |
-| Vazões medidas | Séries históricas das estações fluviométricas da ANA, 1995–2025 |
+| Vazões medidas (mapa) | Séries históricas das estações fluviométricas da ANA, 1995–2025 |
+| Séries históricas (`series.html`) | [`anagovbr/hidro-dados-estacoes-convencionais`](https://github.com/anagovbr/hidro-dados-estacoes-convencionais), retrato de 04/08/2023, 1901–2023 |
 | Reservatórios | Sistema de Acompanhamento de Reservatórios (SAR), ANA |
 | Contorno dos estados | `br_geobr_mapas` / IBGE |
 | Terra e fronteiras | [Natural Earth](https://www.naturalearthdata.com) 1:50m |
@@ -80,9 +105,34 @@ python3 baixa_rede.py 1          # rede BHO inteira (~460 mil trechos, ~20 min, 
 python3 baixa_vazao.py           # inventário fluviométrico + séries mensais (~35 min)
 python3 baixa_reservatorios.py   # reservatórios do SAR + histórico de operação
 python3 terra_fronteiras.py      # silhueta e divisas do Natural Earth
-python3 processa.py              # regionaliza a vazão e valida (~5 min)
+python3 baixa_outorgas.py        # outorgas de lançamento e captação do SNIRH (~2 min)
+python3 baixa_atlas_esgotos.py   # Atlas Esgotos + sedes municipais, do espelho no beelink
+python3 processa.py              # regionaliza a vazão, acumula o efluente e valida (~5 min)
 python3 monta_pagina.py          # gera o index.html
 ```
+
+Para mexer só na camada de poluição, sem refazer a regionalização inteira, `poluicao.py`
+roda avulso sobre um `rede_vazao.json` pronto — ele reaproveita a geometria embutida no
+próprio mapa e só precisa da topologia, que são 7 MB em vez de 888:
+
+```bash
+python3 baixa_topologia.py 1     # COTRECHO/NUTRJUS/COBACIA da BHO, sem geometria (~2 min)
+python3 poluicao.py              # recalcula esg/ind/semDado no rede_vazao.json (~5 s)
+python3 monta_pagina.py
+```
+
+E a página de séries históricas, que depende do ETL do arquivo da ANA já estar no data lake
+(`rodado/scripts/scrap/ana_series_historicas.py`):
+
+```bash
+python3 analisa_tendencia.py     # Mann-Kendall + Theil-Sen + FDR -> tendencia.json
+python3 prepara_paineis.py       # rio seco, cheia, Q7,10, tamanho da rede -> paineis.json
+python3 monta_series.py          # gera o series.html (770 KB)
+```
+
+Uma armadilha da fonte, para quem for refazer: a ANA **esvaziou** o repositório
+`hidro-dados-estacoes-convencionais` em dezembro de 2025 — um zip de `refs/heads/main` sai com
+zero byte. O commit `b8b65b0` ainda carrega os 2,3 GB.
 
 `contorno_uf.py` regenera `uf_linhas.json` a partir do DuckDB; o arquivo já vem versionado,
 então só é preciso rodar se quiser trocar a base de contornos.

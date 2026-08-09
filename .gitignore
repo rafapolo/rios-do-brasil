@@ -5,5 +5,10 @@ bho/
 *.csv
 rede_vazao.json
 reservatorios.json
+tendencia.json
+paineis.json
 *.json.gz
 __pycache__/
+
+# Saída do monta_pagina.py: o que vai ao ar é o index.html na raiz
+pipeline/rios_brasil.html

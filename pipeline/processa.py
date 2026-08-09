@@ -441,6 +441,16 @@ def main():
             ant = v
         return codifica(d)
 
+    # Camada de poluição: a mesma topologia que acabou de acumular vazão serve
+    # para acumular efluente. Importado aqui dentro porque poluicao.py usa o
+    # codificador deste arquivo, e no topo os dois se importariam em círculo.
+    poluicao = {}
+    if (S / "lancamentos.parquet").exists():
+        from poluicao import calcula
+        poluicao = calcula(geoms, props, jus, ordem_topo, q_final)
+    else:
+        print("lancamentos.parquet ausente — mapa sai só com a vazão")
+
     dados = {
         "periodo": [est["mes_ini"].min()[:4], est["mes_fim"].max()[:4]],
         "meses_total": int(est["n_meses"].sum()),
@@ -469,6 +479,7 @@ def main():
         "nomes": nomes_tab,
         "medido": deltas(meds),       # índices dos trechos com estação
         "fora": deltas(fora),         # índices dos trechos fora do Brasil
+        **poluicao,                   # esg, ind e semDado — ver poluicao.py
         "estacoes": [
             {
                 "cod": r["Codigo"],
