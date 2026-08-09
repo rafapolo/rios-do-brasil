@@ -31,6 +31,7 @@ jobs:
         run: |
           mkdir -p site
           cp index.html site/
+          cp series.html site/
           cp screenshot.png site/
 
       - uses: actions/configure-pages@v5

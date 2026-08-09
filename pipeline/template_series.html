@@ -1,0 +1,923 @@
+<title>Os rios do Brasil estão secando?</title>
+<style>
+  @font-face {
+    font-family: "Mono";
+    src: url(data:font/woff2;base64,/*__FONTE__*/) format("woff2-variations");
+    font-weight: 100 800;
+    font-display: swap;
+  }
+
+  /* Tokens herdados do mapa (pipeline/template.html) para as duas páginas
+     lerem como a mesma coisa. O acréscimo aqui é a escala DIVERGENTE: o mapa
+     mostra vazão, que é magnitude e pede rampa sequencial de um tom só; esta
+     página mostra mudança, que tem sinal e zero real, e sequencial mentiria
+     sobre onde fica o zero.
+
+     Os polos reusam o vocabulário existente — laranja (--accent, as estações
+     no mapa) para o rio que seca, azul (a rampa d'água) para o que enche.
+     Validados com scripts/validate_palette.js: ΔE 24,5 protan / 31,9 visão
+     normal no claro, 22,1 / 27,4 no escuro, contraste >= 3:1 nos dois. */
+  :root {
+    color-scheme: light;
+    --panel:   #f8fafb;
+    --fundo:   #eef2f3;
+    --rule:    #c5d0d4;
+    --ink:     #0b1416;
+    --ink-2:   #41535a;
+    --ink-3:   #6f838a;
+    --accent:  #eb6834;
+
+    --seca-3: #8c2d04; --seca-2: #d2560f; --seca-1: #f2a072;
+    --neutro: #d9dee0;
+    --enche-1: #9ec5f4; --enche-2: #256abf; --enche-3: #0d366b;
+    --grade:  rgba(11, 20, 22, .09);
+
+    --sombra: 0 6px 26px rgba(11, 20, 22, .13);
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: "Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  /* O escuro é escolhido passo a passo contra o fundo escuro, não um espelho
+     automático do claro: marca sobre fundo escuro precisa de mais luminosidade
+     para o mesmo contraste. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --panel:   #10161a;
+      --fundo:   #0b0f12;
+      --rule:    #26333a;
+      --ink:     #eef5f6;
+      --ink-2:   #a4b7bd;
+      --ink-3:   #7c8f96;
+      --accent:  #f07a49;
+      --seca-3: #ffb995; --seca-2: #f0824a; --seca-1: #b8501c;
+      --neutro: #3a464c;
+      --enche-1: #2c5f9e; --enche-2: #5f9ee8; --enche-3: #a9cdf7;
+      --grade:  rgba(238, 245, 246, .10);
+      --sombra: 0 6px 26px rgba(0, 0, 0, .45);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --panel:   #10161a;
+    --fundo:   #0b0f12;
+    --rule:    #26333a;
+    --ink:     #eef5f6;
+    --ink-2:   #a4b7bd;
+    --ink-3:   #7c8f96;
+    --accent:  #f07a49;
+    --seca-3: #ffb995; --seca-2: #f0824a; --seca-1: #b8501c;
+    --neutro: #3a464c;
+    --enche-1: #2c5f9e; --enche-2: #5f9ee8; --enche-3: #a9cdf7;
+    --grade:  rgba(238, 245, 246, .10);
+    --sombra: 0 6px 26px rgba(0, 0, 0, .45);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--fundo);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.55;
+    margin: 0;
+    -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .folha { max-width: 1120px; margin: 0 auto; padding: 40px 20px 80px; }
+
+  .eyebrow {
+    font-family: var(--mono); font-size: 0.56rem; font-weight: 500;
+    letter-spacing: 0.13em; text-transform: uppercase; color: var(--ink-3);
+    margin: 0 0 10px;
+  }
+  h1 {
+    font-size: clamp(1.9rem, 5vw, 2.9rem); line-height: 1.04;
+    letter-spacing: -0.035em; font-weight: 680; margin: 0 0 14px;
+    text-wrap: balance;
+  }
+  h2 {
+    font-size: 1.28rem; letter-spacing: -0.02em; font-weight: 660;
+    margin: 0 0 4px; text-wrap: balance;
+  }
+  .desc { color: var(--ink-2); margin: 0 0 18px; max-width: 68ch; }
+  .desc strong { font-weight: 640; color: var(--ink); }
+  .abertura { font-size: 1.06rem; max-width: 66ch; }
+
+  .cartao {
+    background: var(--panel);
+    background-image: linear-gradient(115deg, rgba(255, 255, 255, .045), transparent 25%);
+    border: 1px solid var(--rule); border-radius: 4px;
+    padding: 22px 24px; box-shadow: var(--sombra);
+    margin: 0 0 26px;
+  }
+
+  /* ---------- números-herói ---------- */
+  .tiles {
+    display: grid; gap: 1px; background: var(--rule);
+    border: 1px solid var(--rule); border-radius: 4px; overflow: hidden;
+    grid-template-columns: repeat(auto-fit, minmax(158px, 1fr));
+    margin: 0 0 26px;
+  }
+  .tile { background: var(--panel); padding: 15px 17px; }
+  .tile b {
+    display: block; font-family: var(--mono); font-variant-numeric: tabular-nums;
+    font-size: 1.62rem; font-weight: 620; letter-spacing: -0.03em; line-height: 1.1;
+  }
+  .tile span {
+    display: block; font-family: var(--mono); font-size: 0.55rem;
+    letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-3);
+    margin-top: 3px;
+  }
+  .tile.cai b { color: var(--seca-2); }
+  .tile.sobe b { color: var(--enche-2); }
+
+  /* ---------- controles ---------- */
+  .controles {
+    display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center;
+    margin: 0 0 18px; padding-bottom: 16px; border-bottom: 1px solid var(--rule);
+  }
+  .grupo { display: flex; align-items: center; gap: 6px; }
+  .grupo > label {
+    font-family: var(--mono); font-size: 0.55rem; letter-spacing: 0.09em;
+    text-transform: uppercase; color: var(--ink-3);
+  }
+  .seg { display: flex; border: 1px solid var(--rule); border-radius: 3px; overflow: hidden; }
+  .seg button {
+    font-family: var(--mono); font-size: 0.68rem; font-variant-numeric: tabular-nums;
+    padding: 4px 10px; border: 0; background: transparent; color: var(--ink-2);
+    cursor: pointer; transition: background .12s, color .12s;
+  }
+  .seg button + button { border-left: 1px solid var(--rule); }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--panel); }
+  select {
+    font-family: var(--mono); font-size: 0.68rem; padding: 4px 8px;
+    border: 1px solid var(--rule); border-radius: 3px;
+    background: var(--panel); color: var(--ink);
+  }
+
+  /* ---------- legenda ---------- */
+  .legenda {
+    display: flex; flex-wrap: wrap; gap: 6px 16px; align-items: center;
+    font-family: var(--mono); font-size: 0.62rem; color: var(--ink-2);
+    margin: 0 0 14px;
+  }
+  .legenda i {
+    display: inline-block; width: 11px; height: 11px; border-radius: 2px;
+    vertical-align: -1px; margin-right: 5px;
+  }
+  .legenda .vazada { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ink-3); }
+
+  /* ---------- ranking divergente ---------- */
+  .rank { display: grid; gap: 2px; }
+  .linha {
+    display: grid; align-items: center; gap: 10px;
+    grid-template-columns: minmax(0, 1fr) 300px 74px;
+    padding: 1px 0; cursor: default;
+  }
+  .linha:hover .rot b { color: var(--accent); }
+  .rot {
+    font-size: 0.79rem; text-align: right; overflow: hidden;
+    white-space: nowrap; text-overflow: ellipsis; color: var(--ink-2);
+  }
+  .rot b { font-weight: 620; color: var(--ink); }
+  .rot em {
+    font-style: normal; font-family: var(--mono); font-size: 0.62rem;
+    color: var(--ink-3); margin-left: 5px;
+  }
+  .trilho { position: relative; height: 15px; }
+  /* O zero é uma linha de verdade no meio do trilho — em divergente o eixo
+     nunca pode ser inferido pela borda da barra. */
+  .trilho::before {
+    content: ""; position: absolute; left: 50%; top: -1px; bottom: -1px;
+    width: 1px; background: var(--rule);
+  }
+  .barra {
+    position: absolute; top: 2px; height: 11px;
+    border-radius: 2px;
+  }
+  .barra.cai  { background: var(--seca-2); border-radius: 2px 0 0 2px; }
+  .barra.sobe { background: var(--enche-2); border-radius: 0 2px 2px 0; }
+  /* Vazada = não sobreviveu ao FDR. Mostra a incerteza sem apagar a linha. */
+  .barra.fraca { background: transparent; box-shadow: inset 0 0 0 1.5px currentColor; }
+  .barra.fraca.cai  { color: var(--seca-2); }
+  .barra.fraca.sobe { color: var(--enche-2); }
+  .val {
+    font-family: var(--mono); font-size: 0.72rem; font-variant-numeric: tabular-nums;
+    text-align: right; color: var(--ink-2);
+  }
+  .vazio { color: var(--ink-3); font-size: 0.85rem; padding: 20px 0; text-align: center; }
+
+  /* ---------- svg comum ---------- */
+  .svgwrap { overflow-x: auto; overscroll-behavior-x: contain; }
+  svg { display: block; max-width: 100%; }
+  svg text { font-family: var(--mono); fill: var(--ink-3); font-size: 10px; }
+  svg .eixo { stroke: var(--rule); stroke-width: 1; }
+  svg .grade { stroke: var(--grade); stroke-width: 1; }
+  svg .rotulo { fill: var(--ink-2); font-size: 10.5px; }
+
+  /* ---------- tooltip ---------- */
+  #dica {
+    position: fixed; z-index: 20; pointer-events: none; opacity: 0;
+    transition: opacity .1s; max-width: 280px;
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 4px;
+    box-shadow: var(--sombra); padding: 9px 11px;
+    font-size: 0.76rem; line-height: 1.42;
+  }
+  #dica b { display: block; font-size: 0.82rem; margin-bottom: 2px; }
+  #dica .mn {
+    font-family: var(--mono); font-size: 0.66rem; color: var(--ink-3);
+    font-variant-numeric: tabular-nums;
+  }
+  #dica .mn u { text-decoration: none; color: var(--ink-2); }
+
+  .nota {
+    font-size: 0.78rem; color: var(--ink-3); margin: 14px 0 0;
+    padding-top: 12px; border-top: 1px solid var(--rule); max-width: 76ch;
+  }
+  .nota code {
+    font-family: var(--mono); font-size: 0.92em;
+    background: var(--grade); padding: 1px 4px; border-radius: 2px;
+  }
+
+  details.tabela { margin-top: 14px; }
+  details.tabela summary {
+    font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.09em;
+    text-transform: uppercase; color: var(--ink-3); cursor: pointer;
+  }
+  details.tabela table {
+    width: 100%; border-collapse: collapse; margin-top: 10px;
+    font-family: var(--mono); font-size: 0.68rem; font-variant-numeric: tabular-nums;
+  }
+  details.tabela th, details.tabela td {
+    text-align: right; padding: 3px 8px; border-bottom: 1px solid var(--rule);
+    white-space: nowrap;
+  }
+  details.tabela th:first-child, details.tabela td:first-child { text-align: left; }
+  details.tabela th { color: var(--ink-3); font-weight: 500; }
+  details.tabela .rolo { max-height: 340px; overflow: auto; }
+
+  footer {
+    margin-top: 34px; padding-top: 20px; border-top: 1px solid var(--rule);
+    font-size: 0.82rem; color: var(--ink-3);
+  }
+  footer a { color: var(--ink-2); }
+
+  #carregando { padding: 60px 20px; text-align: center; color: var(--ink-3); }
+
+  @media (max-width: 780px) {
+    .linha { grid-template-columns: minmax(0, 1fr) 130px 60px; gap: 7px; }
+    .rot { font-size: 0.72rem; }
+    .cartao { padding: 18px 15px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; animation: none !important; }
+  }
+</style>
+
+<div class="folha">
+  <p class="eyebrow">Agência Nacional de Águas · séries históricas · 1901–2023</p>
+  <h1>Os rios do Brasil estão secando?</h1>
+  <p class="desc abertura">
+    O <a href="index.html">mapa dos 462 mil trechos</a> mostra a vazão média de cada rio.
+    Média não tem direção: uma estação estável e outra em queda contínua há quarenta anos
+    aparecem iguais se a média bater. Aqui entra a série inteira de cada estação
+    fluviométrica da ANA — <strong>68 mil anos de medição</strong> acumulados desde 1901 —
+    para perguntar o que a média esconde.
+  </p>
+
+  <div id="carregando">descomprimindo as séries…</div>
+  <div id="pagina" hidden></div>
+
+  <footer>
+    <p>
+      Fonte: Agência Nacional de Águas e Saneamento Básico, séries históricas das estações
+      fluviométricas convencionais, retrato de 04/08/2023
+      (<code>anagovbr/hidro-dados-estacoes-convencionais</code>).
+      Método e código em <a href="https://github.com/rafapolo/todos-rios-brasil">rafapolo/todos-rios-brasil</a>.
+    </p>
+    <p>
+      Tendência por Mann-Kendall com correção de empates e inclinação de Theil-Sen,
+      sobre médias anuais de anos com ao menos 10 meses medidos. Significância corrigida
+      para testes múltiplos por Benjamini-Hochberg (FDR).
+    </p>
+  </footer>
+</div>
+
+<div id="dica" role="tooltip" aria-hidden="true"></div>
+
+<script type="text/plain" id="d-tendencia">/*__TENDENCIA__*/</script>
+<script type="text/plain" id="d-paineis">/*__PAINEIS__*/</script>
+
+<script>
+(async function () {
+  'use strict';
+
+  // ---------- dados ----------
+  async function abrir(id) {
+    const b64 = document.getElementById(id).textContent.trim();
+    const bin = Uint8Array.from(atob(b64), c => c.charCodeAt(0));
+    if (!('DecompressionStream' in window)) throw new Error('sem DecompressionStream');
+    const fluxo = new Blob([bin]).stream().pipeThrough(new DecompressionStream('gzip'));
+    return JSON.parse(await new Response(fluxo).text());
+  }
+
+  let T, P;
+  try {
+    [T, P] = await Promise.all([abrir('d-tendencia'), abrir('d-paineis')]);
+  } catch (e) {
+    document.getElementById('carregando').textContent =
+      'este navegador não descomprime a página (precisa de DecompressionStream). ' +
+      'Tente Chrome, Edge, Safari 16.4+ ou Firefox 113+.';
+    return;
+  }
+  document.getElementById('carregando').remove();
+  const pag = document.getElementById('pagina');
+  pag.hidden = false;
+
+  // ---------- utilitários ----------
+  const num = (v, c = 0) => v.toLocaleString('pt-BR', {
+    minimumFractionDigits: c, maximumFractionDigits: c
+  });
+  const sinal = (v, c = 1) => (v > 0 ? '+' : '') + num(v, c);
+  const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun',
+                 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+  const el = (tag, attrs = {}, txt) => {
+    const n = document.createElement(tag);
+    for (const k in attrs) {
+      if (k === 'class') n.className = attrs[k]; else n.setAttribute(k, attrs[k]);
+    }
+    if (txt != null) n.textContent = txt;
+    return n;
+  };
+  // Marcas de eixo em números redondos. Dividir o máximo em quatro dá rótulos
+  // como 197/148/99/49, que o leitor não usa para nada — ninguém compara contra
+  // 148.
+  function ticks(max, alvo = 4) {
+    const cru = max / alvo;
+    const mag = Math.pow(10, Math.floor(Math.log10(cru)));
+    const passo = [1, 2, 2.5, 5, 10].find(m => m * mag >= cru) * mag;
+    const saida = [];
+    for (let v = 0; v <= max * 1.0001; v += passo) saida.push(v);
+    return saida;
+  }
+
+  const SVGNS = 'http://www.w3.org/2000/svg';
+  const s = (tag, attrs = {}, txt) => {
+    const n = document.createElementNS(SVGNS, tag);
+    for (const k in attrs) n.setAttribute(k, attrs[k]);
+    if (txt != null) n.textContent = txt;
+    return n;
+  };
+  const titulo = (r) => `${r.rio || 'sem nome'} · ${r.nome}`;
+
+  // ---------- tooltip ----------
+  const dica = document.getElementById('dica');
+  function mostra(ev, html) {
+    dica.innerHTML = html;
+    dica.style.opacity = '1';
+    dica.setAttribute('aria-hidden', 'false');
+    const r = dica.getBoundingClientRect();
+    let x = ev.clientX + 14, y = ev.clientY + 14;
+    if (x + r.width > innerWidth - 8) x = ev.clientX - r.width - 14;
+    if (y + r.height > innerHeight - 8) y = ev.clientY - r.height - 14;
+    dica.style.left = Math.max(8, x) + 'px';
+    dica.style.top = Math.max(8, y) + 'px';
+  }
+  const some = () => {
+    dica.style.opacity = '0';
+    dica.setAttribute('aria-hidden', 'true');
+  };
+  function liga(node, html) {
+    node.addEventListener('mousemove', ev => mostra(ev, html));
+    node.addEventListener('mouseleave', some);
+  }
+  addEventListener('scroll', some, { passive: true });
+
+  // ---------- sparkline da série anual ----------
+  function faisca(serie, w = 230, h = 34) {
+    const q = serie.map(p => p[1]);
+    const a = serie[0][0], b = serie[serie.length - 1][0];
+    const lo = Math.min(...q), hi = Math.max(...q);
+    const esc = hi > lo ? (v) => h - 3 - (v - lo) / (hi - lo) * (h - 6) : () => h / 2;
+    const px = (an) => b > a ? (an - a) / (b - a) * (w - 2) + 1 : w / 2;
+    const d = serie.map((p, i) => (i ? 'L' : 'M') + px(p[0]).toFixed(1) + ' ' + esc(p[1]).toFixed(1)).join(' ');
+    return `<svg width="${w}" height="${h}" style="margin-top:5px">
+      <path d="${d}" fill="none" stroke="var(--ink-3)" stroke-width="1.2"
+            stroke-linejoin="round" stroke-linecap="round"/>
+    </svg>`;
+  }
+
+  function fichaHTML(r) {
+    return `<b>${titulo(r)}</b>
+      <span class="mn">${r.mun || ''}${r.uf ? ' · ' + r.uf : ''} · cód. ${r.cod}</span>
+      ${faisca(r.serie)}
+      <span class="mn"><u>${sinal(r.pct)}%</u> por década ·
+        ${sinal(r.sen, 3)} m³/s por ano</span><br>
+      <span class="mn">${r.n} anos (${r.ini}–${r.fim}) ·
+        vazão média ${num(r.qmlt, 1)} m³/s</span><br>
+      <span class="mn">área ${r.area ? num(r.area) + ' km²' : '—'} ·
+        ${r.sig ? 'significativo' : 'não significativo'} (q=${num(r.q, 3)})</span>
+      ${r.obra ? '<br><span class="mn">⚑ estação em estrutura hidráulica</span>' : ''}`;
+  }
+
+  // =========================================================
+  //  números-herói
+  // =========================================================
+  {
+    const anos = T.estacoes.reduce((a, r) => a + r.n, 0);
+    const tiles = el('div', { class: 'tiles' });
+    const add = (v, rot, cls) => {
+      const t = el('div', { class: 'tile' + (cls ? ' ' + cls : '') });
+      t.append(el('b', {}, v), el('span', {}, rot));
+      tiles.append(t);
+    };
+    add(num(T.resumo.elegiveis), 'estações analisadas');
+    add(num(anos), 'anos de medição');
+    add(num(T.resumo.caindo), 'com queda comprovada', 'cai');
+    add(num(T.resumo.subindo), 'com alta comprovada', 'sobe');
+    pag.append(tiles);
+  }
+
+  // =========================================================
+  //  1 · ranking divergente — o gráfico principal
+  // =========================================================
+  {
+    const c = el('div', { class: 'cartao' });
+    c.append(
+      el('h2', {}, 'Quem mais mudou, para menos e para mais'),
+      el('p', { class: 'desc' })
+    );
+    c.querySelector('.desc').innerHTML =
+      'Inclinação de Theil-Sen sobre a média anual, em <strong>porcentagem da própria ' +
+      'vazão média por década</strong> — em m³/s absoluto o ranking seria só a lista dos ' +
+      'rios grandes, e nenhum rio pequeno apareceria. O padrão exclui estações em ' +
+      'barragem, açude ou canal, onde a "tendência" costuma ser a data da obra.';
+
+    const ctr = el('div', { class: 'controles' });
+    ctr.innerHTML = `
+      <div class="grupo"><label>mínimo de anos</label>
+        <div class="seg" id="cAnos">
+          <button data-v="20">20</button><button data-v="30">30</button>
+          <button data-v="40">40</button><button data-v="50">50</button>
+        </div></div>
+      <div class="grupo"><label>estações</label>
+        <div class="seg" id="cObra">
+          <button data-v="0">só rio livre</button><button data-v="1">incluir barragens</button>
+        </div></div>
+      <div class="grupo"><label>significância</label>
+        <div class="seg" id="cSig">
+          <button data-v="1">só comprovadas</button><button data-v="0">todas</button>
+        </div></div>
+      <div class="grupo"><label>estado</label>
+        <select id="cUF"><option value="">todos</option></select></div>`;
+    c.append(ctr);
+
+    const leg = el('div', { class: 'legenda' });
+    leg.innerHTML =
+      '<span><i style="background:var(--seca-2)"></i>vazão caindo</span>' +
+      '<span><i style="background:var(--enche-2)"></i>vazão subindo</span>' +
+      '<span><i class="vazada"></i>não significativo (q ≥ 0,05)</span>';
+    c.append(leg);
+
+    const rank = el('div', { class: 'rank' });
+    c.append(rank);
+    c.append(el('p', { class: 'nota' }));
+    pag.append(c);
+
+    const ufs = [...new Set(T.estacoes.map(r => r.uf).filter(Boolean))].sort();
+    const selUF = c.querySelector('#cUF');
+    ufs.forEach(u => selUF.append(el('option', { value: u }, u)));
+
+    const est = { anos: T.criterios.anos_ranking, obra: 0, sig: 1, uf: '' };
+
+    function segAtivo(id, v) {
+      c.querySelectorAll('#' + id + ' button').forEach(b =>
+        b.setAttribute('aria-pressed', String(b.dataset.v === String(v))));
+    }
+
+    function desenha() {
+      segAtivo('cAnos', est.anos);
+      segAtivo('cObra', est.obra);
+      segAtivo('cSig', est.sig);
+
+      const filtradas = T.estacoes.filter(r =>
+        r.n >= est.anos &&
+        (est.obra || !r.obra) &&
+        (!est.sig || r.sig) &&
+        (!est.uf || r.uf === est.uf));
+
+      rank.replaceChildren();
+      if (!filtradas.length) {
+        rank.append(el('p', { class: 'vazio' }, 'nenhuma estação com esses critérios.'));
+        c.querySelector('.nota').textContent = '';
+        return;
+      }
+
+      const ord = filtradas.slice().sort((a, b) => a.pct - b.pct);
+      const caem = ord.filter(r => r.pct < 0).slice(0, 20);
+      const sobem = ord.filter(r => r.pct > 0).slice(-20).reverse();
+      const lista = caem.concat(sobem);
+      // Escala simétrica: com meia-largura por lado, um domínio assimétrico
+      // faria uma queda de 20% parecer maior que uma alta de 20%.
+      const teto = Math.max(...lista.map(r => Math.abs(r.pct))) || 1;
+
+      for (const r of lista) {
+        const linha = el('div', { class: 'linha' });
+        const rot = el('div', { class: 'rot' });
+        rot.innerHTML = `<b>${r.rio || 'sem nome'}</b> · ${r.nome}` +
+          `<em>${r.uf || ''}${r.obra ? ' ⚑' : ''} ${r.n}a</em>`;
+        const trilho = el('div', { class: 'trilho' });
+        const cai = r.pct < 0;
+        const larg = Math.abs(r.pct) / teto * 50;
+        const barra = el('div', {
+          class: 'barra ' + (cai ? 'cai' : 'sobe') + (r.sig ? '' : ' fraca')
+        });
+        barra.style.width = larg + '%';
+        if (cai) barra.style.right = '50%'; else barra.style.left = '50%';
+        trilho.append(barra);
+        const val = el('div', { class: 'val' }, sinal(r.pct) + '%');
+        linha.append(rot, trilho, val);
+        liga(linha, fichaHTML(r));
+        rank.append(linha);
+      }
+
+      const nCai = filtradas.filter(r => r.pct < 0).length;
+      c.querySelector('.nota').textContent =
+        `${num(filtradas.length)} estações atendem aos critérios; ` +
+        `${num(nCai)} com vazão em queda e ${num(filtradas.length - nCai)} em alta. ` +
+        `O gráfico mostra os 20 extremos de cada lado. ` +
+        `A escala é simétrica: ${num(teto, 1)}% por década em cada ponta.`;
+
+      // tabela equivalente, para leitura sem cor
+      const det = c.querySelector('details.tabela');
+      if (det) det.remove();
+      const d = el('details', { class: 'tabela' });
+      d.append(el('summary', {}, 'ver como tabela'));
+      const rolo = el('div', { class: 'rolo' });
+      const tb = el('table');
+      tb.innerHTML = '<thead><tr><th>rio · estação</th><th>UF</th><th>anos</th>' +
+        '<th>%/década</th><th>m³/s·ano</th><th>q</th></tr></thead>';
+      const corpo = el('tbody');
+      for (const r of lista) {
+        const tr = el('tr');
+        tr.innerHTML = `<td>${titulo(r)}</td><td>${r.uf || ''}</td><td>${r.n}</td>` +
+          `<td>${sinal(r.pct)}</td><td>${sinal(r.sen, 3)}</td><td>${num(r.q, 3)}</td>`;
+        corpo.append(tr);
+      }
+      tb.append(corpo); rolo.append(tb); d.append(rolo);
+      c.append(d);
+    }
+
+    c.querySelectorAll('.seg button').forEach(b => {
+      b.addEventListener('click', () => {
+        const id = b.parentElement.id;
+        const v = Number(b.dataset.v);
+        if (id === 'cAnos') est.anos = v;
+        if (id === 'cObra') est.obra = v;
+        if (id === 'cSig') est.sig = v;
+        desenha();
+      });
+    });
+    selUF.addEventListener('change', () => { est.uf = selUF.value; desenha(); });
+    desenha();
+  }
+
+  // =========================================================
+  //  2 · o relógio do rio seco
+  // =========================================================
+  {
+    const c = el('div', { class: 'cartao' });
+    const seco = P.seco;
+    const nEst = Object.keys(seco.estacoes).length;
+    const totDias = seco.por_ano.reduce((a, l) => a + l[1], 0);
+
+    c.append(el('h2', {}, 'Os rios que pararam de correr'));
+    const p = el('p', { class: 'desc' });
+    p.innerHTML =
+      `A ANA marca cada dia de medição com um estado. Três deles significam que não havia ` +
+      `rio para medir: <strong>régua seca</strong>, <strong>rio cortado</strong> e ` +
+      `<strong>rio seco</strong>. São ${num(totDias)} dias assim, em ${num(nEst)} estações — ` +
+      `e isso só existe na série diária: a média mensal de um rio que secou vinte dias e ` +
+      `voltou não é zero, é baixa, e some no meio das outras baixas.`;
+    c.append(p);
+
+    // Barras por ano: quantas estações registraram ao menos um dia sem rio.
+    const dados = seco.por_ano.filter(l => l[0] >= 1960 && l[0] <= 2022);
+    const W = Math.max(680, dados.length * 11), H = 210;
+    const M = { t: 12, r: 10, b: 26, l: 42 };
+    const marcas = ticks(Math.max(...dados.map(l => l[2])));
+    const maxE = marcas[marcas.length - 1];
+    const px = (i) => M.l + i * ((W - M.l - M.r) / dados.length);
+    const larg = (W - M.l - M.r) / dados.length - 2;
+    const py = (v) => H - M.b - v / maxE * (H - M.t - M.b);
+
+    const svg = s('svg', { width: W, height: H, role: 'img',
+      'aria-label': 'estações com ao menos um dia de rio seco por ano, 1960 a 2022' });
+    for (const v of marcas) {
+      svg.append(s('line', { class: 'grade', x1: M.l, x2: W - M.r, y1: py(v), y2: py(v) }));
+      svg.append(s('text', { x: M.l - 6, y: py(v) + 3.5, 'text-anchor': 'end' }, num(v)));
+    }
+    dados.forEach((l, i) => {
+      const [ano, dias, ests] = l;
+      const y = py(ests);
+      const r = s('rect', {
+        x: px(i), y, width: larg, height: Math.max(1, H - M.b - y),
+        fill: 'var(--seca-2)', rx: 1.5
+      });
+      liga(r, `<b>${ano}</b><span class="mn"><u>${num(ests)}</u> estações sem rio<br>` +
+        `${num(dias)} dias secos somados</span>`);
+      svg.append(r);
+      if (ano % 10 === 0) {
+        svg.append(s('text', { x: px(i) + larg / 2, y: H - 9, 'text-anchor': 'middle' }, ano));
+      }
+    });
+    svg.append(s('line', { class: 'eixo', x1: M.l, x2: W - M.r, y1: py(0), y2: py(0) }));
+    const wrap = el('div', { class: 'svgwrap' });
+    wrap.append(svg);
+    c.append(wrap);
+
+    const pior = seco.por_ano.slice().sort((a, b) => b[2] - a[2])[0];
+    const nota = el('p', { class: 'nota' });
+    nota.innerHTML =
+      `Pior ano da série: <strong>${pior[0]}</strong>, com ${num(pior[2])} estações ` +
+      `registrando rio seco. Cada barra conta estações, não dias — uma estação que secou ` +
+      `um dia e outra que secou o ano inteiro contam igual aqui; o total de dias está no ` +
+      `detalhe de cada barra. A série para em 2022, último ano completo do arquivo.`;
+    c.append(nota);
+    pag.append(c);
+  }
+
+  // =========================================================
+  //  3 · o calendário da cheia
+  // =========================================================
+  {
+    const c = el('div', { class: 'cartao' });
+    const cheia = P.cheia;
+    const ja = P.janelas.antes, jd = P.janelas.depois;
+    const tarde = cheia.filter(r => r.desloc > 0.5).length;
+    const cedo = cheia.filter(r => r.desloc < -0.5).length;
+
+    c.append(el('h2', {}, 'A cheia mudou de mês?'));
+    const p = el('p', { class: 'desc' });
+    p.innerHTML =
+      `Para cada estação, o mês do pico de vazão em duas janelas de trinta anos ` +
+      `(${ja[0]}–${ja[1]} contra ${jd[0]}–${jd[1]}), por média circular — a média comum de ` +
+      `dezembro, janeiro e fevereiro daria julho. O deslocamento mediano é praticamente ` +
+      `nulo, mas a cauda é torta: <strong>${num(tarde)} estações com cheia mais tarde</strong> ` +
+      `contra ${num(cedo)} mais cedo.`;
+    c.append(p);
+
+    // A maioria das estações não mudou de mês, e a barra do zero sozinha
+    // esmagaria as outras contra o eixo — o leitor sairia sem ver a assimetria,
+    // que é o achado. O resultado nulo vira número ao lado; o gráfico fica só
+    // com quem se moveu meio mês ou mais.
+    const parado = cheia.filter(r => Math.abs(r.desloc) < 0.5).length;
+    const mexeu = cheia.filter(r => Math.abs(r.desloc) >= 0.5);
+
+    const resumo = el('div', { class: 'tiles' });
+    const tile = (v, rot, cls) => {
+      const t = el('div', { class: 'tile' + (cls ? ' ' + cls : '') });
+      t.append(el('b', {}, v), el('span', {}, rot));
+      return t;
+    };
+    // Sem as classes de cor dos outros painéis: nesta página laranja quer dizer
+    // "rio secando" e azul "rio enchendo". Cheia mais cedo ou mais tarde é outro
+    // eixo — pintar com o mesmo par faria o leitor ler deslocamento como perda.
+    resumo.append(
+      tile(num(parado), 'sem mudança (< ½ mês)'),
+      tile(num(tarde), 'cheia mais tarde'),
+      tile(num(cedo), 'cheia mais cedo'));
+    c.append(resumo);
+
+    const W = 700, H = 240, M = { t: 16, r: 16, b: 44, l: 46 };
+    const bins = new Map();
+    for (const r of mexeu) {
+      const k = Math.round(r.desloc * 2) / 2;
+      bins.set(k, (bins.get(k) || 0) + 1);
+    }
+    const chaves = [...bins.keys()].sort((a, b) => a - b);
+    const lim = Math.max(3, ...chaves.map(Math.abs));
+    const marcas = ticks(Math.max(...bins.values()));
+    const maxN = marcas[marcas.length - 1];
+    const px = (v) => M.l + (v + lim) / (2 * lim) * (W - M.l - M.r);
+    const py = (n) => H - M.b - n / maxN * (H - M.t - M.b);
+
+    const svg = s('svg', { width: W, height: H, role: 'img',
+      'aria-label': 'distribuição do deslocamento do mês de cheia entre as estações que mudaram' });
+    for (const v of marcas) {
+      svg.append(s('line', { class: 'grade', x1: M.l, x2: W - M.r, y1: py(v), y2: py(v) }));
+      svg.append(s('text', { x: M.l - 6, y: py(v) + 3.5, 'text-anchor': 'end' }, num(v)));
+    }
+    const lb = (W - M.l - M.r) / (2 * lim) * 0.5 - 1.5;
+    for (const k of chaves) {
+      const n = bins.get(k), y = py(n);
+      const r = s('rect', {
+        x: px(k) - lb / 2, y, width: lb, height: Math.max(1, H - M.b - y), rx: 1.5,
+        fill: 'var(--ink-2)', 'fill-opacity': .72
+      });
+      const dir = k > 0 ? 'mais tarde' : 'mais cedo';
+      liga(r, `<b>${sinal(k, 1)} mês</b><span class="mn">${num(n)} estações · cheia ${dir}</span>`);
+      svg.append(r);
+    }
+    for (let v = -Math.floor(lim); v <= Math.floor(lim); v++) {
+      svg.append(s('text', { x: px(v), y: H - 12, 'text-anchor': 'middle' }, sinal(v, 0)));
+    }
+    svg.append(s('line', { class: 'eixo', x1: px(0), x2: px(0), y1: M.t, y2: H - M.b }));
+    svg.append(s('text', { x: W / 2, y: H - 1, 'text-anchor': 'middle', class: 'rotulo' },
+      '← cheia mais cedo    ·    deslocamento em meses    ·    cheia mais tarde →'));
+    const wrap = el('div', { class: 'svgwrap' });
+    wrap.append(svg);
+    c.append(wrap);
+
+    const nota = el('p', { class: 'nota' });
+    nota.innerHTML =
+      `${num(cheia.length)} estações com regime completo e ao menos 15 anos em cada janela; ` +
+      `o gráfico mostra as ${num(mexeu.length)} que se deslocaram meio mês ou mais. ` +
+      `Deslocamento no calendário não é o mesmo que perda de água: um rio pode manter o ` +
+      `volume e mudar quando o entrega — o que basta para desencontrar do plantio, do ` +
+      `enchimento de reservatório e da piracema.`;
+    c.append(nota);
+    pag.append(c);
+  }
+
+  // =========================================================
+  //  4 · Q7,10 — o limite legal contra o rio real
+  // =========================================================
+  {
+    const c = el('div', { class: 'cartao' });
+    const q = P.q710;
+    const ja = P.janelas.antes, jd = P.janelas.depois;
+    const piorou = q.filter(r => r.var !== null && r.var < 0).length;
+    const zerou = q.filter(r => r.zerou).length;
+
+    c.append(el('h2', {}, 'A vazão que a lei usa para repartir a água'));
+    const p = el('p', { class: 'desc' });
+    p.innerHTML =
+      `A <strong>Q7,10</strong> — a menor vazão média de sete dias esperada uma vez a cada ` +
+      `dez anos — é a régua que os órgãos gestores usam para decidir quanta água pode ser ` +
+      `retirada de um rio. Comparando as mesmas duas janelas, ` +
+      `<strong>${num(piorou)} das ${num(q.length)} estações</strong> têm hoje uma Q7,10 menor ` +
+      `do que a que consta das contas antigas${zerou ? `, e ${num(zerou)} zeraram a vazão mínima` : ''}.`;
+    c.append(p);
+
+    const leg = el('div', { class: 'legenda' });
+    leg.innerHTML =
+      '<span><i style="background:var(--seca-2)"></i>Q7,10 menor que antes</span>' +
+      '<span><i style="background:var(--enche-2)"></i>Q7,10 maior</span>';
+    c.append(leg);
+
+    // Log-log: Q7,10 vai de milésimos a milhares de m³/s. Linear viraria uma
+    // nuvem colada na origem com três pontos soltos.
+    const W = 640, H = 420, M = { t: 14, r: 14, b: 42, l: 54 };
+    const pos = q.filter(r => r.antes > 0 && r.depois > 0);
+    const vals = pos.flatMap(r => [r.antes, r.depois]);
+    const lo = Math.max(1e-3, Math.min(...vals)), hi = Math.max(...vals);
+    const L = (v) => Math.log10(v);
+    const px = (v) => M.l + (L(v) - L(lo)) / (L(hi) - L(lo)) * (W - M.l - M.r);
+    const py = (v) => H - M.b - (L(v) - L(lo)) / (L(hi) - L(lo)) * (H - M.t - M.b);
+
+    const svg = s('svg', { width: W, height: H, role: 'img',
+      'aria-label': 'Q7,10 antiga contra recente, escala logarítmica' });
+    for (let e = Math.ceil(L(lo)); e <= Math.floor(L(hi)); e++) {
+      const v = Math.pow(10, e);
+      svg.append(s('line', { class: 'grade', x1: px(v), x2: px(v), y1: M.t, y2: H - M.b }));
+      svg.append(s('line', { class: 'grade', x1: M.l, x2: W - M.r, y1: py(v), y2: py(v) }));
+      const r = e < 0 ? num(v, -e) : num(v);
+      svg.append(s('text', { x: px(v), y: H - 26, 'text-anchor': 'middle' }, r));
+      svg.append(s('text', { x: M.l - 6, y: py(v) + 3.5, 'text-anchor': 'end' }, r));
+    }
+    // Diagonal da igualdade: acima dela o rio melhorou, abaixo piorou.
+    svg.append(s('line', {
+      x1: px(lo), y1: py(lo), x2: px(hi), y2: py(hi),
+      stroke: 'var(--ink-3)', 'stroke-width': 1, 'stroke-dasharray': '3 3'
+    }));
+    for (const r of pos) {
+      const pt = s('circle', {
+        cx: px(r.antes), cy: py(r.depois), r: 3.1,
+        fill: r.depois < r.antes ? 'var(--seca-2)' : 'var(--enche-2)',
+        'fill-opacity': .62, stroke: 'var(--panel)', 'stroke-width': 1
+      });
+      liga(pt, `<b>estação ${r.cod}</b><span class="mn">` +
+        `Q7,10 <u>${num(r.antes, 3)}</u> → <u>${num(r.depois, 3)}</u> m³/s<br>` +
+        `${r.var !== null ? sinal(r.var, 0) + '%' : ''} · ` +
+        `${r.anos_antes} e ${r.anos_depois} anos por janela</span>`);
+      svg.append(pt);
+    }
+    svg.append(s('text', { x: (M.l + W - M.r) / 2, y: H - 8, 'text-anchor': 'middle', class: 'rotulo' },
+      `Q7,10 em ${ja[0]}–${ja[1]} (m³/s)`));
+    const rotY = s('text', { x: 12, y: (M.t + H - M.b) / 2, 'text-anchor': 'middle', class: 'rotulo',
+      transform: `rotate(-90 12 ${(M.t + H - M.b) / 2})` }, `Q7,10 em ${jd[0]}–${jd[1]} (m³/s)`);
+    svg.append(rotY);
+    const wrap = el('div', { class: 'svgwrap' });
+    wrap.append(svg);
+    c.append(wrap);
+
+    const nota = el('p', { class: 'nota' });
+    nota.innerHTML =
+      `Ponto abaixo da diagonal = rio que hoje entrega menos no seu pior momento do que ` +
+      `entregava. Aproximação assumida: a Q7,10 aqui é o percentil 10 das mínimas anuais de ` +
+      `sete dias da janela, em vez do ajuste de uma distribuição de extremos — com trinta ` +
+      `anos por janela o percentil empírico é estável, e a escolha entre Gumbel e ` +
+      `log-Pearson mudaria o número em poucos por cento, não a direção. A média móvel usa ` +
+      `sete registros, não sete dias de calendário; por isso só entram anos com 330+ dias ` +
+      `medidos. ${zerou ? `As ${num(zerou)} estações que zeraram não aparecem no gráfico, que é logarítmico.` : ''}`;
+    c.append(nota);
+    pag.append(c);
+  }
+
+  // =========================================================
+  //  5 · a rede que mede — e quem confere
+  // =========================================================
+  {
+    const c = el('div', { class: 'cartao' });
+    const rede = P.rede;
+    const cheio = rede.ultimo_ano_cheio;
+    const cons = rede.consistencia.filter(l => l[0] >= 1960 && l[0] <= cheio);
+    const pico = cons.slice().sort((a, b) => b[3] - a[3])[0];
+    const ult = cons[cons.length - 1];
+
+    c.append(el('h2', {}, 'Quem ainda mede, e quem ainda confere'));
+    const p = el('p', { class: 'desc' });
+    p.innerHTML =
+      `Esta é a barra de erro de tudo que está acima. A rede reportando encolheu de ` +
+      `<strong>${num(pico[3])} estações em ${pico[0]}</strong> para ${num(ult[3])} em ${cheio}. ` +
+      `Parte disso é defasagem de publicação — o arquivo é um retrato de agosto de 2023 e o ` +
+      `dado recente ainda estava chegando. Mas a outra curva não tem essa desculpa: a ANA ` +
+      `<strong>consistiu ${num(cons.find(l => l[0] === 2014)[1])} estações em 2014 e uma em ${cheio}</strong>. ` +
+      `O dado bruto continua entrando; quase ninguém mais o está conferindo.`;
+    c.append(p);
+
+    const leg = el('div', { class: 'legenda' });
+    leg.innerHTML =
+      '<span><i style="background:var(--enche-2)"></i>estações reportando</span>' +
+      '<span><i style="background:var(--accent)"></i>com dado consistido pela ANA</span>';
+    c.append(leg);
+
+    const W = Math.max(700, cons.length * 10), H = 260, M = { t: 14, r: 14, b: 30, l: 46 };
+    const maxV = Math.max(...cons.map(l => l[3]));
+    const px = (a) => M.l + (a - cons[0][0]) / (cheio - cons[0][0]) * (W - M.l - M.r);
+    const py = (v) => H - M.b - v / maxV * (H - M.t - M.b);
+
+    const svg = s('svg', { width: W, height: H, role: 'img',
+      'aria-label': 'estações reportando e estações com dado consistido, por ano' });
+    for (let g = 0; g <= 4; g++) {
+      const v = maxV * g / 4;
+      svg.append(s('line', { class: 'grade', x1: M.l, x2: W - M.r, y1: py(v), y2: py(v) }));
+      svg.append(s('text', { x: M.l - 6, y: py(v) + 3.5, 'text-anchor': 'end' }, num(Math.round(v))));
+    }
+    const caminho = (idx) => cons.map((l, i) =>
+      (i ? 'L' : 'M') + px(l[0]).toFixed(1) + ' ' + py(l[idx]).toFixed(1)).join(' ');
+    svg.append(s('path', { d: caminho(3), fill: 'none', stroke: 'var(--enche-2)',
+      'stroke-width': 2, 'stroke-linejoin': 'round' }));
+    svg.append(s('path', { d: caminho(1), fill: 'none', stroke: 'var(--accent)',
+      'stroke-width': 2, 'stroke-linejoin': 'round' }));
+    for (const l of cons) {
+      if (l[0] % 10 === 0) {
+        svg.append(s('text', { x: px(l[0]), y: H - 11, 'text-anchor': 'middle' }, l[0]));
+      }
+      const alvo = s('rect', {
+        x: px(l[0]) - 5, y: M.t, width: 10, height: H - M.t - M.b, fill: 'transparent'
+      });
+      liga(alvo, `<b>${l[0]}</b><span class="mn"><u>${num(l[3])}</u> estações reportando<br>` +
+        `<u>${num(l[1])}</u> com dado consistido</span>`);
+      svg.append(alvo);
+    }
+    svg.append(s('line', { class: 'eixo', x1: M.l, x2: W - M.r, y1: py(0), y2: py(0) }));
+    const wrap = el('div', { class: 'svgwrap' });
+    wrap.append(svg);
+    c.append(wrap);
+
+    const nota = el('p', { class: 'nota' });
+    nota.innerHTML =
+      `Consistido é o dado que passou pela crítica técnica da ANA; bruto é o que saiu do ` +
+      `sensor. A série para em ${cheio} porque o arquivo é um retrato de 04/08/2023 e 2023 ` +
+      `não é ano completo. Ler junto com o resto da página: as tendências que terminam nos ` +
+      `anos 2020 se apoiam, em boa parte, em série que a própria agência ainda não validou.`;
+    c.append(nota);
+    pag.append(c);
+  }
+
+  // =========================================================
+  //  o que ainda falta
+  // =========================================================
+  {
+    const c = el('div', { class: 'cartao' });
+    c.append(el('h2', {}, 'O que este recorte ainda não responde'));
+    const p = el('p', { class: 'desc' });
+    p.innerHTML =
+      `A pergunta que falta é a mais importante: <strong>é seca ou é consumo?</strong> ` +
+      `Um rio pode perder vazão porque choveu menos ou porque se tirou mais água dele, e as ` +
+      `duas causas pedem respostas opostas. O teste é o coeficiente de escoamento — vazão ` +
+      `anual dividida pela chuva anual da bacia: se a chuva se manteve e a vazão caiu, a ` +
+      `causa não está no céu. A ANA publica a chuva das 5.525 estações pluviométricas em ` +
+      `bancos Access, um por estação, que ainda não foram convertidos.`;
+    c.append(p);
+    const nota = el('p', { class: 'nota' });
+    nota.innerHTML =
+      `Também fora deste recorte: o período de agosto de 2023 até hoje, que existe no ` +
+      `serviço SOAP da ANA mas com defasagem de alguns anos por estação.`;
+    c.append(nota);
+    pag.append(c);
+  }
+})();
+</script>
