@@ -105,9 +105,9 @@
   }
 
   .eyebrow {
-    font-family: var(--mono); font-size: 0.63rem; font-weight: 500;
-    letter-spacing: 0.15em; text-transform: uppercase; color: var(--ink-3);
-    margin: 0 0 7px;
+    font-family: var(--mono); font-size: 0.53rem; font-weight: 500;
+    letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-3);
+    margin: 0 0 7px; white-space: nowrap;
   }
   h1 {
     font-size: 1.44rem; line-height: 1.08; letter-spacing: -0.03em;
@@ -133,8 +133,11 @@
   }
 
   /* ---------- ficha ---------- */
-  .ficha { min-height: 132px; }
-  .ficha.vazia { color: var(--ink-3); font-size: 0.82rem; display: flex; align-items: center; }
+  .ficha { min-height: 132px; text-align: center; }
+  .ficha.vazia {
+    color: var(--ink-3); font-size: 0.82rem;
+    display: flex; align-items: center; justify-content: center;
+  }
   .ficha .nome {
     font-size: 0.97rem; font-weight: 620; line-height: 1.25; margin-bottom: 6px;
     text-wrap: balance;
@@ -143,6 +146,7 @@
     display: flex; justify-content: space-between; gap: 12px;
     font-size: 0.79rem; color: var(--ink-2); padding: 1px 0;
   }
+  .ficha .linha { justify-content: center; gap: 8px; }
   .linha em {
     font-style: normal; color: var(--ink); font-weight: 550;
     font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap;
@@ -151,7 +155,7 @@
      do selo laranja de estação, e a diferença entre medido e estimado é
      justamente o que o leitor precisa enxergar. */
   .selo {
-    display: inline-block; margin-top: 10px; padding: 3px 7px;
+    display: inline-block; margin-top: 10px; padding: 3px 7px; text-align: center;
     font-family: var(--mono); font-size: 0.62rem;
     text-transform: uppercase; letter-spacing: 0.08em;
     color: var(--accent); border: 1px solid currentColor; border-radius: 2px;
@@ -393,11 +397,6 @@
   </div>
 
   <div class="cartao">
-    <h2>Vazão média</h2>
-    <div class="classes" id="classes"></div>
-  </div>
-
-  <div class="cartao">
     <h2>Detalhe da rede</h2>
     <label class="faixa">
       <input type="range" id="rgOrdem" min="0" max="6" step="1" value="0"
@@ -427,6 +426,10 @@
     </div>
   </div>
 
+  <div class="cartao">
+    <h2>Vazão média</h2>
+    <div class="classes" id="classes"></div>
+  </div>
 </div>
 
 <div class="veu" id="veu"></div>
@@ -1146,16 +1149,23 @@
       ' — ' + fmt(reg[cheio] / Math.max(reg[seco], 0.01), 1) + '× entre os extremos</div></div>';
   }
 
+  const OUTRAS_MEDIDAS = { T: 'telemetria', S: 'sedimentos', Q: 'qualidade da água' };
   function fichaEstacao(e) {
+    const extras = (e.mede || '').split('').map(c => OUTRAS_MEDIDAS[c]).filter(Boolean);
     fichaEl.className = 'cartao ficha';
     fichaEl.innerHTML =
       '<div class="nome">' + e.nome + '</div>' +
+      (e.mun ? linha('Onde', e.mun + (e.uf ? ' · ' + e.uf : '')) : '') +
+      (e.op ? linha('Operada por', e.op) : '') +
       linha('Rio', e.rio || '—') +
       linha('Vazão média', fmt(e.q, e.q < 10 ? 1 : 0) + ' m³/s') +
       linha('Faixa mensal', fmt(e.qmin, 1) + ' – ' + fmt(e.qmax) + ' m³/s') +
       linha('Área de drenagem', fmt(e.area) + ' km²') +
+      (e.alt != null ? linha('Altitude', fmt(e.alt) + ' m') : '') +
+      linha('Série', e.ini + '–' + e.fim + ' · ' + e.n + ' meses') +
+      (extras.length ? linha('Mede também', extras.join(', ')) : '') +
       regimeHTML(e.regime, 'Vazão média por mês') +
-      '<div class="selo">estação ' + e.cod + ' · ' + e.n + ' meses medidos</div>';
+      '<div class="selo">estação ' + e.cod + (e.ativa ? ' · em operação' : ' · desativada') + '</div>';
   }
 
   function fichaUsina(u) {
@@ -1384,7 +1394,7 @@
   const anoIni = D.periodo ? D.periodo[0] : '1995', anoFim = D.periodo ? D.periodo[1] : '2025';
   document.getElementById('stats').innerHTML = [
     [fmt(N), 'trechos de rio'],
-    [fmt(D.estacoes.length), 'estações medindo'],
+    [fmt(D.estacoes.length), 'estações com série'],
     [fmt(RES.length), 'reservatórios'],
     [(val.dentro2x || 0) + '%', 'acerto na validação'],
   ].map(([a, b]) => '<div class="stat"><b>' + a + '</b><span>' + b + '</span></div>').join('');

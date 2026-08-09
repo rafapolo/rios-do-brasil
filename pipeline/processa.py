@@ -120,6 +120,13 @@ def carrega_estacoes():
             pl.col("Latitude").cast(pl.Float64, strict=False).alias("lat"),
             pl.col("Longitude").cast(pl.Float64, strict=False).alias("lon"),
             pl.col("AreaDrenagem").cast(pl.Float64, strict=False).alias("area_km2"),
+            pl.col("Altitude").cast(pl.Float64, strict=False).alias("altitude"),
+            pl.col("OperadoraSigla").alias("operadora"),
+            pl.col("ResponsavelSigla").alias("responsavel"),
+            pl.col("Operando").alias("operando"),
+            pl.col("TipoEstacaoTelemetrica").alias("telemetrica"),
+            pl.col("TipoEstacaoSedimentos").alias("sedimentos"),
+            pl.col("TipoEstacaoQualAgua").alias("qualidade"),
         ).filter(pl.col("lat").is_not_null() & pl.col("lon").is_not_null())
     else:
         est = pl.read_csv(S / "estacoes_vazao.csv", infer_schema_length=5000).with_columns(
@@ -464,6 +471,15 @@ def main():
                 "qmin": round(r["q_min_mensal"], 2),
                 "qmax": round(r["q_max_mensal"], 2),
                 "n": r["n_meses"],
+                "ini": r["mes_ini"][:4],
+                "fim": r["mes_fim"][:4],
+                "mun": (r.get("nmMunicipio") or "").strip().title() or None,
+                "alt": None if r.get("altitude") is None else round(r["altitude"]),
+                "op": (r.get("operadora") or "").strip() or None,
+                # o que mais essa estação mede além de vazão
+                "mede": "".join(c for c, k in (("T", "telemetrica"), ("S", "sedimentos"),
+                                               ("Q", "qualidade")) if r.get(k) == "1") or None,
+                "ativa": 1 if r.get("operando") == "1" else 0,
                 "regime": regime_mensal.get(r["Codigo"]),
             }
             for r in est.iter_rows(named=True)
