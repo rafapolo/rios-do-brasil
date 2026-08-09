@@ -7,6 +7,12 @@ estação fluviométrica, estimada nos demais.
 
 ![O mapa](screenshot.png)
 
+Inspirado no [Elvestraum Noreg](https://norway-charts.netlify.app/river_flow_map/), que faz o
+mesmo para os rios da Noruega a partir dos dados do NVE. A ideia de desenhar a rede pela vazão,
+o painel lateral com a ficha do curso d'água e o fluxo animado vêm de lá; os dados, o método de
+regionalização e o código são outros — aqui a direção do escoamento não é derivada do terreno,
+ela vem pronta na topologia da base da ANA.
+
 ## O que dá para ver
 
 - **Largura e cor de cada traço** proporcionais à vazão média, em escala logarítmica
