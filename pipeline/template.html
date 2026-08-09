@@ -97,7 +97,7 @@
     /* itens de coluna flex encolhem por padrão: sem isto o cartão da ficha era
        espremido e o gráfico de regime vazava por baixo da borda */
     flex: none;
-    background: color-mix(in srgb, var(--panel) 93%, transparent);
+    background: linear-gradient(115deg, rgba(255, 255, 255, .045), transparent 25%);
     backdrop-filter: blur(14px);
     border: 1px solid var(--rule); border-radius: 4px;
     padding: 14px 16px; box-shadow: var(--sombra);
@@ -113,7 +113,6 @@
     font-size: 1.44rem; line-height: 1.08; letter-spacing: -0.03em;
     font-weight: 680; margin: 0 0 8px; text-wrap: balance;
   }
-  .dek { color: var(--ink-2); font-size: 0.82rem; margin: 0; }
 
   .stats {
     display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px;
@@ -255,7 +254,7 @@
     display: flex; flex-direction: column; gap: 6px;
   }
   .zoom button, .abrir {
-    background: color-mix(in srgb, var(--panel) 93%, transparent);
+    background: linear-gradient(115deg, rgba(255, 255, 255, .045), transparent 25%);
     backdrop-filter: blur(14px); box-shadow: var(--sombra);
     justify-content: center; min-width: 40px; padding: 9px;
     font-size: 0.88rem; letter-spacing: 0;
@@ -268,7 +267,8 @@
   /* ---------- gaveta com tabela e método ---------- */
   .gaveta {
     position: fixed; top: 0; right: 0; bottom: 0; z-index: 6;
-    width: min(430px, 100vw); background: var(--panel);
+    width: min(430px, 100vw); background: linear-gradient(115deg, rgba(255, 255, 255, .045), transparent 25%);
+    backdrop-filter: blur(18px);
     border-left: 1px solid var(--rule); box-shadow: var(--sombra);
     padding: 20px 22px 40px; overflow-y: auto; overscroll-behavior: contain;
     transform: translateX(101%); transition: transform .22s ease;
@@ -306,7 +306,8 @@
   /* ---------- sobreposições ---------- */
   .tip {
     position: fixed; pointer-events: none; opacity: 0; transition: opacity .1s; z-index: 4;
-    background: var(--panel); border: 1px solid var(--rule); border-radius: 3px;
+    background: linear-gradient(115deg, rgba(255, 255, 255, .045), transparent 25%); backdrop-filter: blur(14px);
+    border: 1px solid var(--rule); border-radius: 3px;
     padding: 9px 11px; font-size: 0.77rem; max-width: 244px; box-shadow: var(--sombra);
   }
   @media (prefers-reduced-motion: reduce) { .tip { transition: none; } }
@@ -341,13 +342,13 @@
     .puxador {
       display: flex; align-items: center; justify-content: space-between; gap: 10px;
       width: 100%; pointer-events: auto; text-transform: none; font-size: 0.75rem;
-      background: color-mix(in srgb, var(--panel) 94%, transparent);
+      background: linear-gradient(115deg, rgba(255, 255, 255, .045), transparent 25%);
       backdrop-filter: blur(14px); border: 1px solid var(--rule); border-radius: 6px;
       box-shadow: var(--sombra); padding: 11px 15px; min-height: 46px;
       font-family: var(--sans); font-weight: 600; letter-spacing: 0;
     }
     .titulo-cartao { order: 9; }
-    .titulo-cartao .eyebrow, .titulo-cartao h1, .titulo-cartao .dek { display: none; }
+    .titulo-cartao .eyebrow, .titulo-cartao h1 { display: none; }
     .titulo-cartao .stats { margin-top: 0; padding-top: 0; border-top: none; }
     h1 { font-size: 1.28rem; }
     .zoom { top: auto; bottom: 76px; right: 12px; }
@@ -384,11 +385,6 @@
   <div class="cartao titulo-cartao">
     <p class="eyebrow">Rede de drenagem · Agência Nacional de Águas</p>
     <h1>Os rios do Brasil, por vazão</h1>
-    <p class="dek">
-      A rede nacional desenhada pelo volume de água que passa por ela. Cada trecho tem largura
-      e cor proporcionais à vazão média de longo termo — medida onde existe estação
-      fluviométrica, estimada nos demais.
-    </p>
     <div class="stats" id="stats"></div>
   </div>
 
