@@ -1,0 +1,9 @@
+# Intermediários da coleta: pesados e refazíveis pelos scripts do pipeline/
+bho/
+*.geojson
+*.parquet
+*.csv
+rede_vazao.json
+reservatorios.json
+*.json.gz
+__pycache__/

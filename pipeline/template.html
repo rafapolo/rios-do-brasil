@@ -1,0 +1,1460 @@
+<title>Os rios do Brasil por vazão</title>
+<style>
+  /* JetBrains Mono (SIL OFL 1.1), subconjunto variável embutido — a face de
+     leitura de instrumento: número, código de estação, rótulo, eixo. */
+  @font-face {
+    font-family: "Mono";
+    src: url(data:font/woff2;base64,/*__FONTE__*/) format("woff2-variations");
+    font-weight: 100 800;
+    font-display: swap;
+  }
+
+  :root {
+    color-scheme: light;
+    --panel:    #f8fafb;
+    --leito:    #e2e8ea;
+    --uf-line:  #cfd9dc;
+    --terra:    #dfe6e8;
+    --divisa:   #b9c6cb;
+    --rule:     #c5d0d4;
+    --ink:      #0b1416;
+    --ink-2:    #41535a;
+    --ink-3:    #6f838a;
+    --accent:   #eb6834;
+    --usina:    #b07800;
+    --ramp-0: #cde2fb; --ramp-1: #9ec5f4; --ramp-2: #6da7ec; --ramp-3: #3987e5;
+    --ramp-4: #256abf; --ramp-5: #184f95; --ramp-6: #0d366b;
+    --fluxo:  #0d366b;
+    --sombra: 0 6px 26px rgba(11, 20, 22, .13);
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --mono: "Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --panel:    #10161a;
+      --leito:    #070b0e;
+      --uf-line:  #1e282d;
+    --terra:    #141a1e;
+    --divisa:   #2b383f;
+      --terra:    #141a1e;
+      --divisa:   #2b383f;
+      --rule:     #26333a;
+      --ink:      #eef5f6;
+      --ink-2:    #a4b7bd;
+      --ink-3:    #7c8f96;
+      --accent:   #f07a49;
+      --usina:    #eda100;
+      --ramp-0: #0d366b; --ramp-1: #184f95; --ramp-2: #256abf; --ramp-3: #3987e5;
+      --ramp-4: #6da7ec; --ramp-5: #9ec5f4; --ramp-6: #cde2fb;
+      --fluxo:  #dbeafd;
+      --sombra: 0 6px 26px rgba(0, 0, 0, .45);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --panel:    #10161a;
+    --leito:    #070b0e;
+    --uf-line:  #1e282d;
+    --rule:     #26333a;
+    --ink:      #eef5f6;
+    --ink-2:    #a4b7bd;
+    --ink-3:    #7c8f96;
+    --accent:   #f07a49;
+    --usina:    #eda100;
+    --ramp-0: #0d366b; --ramp-1: #184f95; --ramp-2: #256abf; --ramp-3: #3987e5;
+    --ramp-4: #6da7ec; --ramp-5: #9ec5f4; --ramp-6: #cde2fb;
+    --fluxo:  #dbeafd;
+    --sombra: 0 6px 26px rgba(0, 0, 0, .45);
+  }
+
+  body {
+    background: var(--leito);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.5;
+    margin: 0;
+    overflow: hidden;
+    -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* ---------- o mapa é a página ---------- */
+  .mapa { position: fixed; inset: 0; background: var(--leito); touch-action: none; }
+  canvas { display: block; width: 100%; height: 100%; cursor: grab; }
+  #cvFluxo { position: absolute; inset: 0; pointer-events: none; }
+  canvas.arrastando { cursor: grabbing; }
+
+  /* ---------- painéis flutuantes ---------- */
+  .hud {
+    position: fixed; top: 16px; left: 16px; z-index: 3;
+    width: 320px; max-width: calc(100vw - 32px);
+    max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain;
+    display: flex; flex-direction: column; gap: 10px;
+    pointer-events: none;
+  }
+  .cartao {
+    /* itens de coluna flex encolhem por padrão: sem isto o cartão da ficha era
+       espremido e o gráfico de regime vazava por baixo da borda */
+    flex: none;
+    background: color-mix(in srgb, var(--panel) 93%, transparent);
+    backdrop-filter: blur(14px);
+    border: 1px solid var(--rule); border-radius: 4px;
+    padding: 14px 16px; box-shadow: var(--sombra);
+    pointer-events: auto;
+  }
+
+  .eyebrow {
+    font-family: var(--mono); font-size: 0.63rem; font-weight: 500;
+    letter-spacing: 0.15em; text-transform: uppercase; color: var(--ink-3);
+    margin: 0 0 7px;
+  }
+  h1 {
+    font-size: 1.44rem; line-height: 1.08; letter-spacing: -0.03em;
+    font-weight: 680; margin: 0 0 8px; text-wrap: balance;
+  }
+  .dek { color: var(--ink-2); font-size: 0.82rem; margin: 0; }
+
+  .stats {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px;
+    margin-top: 13px; padding-top: 12px; border-top: 1px solid var(--rule);
+  }
+  .stat b {
+    display: block; font-family: var(--mono); font-size: 0.96rem; font-weight: 550;
+    letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.2;
+  }
+  .stat span {
+    font-family: var(--mono); font-size: 0.55rem; color: var(--ink-3);
+    text-transform: uppercase; letter-spacing: 0.09em; display: block; line-height: 1.5;
+  }
+
+  h2 {
+    font-size: 0.63rem; margin: 0 0 9px; font-family: var(--mono); font-weight: 500;
+    text-transform: uppercase; letter-spacing: 0.13em; color: var(--ink-3);
+  }
+
+  /* ---------- ficha ---------- */
+  .ficha { min-height: 132px; }
+  .ficha.vazia { color: var(--ink-3); font-size: 0.82rem; display: flex; align-items: center; }
+  .ficha .nome {
+    font-size: 0.97rem; font-weight: 620; line-height: 1.25; margin-bottom: 6px;
+    text-wrap: balance;
+  }
+  .linha {
+    display: flex; justify-content: space-between; gap: 12px;
+    font-size: 0.79rem; color: var(--ink-2); padding: 1px 0;
+  }
+  .linha em {
+    font-style: normal; color: var(--ink); font-weight: 550;
+    font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  /* Etiqueta com corpo: em cinza claro a 9px o "vazão estimada" sumia ao lado
+     do selo laranja de estação, e a diferença entre medido e estimado é
+     justamente o que o leitor precisa enxergar. */
+  .selo {
+    display: inline-block; margin-top: 10px; padding: 3px 7px;
+    font-family: var(--mono); font-size: 0.62rem;
+    text-transform: uppercase; letter-spacing: 0.08em;
+    color: var(--accent); border: 1px solid currentColor; border-radius: 2px;
+    background: color-mix(in srgb, currentColor 11%, transparent);
+  }
+  .selo.neutro { color: var(--ink-2); }
+  .selo.usina { color: var(--usina); }
+
+  /* ---------- regime mensal ---------- */
+  .regime { margin-top: 11px; }
+  .regime-titulo, .regime-nota {
+    font-family: var(--mono); font-size: 0.58rem; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--ink-3);
+  }
+  .barras {
+    display: flex; align-items: flex-end; gap: 2px; height: 46px; margin: 6px 0 5px;
+  }
+  .mes {
+    flex: 1; display: flex; flex-direction: column; justify-content: flex-end;
+    align-items: center; gap: 3px; height: 100%;
+    font-family: var(--mono); font-size: 0.52rem; color: var(--ink-3);
+  }
+  .mes i { display: block; width: 100%; height: var(--h); background: var(--ramp-3); border-radius: 1px; }
+  .regime-nota { text-transform: none; letter-spacing: 0; font-size: 0.66rem; line-height: 1.4; }
+
+  /* ---------- legenda em classes ---------- */
+  /* Cada amostra usa a mesma cor e a mesma espessura que o mapa desenha para
+     aquela faixa — são geradas em JS a partir das funções de cor e largura,
+     então não há como legenda e mapa divergirem. */
+  .classes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+  .classe { display: flex; align-items: center; gap: 8px; font-size: 0.73rem; color: var(--ink-2); }
+  .amostra { width: 26px; border-radius: 99px; flex: none; }
+  .nota { font-size: 0.72rem; color: var(--ink-3); margin: 8px 0 0; line-height: 1.5; }
+
+  /* ---------- controle de detalhe ---------- */
+  .faixa { display: flex; flex-direction: column; gap: 7px; }
+  .faixa input[type="range"] {
+    width: 100%; accent-color: var(--accent); height: 22px; margin: 0; cursor: pointer;
+  }
+  .faixa-texto {
+    font-size: 0.75rem; color: var(--ink-2); line-height: 1.45;
+  }
+  .faixa-texto b {
+    font-family: var(--mono); font-variant-numeric: tabular-nums;
+    color: var(--ink); font-weight: 550;
+  }
+
+  /* ---------- botões ---------- */
+  .controles { display: grid; gap: 6px; }
+  button {
+    background: transparent; color: var(--ink);
+    border: 1px solid var(--rule); border-radius: 2px;
+    padding: 8px 11px; cursor: pointer; text-align: left;
+    font-family: var(--mono); font-size: 0.64rem; font-weight: 500;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    display: flex; justify-content: space-between; align-items: center; gap: 10px;
+    min-height: 38px; line-height: 1.3;
+  }
+  button:hover { border-color: var(--ink-3); }
+  button .rotulo { white-space: nowrap; }
+
+  /* ---------- interruptores das camadas ---------- */
+  button.chave {
+    border: none; padding: 5px 0; min-height: 34px; gap: 10px;
+    text-transform: none; letter-spacing: 0; font-family: var(--sans);
+    font-size: 0.82rem; font-weight: 500; color: var(--ink);
+  }
+  button.chave:hover { background: none; }
+  button.chave .rotulo { flex: 1; }
+  button.chave .rotulo b {
+    font-family: var(--mono); font-weight: 500; font-size: 0.72rem;
+    color: var(--ink-3); font-variant-numeric: tabular-nums;
+  }
+  .icone {
+    width: 24px; height: 24px; border-radius: 6px; flex: none;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.72rem; line-height: 1;
+  }
+  .icone.est { color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, transparent); }
+  .icone.res { color: var(--usina); background: color-mix(in srgb, var(--usina) 18%, transparent); }
+  .icone.flu { color: var(--ramp-3); background: color-mix(in srgb, var(--ramp-3) 20%, transparent); }
+  .switch {
+    width: 34px; height: 20px; border-radius: 99px; flex: none; position: relative;
+    background: color-mix(in srgb, var(--ink-3) 40%, transparent);
+    transition: background .15s;
+  }
+  .switch::after {
+    content: ""; position: absolute; top: 3px; left: 3px;
+    width: 14px; height: 14px; border-radius: 50%; background: var(--panel);
+    transition: transform .15s;
+  }
+  button.chave[aria-pressed="true"] .switch { background: var(--accent); }
+  button.chave[aria-pressed="true"] .switch::after { transform: translateX(14px); }
+  @media (prefers-reduced-motion: reduce) {
+    .switch, .switch::after { transition: none; }
+  }
+
+  .zoom {
+    position: fixed; right: 16px; top: 16px; z-index: 3;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .zoom button, .abrir {
+    background: color-mix(in srgb, var(--panel) 93%, transparent);
+    backdrop-filter: blur(14px); box-shadow: var(--sombra);
+    justify-content: center; min-width: 40px; padding: 9px;
+    font-size: 0.88rem; letter-spacing: 0;
+  }
+  .abrir {
+    position: fixed; right: 16px; bottom: 16px; z-index: 3;
+    font-size: 0.64rem; letter-spacing: 0.06em; padding: 10px 14px; min-height: 40px;
+  }
+
+  /* ---------- gaveta com tabela e método ---------- */
+  .gaveta {
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 6;
+    width: min(430px, 100vw); background: var(--panel);
+    border-left: 1px solid var(--rule); box-shadow: var(--sombra);
+    padding: 20px 22px 40px; overflow-y: auto; overscroll-behavior: contain;
+    transform: translateX(101%); transition: transform .22s ease;
+    display: flex; flex-direction: column; gap: 20px;
+  }
+  .gaveta.on { transform: none; }
+  @media (prefers-reduced-motion: reduce) { .gaveta { transition: none; } }
+  .gaveta-topo { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .gaveta-topo h2 { margin: 0; }
+  .fechar { min-height: 34px; padding: 6px 11px; }
+
+  .tabela { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+  .tabela th, .tabela td { padding: 6px 0; text-align: left; border-bottom: 1px solid var(--rule); }
+  .tabela th {
+    font-family: var(--mono); font-size: 0.55rem; text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--ink-3); font-weight: 500;
+  }
+  .tabela td.num {
+    text-align: right; font-family: var(--mono); font-variant-numeric: tabular-nums;
+    font-size: 0.75rem; white-space: nowrap;
+  }
+  .tabela tbody tr { cursor: pointer; }
+  .tabela tbody tr:hover td { color: var(--accent); }
+  .barra { display: block; height: 4px; border-radius: 1px; background: var(--ramp-3); margin-top: 4px; }
+
+  .metodo { font-size: 0.81rem; color: var(--ink-2); display: flex; flex-direction: column; gap: 10px; }
+  .metodo p { margin: 0; }
+  .metodo strong { color: var(--ink); font-weight: 620; }
+  .ressalva { border-left: 2px solid var(--accent); padding-left: 13px; }
+  footer {
+    font-family: var(--mono); font-size: 0.59rem; color: var(--ink-3);
+    line-height: 1.7; border-top: 1px solid var(--rule); padding-top: 14px;
+  }
+
+  /* ---------- sobreposições ---------- */
+  .tip {
+    position: fixed; pointer-events: none; opacity: 0; transition: opacity .1s; z-index: 4;
+    background: var(--panel); border: 1px solid var(--rule); border-radius: 3px;
+    padding: 9px 11px; font-size: 0.77rem; max-width: 244px; box-shadow: var(--sombra);
+  }
+  @media (prefers-reduced-motion: reduce) { .tip { transition: none; } }
+  .tip.on { opacity: 1; }
+  .tip b { display: block; font-size: 0.82rem; margin-bottom: 3px; line-height: 1.3; }
+  @media (hover: none) { .tip { display: none; } }
+
+  .vazio {
+    position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    margin: 0; display: none; text-align: center; max-width: 300px;
+    color: var(--ink-3); font-size: 0.82rem; pointer-events: none; text-wrap: balance;
+  }
+  .vazio.on { display: block; }
+
+  .veu {
+    position: fixed; inset: 0; z-index: 5; background: rgba(0,0,0,.32);
+    opacity: 0; pointer-events: none; transition: opacity .22s;
+  }
+  .veu.on { opacity: 1; pointer-events: auto; }
+
+  /* ---------- mobile: o HUD vira faixa inferior recolhível ---------- */
+  .puxador { display: none; }
+  @media (max-width: 760px) {
+    .hud {
+      top: auto; left: 0; right: 0; bottom: 0; width: auto; max-width: none;
+      max-height: 70dvh; padding: 0 10px 10px; gap: 8px;
+      transition: transform .24s ease;
+    }
+    @media (prefers-reduced-motion: reduce) { .hud { transition: none; } }
+    .hud.recolhido { transform: translateY(calc(100% - 56px)); }
+    .cartao { border-radius: 6px; padding: 13px 15px; }
+    .puxador {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      width: 100%; pointer-events: auto; text-transform: none; font-size: 0.75rem;
+      background: color-mix(in srgb, var(--panel) 94%, transparent);
+      backdrop-filter: blur(14px); border: 1px solid var(--rule); border-radius: 6px;
+      box-shadow: var(--sombra); padding: 11px 15px; min-height: 46px;
+      font-family: var(--sans); font-weight: 600; letter-spacing: 0;
+    }
+    .titulo-cartao { order: 9; }
+    .titulo-cartao .eyebrow, .titulo-cartao h1, .titulo-cartao .dek { display: none; }
+    .titulo-cartao .stats { margin-top: 0; padding-top: 0; border-top: none; }
+    h1 { font-size: 1.28rem; }
+    .zoom { top: auto; bottom: 76px; right: 12px; }
+    .abrir { bottom: auto; top: 12px; right: 12px; }
+    .gaveta { width: 100vw; padding: 18px 18px 40px; }
+    .vazio { top: 32%; }
+    button { min-height: 42px; }
+  }
+</style>
+
+<main class="mapa" id="mapa">
+  <canvas id="cv"></canvas>
+  <canvas id="cvFluxo"></canvas>
+</main>
+
+<p class="vazio" id="vazio">Nenhum rio de porte por aqui — a rede desenhada começa
+  nos cursos que drenam algumas centenas de km².</p>
+<div class="tip" id="tip"></div>
+
+<div class="zoom">
+  <button id="btMais" title="Aproximar" aria-label="Aproximar">+</button>
+  <button id="btMenos" title="Afastar" aria-label="Afastar">−</button>
+  <button id="btReset" title="Enquadrar o Brasil" aria-label="Enquadrar o Brasil">⤢</button>
+</div>
+
+<button class="abrir" id="btSobre">Tabela e método</button>
+
+<div class="hud" id="hud">
+  <button class="puxador" id="puxador" aria-expanded="true" aria-controls="hud">
+    <span>Os rios do Brasil, por vazão</span>
+    <span class="estado" id="puxadorSeta">▾</span>
+  </button>
+
+  <div class="cartao titulo-cartao">
+    <p class="eyebrow">Rede de drenagem · Agência Nacional de Águas</p>
+    <h1>Os rios do Brasil, por vazão</h1>
+    <p class="dek">
+      A rede nacional desenhada pelo volume de água que passa por ela. Cada trecho tem largura
+      e cor proporcionais à vazão média de longo termo — medida onde existe estação
+      fluviométrica, estimada nos demais.
+    </p>
+    <div class="stats" id="stats"></div>
+  </div>
+
+  <div class="cartao ficha vazia" id="ficha">
+    Toque num rio, numa estação ou num reservatório para ver a vazão.
+  </div>
+
+  <div class="cartao">
+    <h2>Vazão média</h2>
+    <div class="classes" id="classes"></div>
+  </div>
+
+  <div class="cartao">
+    <h2>Detalhe da rede</h2>
+    <label class="faixa">
+      <input type="range" id="rgOrdem" min="0" max="6" step="1" value="0"
+             aria-label="Vazão mínima dos rios desenhados">
+      <span class="faixa-texto" id="rgTexto"></span>
+    </label>
+  </div>
+
+  <div class="cartao">
+    <h2>Camadas</h2>
+    <div class="controles">
+      <button id="btEst" class="chave" aria-pressed="true">
+        <span class="icone est">●</span>
+        <span class="rotulo">Estações <b id="nEst"></b></span>
+        <span class="switch"></span>
+      </button>
+      <button id="btRes" class="chave" aria-pressed="true">
+        <span class="icone res">■</span>
+        <span class="rotulo">Reservatórios <b id="nRes"></b></span>
+        <span class="switch"></span>
+      </button>
+      <button id="btFluxo" class="chave" aria-pressed="false">
+        <span class="icone flu">≈</span>
+        <span class="rotulo">Fluxo animado <b id="nFluxo"></b></span>
+        <span class="switch"></span>
+      </button>
+    </div>
+  </div>
+
+</div>
+
+<div class="veu" id="veu"></div>
+
+<aside class="gaveta" id="gaveta" aria-hidden="true">
+  <div class="gaveta-topo">
+    <h2>Os 20 maiores rios</h2>
+    <button class="fechar" id="btFechar">Fechar</button>
+  </div>
+
+  <div>
+    <table class="tabela">
+      <thead>
+        <tr><th>Rio</th><th class="num">m³/s</th><th class="num">km² de bacia</th></tr>
+      </thead>
+      <tbody id="tb"></tbody>
+    </table>
+    <p class="nota">
+      Vazão no trecho mais caudaloso de cada rio dentro do Brasil — para os que saem do país,
+      é o valor na fronteira, não na foz. Ficaram de fora os trechos que a base nomeia como
+      córrego ou baía: no Paraná, o tronco principal aparece rotulado como
+      “Córrego do Machado” por dezenas de quilômetros.
+    </p>
+  </div>
+
+  <div class="metodo">
+    <h2>Como o número é obtido</h2>
+    <p>
+      A rede vem da <strong>Base Hidrográfica Ottocodificada 2017 (1:5.000)</strong> da Agência
+      Nacional de Águas, recortada nos trechos de ordem de Strahler 5 ou mais. Cada trecho traz
+      sua área de drenagem a montante e o trecho de jusante, então a direção do fluxo — inclusive
+      a do movimento animado — não é inferida do terreno: ela já vem na base.
+    </p>
+    <p>
+      A vazão medida vem das <strong>séries históricas das estações fluviométricas da ANA</strong>,
+      de <span data-ini></span> a <span data-fim></span>. Para cada estação com pelo menos cinco
+      anos de dados, a vazão média de longo termo dividida pela área de drenagem dá a
+      <strong>vazão específica</strong> daquele pedaço de bacia — no Brasil isso vai de menos de
+      1 L/s/km² na caatinga a cerca de 60 no litoral mais chuvoso.
+    </p>
+    <p>
+      Cada trecho recebe a vazão específica interpolada das estações vizinhas, aplicada apenas
+      à <strong>área que entra nele</strong>, e esse volume desce pela rede somando trecho a
+      trecho até a foz. Onde uma estação mede o trecho, o valor medido substitui o acumulado e
+      <strong>vale para todo o curso a jusante</strong>.
+    </p>
+    <p>
+      Os <strong>reservatórios</strong> são os do Sistema Interligado Nacional acompanhados pela
+      ANA, com a média de 22 anos de operação diária: quanto passou pelas turbinas, quanto foi
+      vertido e quanto chegou de montante.
+    </p>
+    <p>
+      <strong>Quanto isso erra:</strong> retirando um quinto das estações, reestimando a rede sem
+      elas e comparando nos trechos que elas mediam, <span data-2x></span>% das estimativas ficam
+      dentro de 2× do valor observado e <span data-15x></span>% dentro de 1,5×, sem viés
+      sistemático (mediana <span data-vies></span>×). Nos grandes rios da Amazônia a estimativa
+      fica a menos de 10% das vazões publicadas.
+    </p>
+    <p class="ressalva">
+      <strong>Onde erra mais:</strong> a estimativa ignora barragens, transposições e captações —
+      no São Francisco e no Paraná, fortemente regulados, o número se afasta do regime natural.
+      E a rede cobre as bacias inteiras, inclusive os trechos em território vizinho, onde não há
+      posto brasileiro medindo: no Uruguai e no Paraguai a vazão sai perto do dobro do publicado.
+      É um retrato de ordem de grandeza, não um dado operacional.
+    </p>
+  </div>
+
+  <footer id="rodape"></footer>
+</aside>
+
+<script id="dados" type="text/plain">/*__DADOS__*/</script>
+<script id="usinas" type="text/plain">/*__RESERV__*/</script>
+<script>
+(async function () {
+  /* Os dados vão embutidos em gzip+base64 e são descomprimidos aqui. O ganho é
+     modesto — o varint da geometria já deixou os bytes com pouca redundância —
+     mas tira ~2 MB da página e mantém o arquivo pequeno no repositório. */
+  async function carrega(id) {
+    const b64 = document.getElementById(id).textContent.trim();
+    const s = atob(b64);
+    const bin = new Uint8Array(s.length);
+    for (let i = 0; i < s.length; i++) bin[i] = s.charCodeAt(i);
+    const fluxo = new Blob([bin]).stream().pipeThrough(new DecompressionStream('gzip'));
+    return JSON.parse(new TextDecoder().decode(await new Response(fluxo).arrayBuffer()));
+  }
+
+  if (typeof DecompressionStream === 'undefined') {
+    document.getElementById('vazio').textContent =
+      'Este navegador não descomprime os dados do mapa. Tente uma versão mais recente.';
+    document.getElementById('vazio').classList.add('on');
+    return;
+  }
+
+  const [D, RES] = await Promise.all([carrega('dados'), carrega('usinas')]);
+  const ESC = D.esc;
+  const N = D.n;
+
+  /* ---------- projeção Mercator para coordenadas de mundo em [0,1] ---------- */
+  const merc = lat => {
+    const s = Math.sin(lat * Math.PI / 180);
+    return 0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI);
+  };
+  const projX = lon => (lon + 180) / 360;
+
+  /* Varint em base64 (5 bits por caractere, o sexto marca continuação), o
+     mesmo esquema usado na geração. Guardar 2,7 milhões de vértices como
+     inteiros em JSON custaria 24 MB; assim cabe em menos de um terço disso. */
+  const ALFA = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+  const IDX = new Int8Array(128).fill(-1);
+  for (let i = 0; i < 64; i++) IDX[ALFA.charCodeAt(i)] = i;
+
+  function varints(s, ini, fim) {
+    const out = [];
+    let v = 0, desl = 0;
+    for (let i = ini; i < fim; i++) {
+      const c = IDX[s.charCodeAt(i)];
+      v |= (c & 31) << desl;
+      if (c & 32) { desl += 5; continue; }
+      out.push((v & 1) ? ~(v >>> 1) : (v >>> 1));   // desfaz o zigue-zague
+      v = 0; desl = 0;
+    }
+    return out;
+  }
+
+  // duas grades: os rios de ordem 1 e 2 vêm em 1e-3 grau, o resto em 1e-4
+  const ESC_GROSSO = D.escGrosso || ESC;
+  const paraMundoArr = (nums, esc) => {
+    const e = esc || ESC;
+    const n = nums.length >> 1, p = new Float32Array(n * 2);
+    let xi = nums[0], yi = nums[1];
+    for (let j = 0; j < n; j++) {
+      if (j > 0) { xi += nums[2 * j]; yi += nums[2 * j + 1]; }
+      p[2 * j] = projX(xi / e); p[2 * j + 1] = merc(yi / e);
+    }
+    return p;
+  };
+  const contornos = (D.uf || []).map(g => paraMundoArr(g, ESC));
+  // Silhueta de terra e divisas dos vizinhos (Natural Earth). Sem elas os rios
+  // andinos e os do Prata ficavam boiando fora de qualquer referência.
+  const terra = ((D.terra && D.terra.terra) || []).map(g => paraMundoArr(g, (D.terra || {}).esc || ESC));
+  const divisas = ((D.terra && D.terra.divisas) || []).map(g => paraMundoArr(g, (D.terra || {}).esc || ESC));
+
+  const strahler = Uint8Array.from(D.strahler, c => +c);
+  const areas = Int32Array.from(varints(D.area, 0, D.area.length));
+  const comps = D.comp ? Int32Array.from(varints(D.comp, 0, D.comp.length)) : null;
+  // trechos do mesmo rio: o realce acende o curso inteiro, não um pedaço
+  const rioDe = D.rio ? Int32Array.from(varints(D.rio, 0, D.rio.length)) : null;
+  // agrupamento por rio também em CSR, pelo mesmo motivo do índice espacial
+  let rioIni = null, rioLista = null;
+  if (rioDe) {
+    let maior = 0;
+    for (let i = 0; i < rioDe.length; i++) if (rioDe[i] > maior) maior = rioDe[i];
+    rioIni = new Int32Array(maior + 2);
+    for (let i = 0; i < rioDe.length; i++) rioIni[rioDe[i] + 1]++;
+    for (let k = 0; k <= maior; k++) rioIni[k + 1] += rioIni[k];
+    rioLista = new Int32Array(rioDe.length);
+    const cursor = rioIni.slice(0, maior + 1);
+    for (let i = 0; i < rioDe.length; i++) rioLista[cursor[rioDe[i]]++] = i;
+  }
+  const trechosDoRio = i => {
+    if (!rioDe) return [i];
+    const r = rioDe[i];
+    return rioLista.subarray(rioIni[r], rioIni[r + 1]);
+  };
+  const AREA_FINA = D.areaFina || 500;
+  const bbox = new Float32Array(N * 4);
+  let coords;
+
+  /* Toda a geometria num buffer só, com um índice de início por trecho. Antes
+     eram 462 mil Float32Array independentes: cada objeto tem custo fixo de
+     cabeçalho, e somados passavam de 50 MB de heap só em overhead. */
+  const inicio = new Int32Array(N + 1);
+  {
+    let corte = 0, total = 0;
+    const fins = new Int32Array(N);
+    for (let i = 0; i < N; i++) {
+      let prox = D.geo.indexOf(".", corte);
+      if (prox < 0) prox = D.geo.length;
+      fins[i] = prox;
+      let n = 0;
+      for (let j = corte; j < prox; j++) if ((IDX[D.geo.charCodeAt(j)] & 32) === 0) n++;
+      inicio[i] = total; total += n;          // n = quantidade de números do trecho
+      corte = prox + 1;
+    }
+    inicio[N] = total;
+    coords = new Float32Array(total);
+    corte = 0;
+    for (let i = 0; i < N; i++) {
+      const esc = areas[i] >= AREA_FINA ? ESC : ESC_GROSSO;
+      const nums = varints(D.geo, corte, fins[i]);
+      corte = fins[i] + 1;
+      const base = inicio[i], np = nums.length >> 1;
+      let xi = nums[0], yi = nums[1];
+      let minx = 1, miny = 1, maxx = 0, maxy = 0;
+      for (let j = 0; j < np; j++) {
+        if (j > 0) { xi += nums[2 * j]; yi += nums[2 * j + 1]; }
+        const wx = projX(xi / esc), wy = merc(yi / esc);
+        coords[base + 2 * j] = wx; coords[base + 2 * j + 1] = wy;
+        if (wx < minx) minx = wx; if (wx > maxx) maxx = wx;
+        if (wy < miny) miny = wy; if (wy > maxy) maxy = wy;
+      }
+      bbox[i * 4] = minx; bbox[i * 4 + 1] = miny; bbox[i * 4 + 2] = maxx; bbox[i * 4 + 3] = maxy;
+    }
+  }
+  D.geo = null;
+
+  // atributos: também varint, exceto a ordem de Strahler (um dígito por trecho)
+  const q = Float32Array.from(varints(D.q, 0, D.q.length), v => v / 100);
+  const nomeIdx = Int32Array.from(varints(D.nome, 0, D.nome.length));
+  const acumula = s => {
+    const v = varints(s, 0, s.length), r = new Set();
+    let a = 0;
+    for (const d of v) { a += d; r.add(a); }
+    return r;
+  };
+  const medidos = acumula(D.medido);
+  const foraBr = acumula(D.fora);
+  const ordem = Array.from({ length: N }, (_, i) => i).sort((a, b) => q[b] - q[a]);
+
+  /* ---------- índice espacial para acerto do cursor/toque ---------- */
+  const GRID = 900;
+  const bounds = { minx: 1, miny: 1, maxx: 0, maxy: 0 };
+  for (let i = 0; i < N; i++) {
+    bounds.minx = Math.min(bounds.minx, bbox[i * 4]);
+    bounds.miny = Math.min(bounds.miny, bbox[i * 4 + 1]);
+    bounds.maxx = Math.max(bounds.maxx, bbox[i * 4 + 2]);
+    bounds.maxy = Math.max(bounds.maxy, bbox[i * 4 + 3]);
+  }
+  for (const p of contornos) {
+    for (let j = 0; j < p.length; j += 2) {
+      if (p[j] < bounds.minx) bounds.minx = p[j];
+      if (p[j] > bounds.maxx) bounds.maxx = p[j];
+      if (p[j + 1] < bounds.miny) bounds.miny = p[j + 1];
+      if (p[j + 1] > bounds.maxy) bounds.maxy = p[j + 1];
+    }
+  }
+  const spanX = bounds.maxx - bounds.minx, spanY = bounds.maxy - bounds.miny;
+
+  // O enquadramento segue o contorno do Brasil, não a extensão dos dados: a BHO
+  // vai até os Andes e até o Prata, e enquadrar tudo deixaria o país pequeno num
+  // canto. O índice espacial continua usando a extensão inteira.
+  const moldura = { minx: 1, miny: 1, maxx: 0, maxy: 0 };
+  for (const p of contornos) {
+    for (let j = 0; j < p.length; j += 2) {
+      if (p[j] < moldura.minx) moldura.minx = p[j];
+      if (p[j] > moldura.maxx) moldura.maxx = p[j];
+      if (p[j + 1] < moldura.miny) moldura.miny = p[j + 1];
+      if (p[j + 1] > moldura.maxy) moldura.maxy = p[j + 1];
+    }
+  }
+  const molduraX = moldura.maxx - moldura.minx, molduraY = moldura.maxy - moldura.miny;
+  /* Índice espacial em CSR (contagem + deslocamento + lista plana). Um Map com
+     210 mil arrays guardava 1 milhão de entradas em objetos separados; assim
+     são dois typed arrays contíguos. */
+  const chave = (cx, cy) => cy * GRID + cx;
+  const celIni = new Int32Array(GRID * GRID + 1);
+  let celLista;
+  {
+    const faixa = i => [
+      Math.floor((bbox[i * 4] - bounds.minx) / spanX * (GRID - 1)),
+      Math.floor((bbox[i * 4 + 2] - bounds.minx) / spanX * (GRID - 1)),
+      Math.floor((bbox[i * 4 + 1] - bounds.miny) / spanY * (GRID - 1)),
+      Math.floor((bbox[i * 4 + 3] - bounds.miny) / spanY * (GRID - 1)),
+    ];
+    for (let i = 0; i < N; i++) {
+      const [c0, c1, r0, r1] = faixa(i);
+      for (let cx = c0; cx <= c1; cx++) for (let cy = r0; cy <= r1; cy++) celIni[chave(cx, cy) + 1]++;
+    }
+    for (let k = 0; k < GRID * GRID; k++) celIni[k + 1] += celIni[k];
+    celLista = new Int32Array(celIni[GRID * GRID]);
+    const cursor = celIni.slice(0, GRID * GRID);
+    for (let i = 0; i < N; i++) {
+      const [c0, c1, r0, r1] = faixa(i);
+      for (let cx = c0; cx <= c1; cx++) for (let cy = r0; cy <= r1; cy++) celLista[cursor[chave(cx, cy)]++] = i;
+    }
+  }
+
+  /* ---------- escalas ---------- */
+  const QMIN = 0.5, QMAX = 120000;
+  const L0 = Math.log10(QMIN), L1 = Math.log10(QMAX);
+  const t01 = v => (Math.log10(Math.max(QMIN, Math.min(QMAX, v))) - L0) / (L1 - L0);
+
+  const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+  let RAMPA = [], COR_FLUXO = '', COR_UF = '', COR_ACC = '', COR_USINA = '', COR_LEITO = '', COR_TERRA = '', COR_DIVISA = '';
+  const lerCores = () => {
+    RAMPA = [0, 1, 2, 3, 4, 5, 6].map(i => css('--ramp-' + i));
+    COR_FLUXO = css('--fluxo'); COR_UF = css('--uf-line'); COR_ACC = css('--accent');
+    COR_USINA = css('--usina'); COR_LEITO = css('--leito');
+    COR_TERRA = css('--terra'); COR_DIVISA = css('--divisa');
+  };
+  const cor = v => RAMPA[Math.max(0, Math.min(6, Math.round(t01(v) * 6)))];
+  const largura = (v, z) => (0.35 + 3.4 * Math.pow(t01(v), 2.1)) * (1 + 0.5 * Math.log2(z));
+
+  /* ---------- estado ---------- */
+  const cv = document.getElementById('cv');
+  const ctx = cv.getContext('2d');
+  // A rede inteira vai para um canvas fora de tela e só é redesenhada quando a
+  // vista muda; cada quadro da animação repinta apenas a camada de fluxo.
+  const off = document.createElement('canvas');
+  const octx = off.getContext('2d');
+  const cvF = document.getElementById('cvFluxo');
+  const fctx = cvF.getContext('2d');
+  const caixa = document.getElementById('mapa');
+  const tip = document.getElementById('tip');
+  const fichaEl = document.getElementById('ficha');
+  const vazioEl = document.getElementById('vazio');
+  let W = 0, H = 0, dpr = 1;
+  const vista = { x: 0, y: 0, k: 1 };
+  const semMovimento = window.matchMedia('(prefers-reduced-motion: reduce)');
+  let mostrarEst = true, mostrarRes = true;
+  // O filtro é por vazão, não por ordem de Strahler: a BHO não mapeia as
+  // cabeceiras fora do Brasil, então rios grandes de país vizinho ficam com
+  // ordem 1 e sumiriam do mapa junto com os córregos.
+  const LIMIARES = [0, 0.5, 2, 8, 30, 120, 500];   // m³/s
+  let qMinUsuario = LIMIARES[0];   // nasce mostrando a rede inteira
+  let animando = false;
+  let estaticoSujo = true;
+  let realce = -1, estRealce = null, resRealce = null, fixado = false, selecao = null;
+
+  // no mobile a faixa recolhida come o rodapé da tela: o enquadramento
+  // centraliza no que sobra, não no retângulo inteiro
+  const rodapeHud = () => (window.matchMedia('(max-width: 760px)').matches ? 66 : 0);
+  const kBase = () => Math.min(W / (molduraX * 1.06), (H - rodapeHud()) / (molduraY * 1.06));
+  function enquadrar() {
+    vista.k = kBase();
+    vista.x = W / 2 - (moldura.minx + molduraX / 2) * vista.k;
+    vista.y = (H - rodapeHud()) / 2 - (moldura.miny + molduraY / 2) * vista.k;
+  }
+
+  function redimensionar() {
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const r = caixa.getBoundingClientRect();
+    W = r.width; H = r.height;
+    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    off.width = cv.width; off.height = cv.height;
+    octx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    cvF.width = cv.width; cvF.height = cv.height;
+    fctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    estaticoSujo = true;
+  }
+
+  const paraTela = (wx, wy) => [wx * vista.k + vista.x, wy * vista.k + vista.y];
+  const paraMundo = (sx, sy) => [(sx - vista.x) / vista.k, (sy - vista.y) / vista.k];
+
+  // contagem em cada controle
+  // A legenda sai das mesmas funções que desenham o mapa
+  const CLASSES = [
+    [0, 2, 'até 2 m³/s'], [2, 10, '2 – 10'], [10, 40, '10 – 40'],
+    [40, 150, '40 – 150'], [150, 500, '150 – 500'], [500, 1e6, 'acima de 500'],
+  ];
+  function montaLegenda() {
+    document.getElementById('classes').innerHTML = CLASSES.map(([a, b, rot]) => {
+      const ref = a === 0 ? 1 : Math.sqrt(a * Math.min(b, a * 25));
+      const esp = Math.max(2, Math.min(9, largura(ref, 1) * 1.9));
+      return '<div class="classe"><span class="amostra" style="height:' + esp.toFixed(1) +
+        'px;background:' + cor(ref) + '"></span>' + rot + '</div>';
+    }).join('');
+  }
+
+  const contadores = () => {
+    document.getElementById('nEst').textContent = '(' + D.estacoes.length + ')';
+    document.getElementById('nRes').textContent = '(' + RES.length + ')';
+    // conta com o mesmo corte da camada de fluxo, sobre o que está de fato à vista
+    const corte = Math.max(5, 240 / Math.pow(zAtual, 1.35));
+    let n = 0;
+    for (const i of visiveis) if (q[i] >= corte) n++;
+    document.getElementById('nFluxo').textContent = '(' + n + ')';
+  };
+
+  let rapido = false, timerQualidade = null, pedido = null;
+  function quadroUnico() {
+    if (!pedido) pedido = requestAnimationFrame(() => { pedido = null; desenhar(); contadores(); });
+  }
+  function agendar(modoRapido) {          // a vista mudou
+    rapido = modoRapido;
+    estaticoSujo = true;
+    if (animando) tocar(); else quadroUnico();
+    if (modoRapido) {
+      clearTimeout(timerQualidade);
+      timerQualidade = setTimeout(() => {
+        rapido = false; estaticoSujo = true;
+        quadroUnico();
+      }, 130);
+    }
+  }
+  function repintar() {                   // mudou só o realce
+    if (animando) tocar(); else quadroUnico();
+  }
+  function repintarFundo() {              // mudou uma camada do fundo
+    estaticoSujo = true;
+    if (animando) tocar(); else quadroUnico();
+  }
+
+  /* ---------- camada estática: contorno dos estados + rede ---------- */
+  let visiveis = [], visiveisSet = new Set(), zAtual = 1;
+
+  function traca(c, i) {
+    const a = inicio[i], b = inicio[i + 1];
+    c.moveTo(coords[a] * vista.k + vista.x, coords[a + 1] * vista.k + vista.y);
+    for (let j = a + 2; j < b; j += 2)
+      c.lineTo(coords[j] * vista.k + vista.x, coords[j + 1] * vista.k + vista.y);
+  }
+  function desenharEstatico() {
+    const z = zAtual = vista.k / kBase();
+    octx.clearRect(0, 0, W, H);
+    // o corte é o mais restritivo entre o pedido do usuário e o do zoom
+    const corteZoom = rapido ? 60 / Math.pow(z, 1.5) : 1.2 / Math.pow(z, 1.6);
+    const corteQ = Math.max(qMinUsuario, corteZoom * 0.02);
+    const [w0x, w0y] = paraMundo(0, 0), [w1x, w1y] = paraMundo(W, H);
+
+    octx.lineCap = 'round'; octx.lineJoin = 'round';
+
+    // massa de terra por baixo de tudo
+    octx.beginPath();
+    octx.fillStyle = COR_TERRA;
+    for (const p of terra) {
+      octx.moveTo(p[0] * vista.k + vista.x, p[1] * vista.k + vista.y);
+      for (let j = 2; j < p.length; j += 2)
+        octx.lineTo(p[j] * vista.k + vista.x, p[j + 1] * vista.k + vista.y);
+      octx.closePath();
+    }
+    octx.fill('evenodd');
+
+    // divisa dos países um pouco mais forte que a das UFs
+    octx.beginPath();
+    octx.strokeStyle = COR_DIVISA; octx.lineWidth = 1;
+    for (const p of divisas) {
+      octx.moveTo(p[0] * vista.k + vista.x, p[1] * vista.k + vista.y);
+      for (let j = 2; j < p.length; j += 2)
+        octx.lineTo(p[j] * vista.k + vista.x, p[j + 1] * vista.k + vista.y);
+    }
+    octx.stroke();
+
+    octx.beginPath();
+    octx.strokeStyle = COR_UF; octx.lineWidth = 1;
+    for (const p of contornos) {
+      octx.moveTo(p[0] * vista.k + vista.x, p[1] * vista.k + vista.y);
+      for (let j = 2; j < p.length; j += 2)
+        octx.lineTo(p[j] * vista.k + vista.x, p[j + 1] * vista.k + vista.y);
+    }
+    octx.stroke();
+    octx.beginPath();
+
+    // Teto de trechos por quadro: como ordem[] é decrescente em vazão, cortar no
+    // teto sempre sacrifica os menores primeiro — o desenho degrada pela base,
+    // não pelo topo.
+    const teto = rapido ? 14000 : 60000;
+    visiveis = [];
+    for (let oi = 0; oi < N; oi++) {
+      const i = ordem[oi];
+      if (q[i] < corteQ) break;                     // ordem[] é decrescente em vazão
+      if (bbox[i * 4 + 2] < w0x || bbox[i * 4] > w1x ||
+          bbox[i * 4 + 3] < w0y || bbox[i * 4 + 1] > w1y) continue;
+      if (visiveis.length >= teto) break;
+      visiveis.push(i);
+    }
+    visiveisSet = new Set(visiveis);
+
+    // Duas passadas: o que está fora do Brasil vai esmaecido. São bacias
+    // compartilhadas de verdade — a água do Solimões nasce no Peru — mas ali
+    // não há posto brasileiro medindo, e o traço mais fraco diz isso.
+    for (const passo of [0, 1]) {
+      octx.globalAlpha = passo === 0 ? 0.34 : 1;
+      let corAtual = '', larAtual = -1;
+      octx.beginPath();
+      for (const i of visiveis) {
+        if (foraBr.has(i) !== (passo === 0)) continue;
+        // cor e largura em degraus: trechos vizinhos em vazão caem no mesmo
+        // degrau e entram num único stroke()
+        const c = cor(q[i]), lw = Math.round(largura(q[i], z) * 3) / 3;
+        if (c !== corAtual || lw !== larAtual) {
+          octx.stroke(); octx.beginPath();
+          octx.strokeStyle = c; octx.lineWidth = lw;
+          corAtual = c; larAtual = lw;
+        }
+        traca(octx, i);
+      }
+      octx.stroke();
+    }
+    octx.globalAlpha = 1;
+
+    // Marcadores no fundo, não a cada quadro: eram 2 mil arcos por frame, ~15 ms
+    // que a animação pagava sem necessidade — eles só mudam quando a vista muda.
+    if (mostrarEst) {
+      const r = Math.min(4.2, 1.6 + 0.8 * z);
+      octx.fillStyle = COR_ACC; octx.strokeStyle = COR_LEITO; octx.lineWidth = 1;
+      octx.globalAlpha = 0.82;
+      for (const e of D.estacoes) {
+        const [sx, sy] = paraTela(projX(e.lon), merc(e.lat));
+        if (sx < -8 || sy < -8 || sx > W + 8 || sy > H + 8) continue;
+        octx.beginPath(); octx.arc(sx, sy, r, 0, 6.2832); octx.fill(); octx.stroke();
+      }
+      octx.globalAlpha = 1;
+    }
+    if (mostrarRes) {
+      octx.strokeStyle = COR_LEITO; octx.lineWidth = 1;
+      octx.fillStyle = COR_USINA;
+      octx.globalAlpha = 0.88;
+      for (const u of RES) {
+        const [sx, sy] = paraTela(projX(u.lon), merc(u.lat));
+        if (sx < -12 || sy < -12 || sx > W + 12 || sy > H + 12) continue;
+        // lado do quadrado pela vazão média turbinada
+        const l = (2.6 + 4 * t01(u.turb || 1)) * (1 + 0.18 * Math.log2(Math.max(1, z)));
+        octx.fillRect(sx - l / 2, sy - l / 2, l, l);
+        octx.strokeRect(sx - l / 2, sy - l / 2, l, l);
+      }
+      octx.globalAlpha = 1;
+    }
+    estaticoSujo = false;
+    vazioEl.classList.toggle('on', visiveis.length === 0 && z > 2);
+  }
+
+  /* Camada de fluxo: tracinhos correndo rio abaixo. A geometria da BHO é
+     desenhada de montante para jusante em todos os trechos e o fim de cada um
+     encaixa no começo do trecho seguinte, então basta puxar o lineDashOffset
+     para o negativo — o traço anda no sentido do fluxo. A velocidade é a mesma
+     em toda a rede, que é o comportamento real: a água corre a poucos km/h
+     tanto no riacho quanto no Amazonas; o que muda é a seção, já codificada na
+     largura do traço. */
+  const VEL = 30;   // px/s
+  let nFluxo = 0;
+  function desenharFluxo(t) {
+    const ctx = fctx;
+    ctx.clearRect(0, 0, W, H);
+    const z = zAtual;
+    const corte = Math.max(5, 240 / Math.pow(z, 1.35));   // só os rios de porte na vista
+    const fase = (t / 1000) * VEL;
+    ctx.lineCap = 'butt'; ctx.lineJoin = 'round';
+    ctx.globalAlpha = 0.5;
+    ctx.strokeStyle = COR_FLUXO;
+    let larAtual = -1, conta = 0;
+    ctx.beginPath();
+    for (const i of visiveis) {
+      if (q[i] < corte) continue;
+      conta++;
+      const lw = Math.max(0.7, Math.round(largura(q[i], z) * 0.5 * 3) / 3);
+      if (lw !== larAtual) {
+        ctx.stroke(); ctx.beginPath();
+        ctx.lineWidth = lw;
+        const traco = 3 + lw * 1.5, vao = 16 + lw * 5;
+        ctx.setLineDash([traco, vao]);
+        ctx.lineDashOffset = -fase % (traco + vao);
+        larAtual = lw;
+      }
+      traca(ctx, i);
+    }
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.globalAlpha = 1;
+    ctx.lineCap = 'round';
+    nFluxo = conta;
+  }
+
+  // O laço da animação só repinta a camada de fluxo; o fundo fica parado.
+  function quadroFluxo(t) {
+    if (estaticoSujo) desenhar();
+    else desenharFluxo(t === undefined ? performance.now() : t);
+  }
+
+  function desenhar(t) {
+    if (estaticoSujo) desenharEstatico();
+    ctx.clearRect(0, 0, W, H);
+    ctx.drawImage(off, 0, 0, W, H);
+    const z = zAtual;
+    const [w0x, w0y] = paraMundo(0, 0), [w1x, w1y] = paraMundo(W, H);
+
+    if (animando && !rapido) desenharFluxo(t === undefined ? performance.now() : t);
+    else fctx.clearRect(0, 0, W, H);
+
+    if (realce >= 0) {
+      ctx.strokeStyle = COR_ACC;
+      let larAtual = -1;
+      ctx.beginPath();
+      for (const i of trechosDoRio(realce)) {
+        if (bbox[i * 4 + 2] < w0x || bbox[i * 4] > w1x ||
+            bbox[i * 4 + 3] < w0y || bbox[i * 4 + 1] > w1y) continue;
+        const lw = Math.round((largura(q[i], z) + 2.4) * 2) / 2;
+        if (lw !== larAtual) { ctx.stroke(); ctx.beginPath(); ctx.lineWidth = lw; larAtual = lw; }
+        traca(ctx, i);
+      }
+      ctx.stroke();
+    }
+
+    if (mostrarEst) {
+      const r = Math.min(3.6, 1.15 + 0.62 * z);
+      ctx.fillStyle = COR_ACC; ctx.strokeStyle = COR_LEITO; ctx.lineWidth = 1;
+      ctx.globalAlpha = 0.72;
+      for (const e of D.estacoes) {
+        const [sx, sy] = paraTela(projX(e.lon), merc(e.lat));
+        if (sx < -8 || sy < -8 || sx > W + 8 || sy > H + 8) continue;
+        ctx.beginPath(); ctx.arc(sx, sy, r, 0, 6.2832); ctx.fill(); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    if (mostrarRes) {
+      ctx.strokeStyle = COR_LEITO; ctx.lineWidth = 1;
+      ctx.fillStyle = COR_USINA;
+      ctx.globalAlpha = 0.88;
+      for (const u of RES) {
+        const [sx, sy] = paraTela(projX(u.lon), merc(u.lat));
+        if (sx < -12 || sy < -12 || sx > W + 12 || sy > H + 12) continue;
+        // lado do quadrado pela vazão média turbinada
+        const l = (2.6 + 4 * t01(u.turb || 1)) * (1 + 0.18 * Math.log2(Math.max(1, z)));
+        ctx.fillRect(sx - l / 2, sy - l / 2, l, l);
+        ctx.strokeRect(sx - l / 2, sy - l / 2, l, l);
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    const anel = (o, c, raio) => {
+      const [sx, sy] = paraTela(projX(o.lon), merc(o.lat));
+      ctx.beginPath(); ctx.arc(sx, sy, raio, 0, 6.2832);
+      ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.stroke();
+    };
+    if (estRealce && mostrarEst) anel(estRealce, COR_ACC, 8);
+    if (resRealce && mostrarRes) anel(resRealce, COR_USINA, 11);
+  }
+
+  /* laço de animação: só roda com o fluxo ligado */
+  let laco = null;
+  function tocar() {
+    if (laco) return;
+    const passo = t => { laco = animando ? requestAnimationFrame(passo) : null; quadroFluxo(t); };
+    laco = requestAnimationFrame(passo);
+  }
+  function parar() { if (laco) { cancelAnimationFrame(laco); laco = null; } }
+
+  /* ---------- acerto ---------- */
+  function distSeg(px, py, ax, ay, bx, by) {
+    const vx = bx - ax, vy = by - ay;
+    const L = vx * vx + vy * vy;
+    let t = L > 0 ? ((px - ax) * vx + (py - ay) * vy) / L : 0;
+    t = Math.max(0, Math.min(1, t));
+    return Math.hypot(px - (ax + t * vx), py - (ay + t * vy));
+  }
+
+  function acharTrecho(sx, sy, tolPx) {
+    const [wx, wy] = paraMundo(sx, sy);
+    const cx = Math.floor((wx - bounds.minx) / spanX * (GRID - 1));
+    const cy = Math.floor((wy - bounds.miny) / spanY * (GRID - 1));
+    const tol = tolPx / vista.k;
+    let melhor = -1, melhorD = Infinity;
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+      const k = chave(cx + dx, cy + dy);
+      if (k < 0 || k >= GRID * GRID) continue;
+      for (let e = celIni[k]; e < celIni[k + 1]; e++) {
+        const i = celLista[e];
+        if (!visiveisSet.has(i)) continue;
+        const a = inicio[i], b = inicio[i + 1];
+        for (let j = a; j + 3 < b; j += 2) {
+          const d = distSeg(wx, wy, coords[j], coords[j + 1], coords[j + 2], coords[j + 3]);
+          if (d >= tol) continue;
+          // rio maior ganha o desempate quando dois traços se sobrepõem
+          const score = d - Math.min(tol * 0.4, tol * 0.12 * Math.log10(1 + q[i]));
+          if (score < melhorD) { melhorD = score; melhor = i; }
+        }
+      }
+    }
+    return melhor;
+  }
+
+  function acharPonto(lista, sx, sy, tolPx) {
+    let melhor = null, melhorD = tolPx;
+    for (const o of lista) {
+      const [x, y] = paraTela(projX(o.lon), merc(o.lat));
+      const d = Math.hypot(x - sx, y - sy);
+      if (d < melhorD) { melhorD = d; melhor = o; }
+    }
+    return melhor;
+  }
+
+  /* ---------- fichas ---------- */
+  const fmt = (v, d = 0) => v.toLocaleString('pt-BR', { maximumFractionDigits: d });
+  const linha = (r, v) => '<div class="linha"><span>' + r + '</span><em>' + v + '</em></div>';
+
+  function fichaTrecho(i) {
+    const grupo = trechosDoRio(i);
+    // o rio inteiro: soma o comprimento, acha a foz (maior vazão) e conta postos
+    let comp = 0, foz = i, postos = 0;
+    for (const k of grupo) {
+      if (comps) comp += comps[k];
+      if (q[k] > q[foz]) foz = k;
+      if (medidos.has(k)) postos++;
+    }
+    const medido = medidos.has(i);
+    const fora = foraBr.has(i);
+    const nome = D.nomes[nomeIdx[i]];
+    fichaEl.className = 'cartao ficha';
+    fichaEl.innerHTML =
+      '<div class="nome">' + (nome || 'Curso d’água sem nome na base') + '</div>' +
+      linha('Vazão aqui', fmt(q[i], q[i] < 10 ? 1 : 0) + ' m³/s') +
+      (foz !== i ? linha('Na foz', fmt(q[foz], q[foz] < 10 ? 1 : 0) + ' m³/s') : '') +
+      linha('Área de drenagem', fmt(areas[i]) + ' km²') +
+      (comps && grupo.length > 1
+        ? linha('Extensão do rio', fmt(comp / 10, 1) + ' km em ' + grupo.length + ' trechos')
+        : comps ? linha('Comprimento', fmt(comps[i] / 10, 1) + ' km') : '') +
+      linha('Ordem de Strahler', strahler[i]) +
+      linha('Estações no rio', String(postos)) +
+      (fora ? linha('Território', 'fora do Brasil') : '') +
+      '<div class="selo' + (medido ? '' : ' neutro') + '">' +
+      (medido ? 'vazão medida em estação' : 'vazão estimada') + '</div>';
+  }
+
+  const MESES = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
+  function regimeHTML(reg, titulo) {
+    if (!reg || reg.length !== 12) return '';
+    const max = Math.max(...reg);
+    if (!(max > 0)) return '';
+    const seco = reg.indexOf(Math.min(...reg)), cheio = reg.indexOf(max);
+    return '<div class="regime"><div class="regime-titulo">' + titulo + '</div><div class="barras">' +
+      reg.map((v, m) => '<span class="mes" style="--h:' + Math.max(3, 100 * v / max) + '%"' +
+        ' title="' + MESES[m] + ': ' + fmt(v, v < 10 ? 1 : 0) + ' m³/s"><i></i>' +
+        MESES[m] + '</span>').join('') +
+      '</div><div class="regime-nota">cheia em ' + MESES[cheio] + ', seca em ' + MESES[seco] +
+      ' — ' + fmt(reg[cheio] / Math.max(reg[seco], 0.01), 1) + '× entre os extremos</div></div>';
+  }
+
+  function fichaEstacao(e) {
+    fichaEl.className = 'cartao ficha';
+    fichaEl.innerHTML =
+      '<div class="nome">' + e.nome + '</div>' +
+      linha('Rio', e.rio || '—') +
+      linha('Vazão média', fmt(e.q, e.q < 10 ? 1 : 0) + ' m³/s') +
+      linha('Faixa mensal', fmt(e.qmin, 1) + ' – ' + fmt(e.qmax) + ' m³/s') +
+      linha('Área de drenagem', fmt(e.area) + ' km²') +
+      regimeHTML(e.regime, 'Vazão média por mês') +
+      '<div class="selo">estação ' + e.cod + ' · ' + e.n + ' meses medidos</div>';
+  }
+
+  function fichaUsina(u) {
+    fichaEl.className = 'cartao ficha';
+    fichaEl.innerHTML =
+      '<div class="nome">' + u.nome + '</div>' +
+      linha('Bacia', u.bacia || '—') +
+      (u.turb != null ? linha('Turbinada', fmt(u.turb) + ' m³/s') : '') +
+      (u.vert != null ? linha('Vertida', fmt(u.vert) + ' m³/s') : '') +
+      (u.aflu != null ? linha('Afluência', fmt(u.aflu) + ' m³/s') : '') +
+      (u.vol != null ? linha('Volume atual', fmt(u.vol, 1) + '%') : '') +
+      '<div class="selo usina">reservatório' + (u.uf ? ' · ' + u.uf : '') +
+      (u.ini ? ' · média ' + u.ini + '–' + u.fim : '') + '</div>';
+  }
+
+  function fichaVazia() {
+    fichaEl.className = 'cartao ficha vazia';
+    fichaEl.textContent = 'Toque num rio, numa estação ou num reservatório para ver a vazão.';
+  }
+
+  function mostrarTip(html, ev) {
+    tip.innerHTML = html;
+    tip.classList.add('on');
+    const r = tip.getBoundingClientRect();
+    let x = ev.clientX + 16, y = ev.clientY + 16;
+    if (x + r.width > window.innerWidth - 8) x = ev.clientX - r.width - 14;
+    if (y + r.height > window.innerHeight - 8) y = ev.clientY - r.height - 14;
+    tip.style.left = Math.max(6, x) + 'px';
+    tip.style.top = Math.max(6, y) + 'px';
+  }
+
+  /* ---------- ponteiro: arrasto, pinça, toque, roda ---------- */
+  const ativos = new Map();
+  let pinca = null, movimento = 0, tInicio = 0;
+
+  cv.addEventListener('pointerdown', e => {
+    cv.setPointerCapture(e.pointerId);
+    ativos.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
+    if (ativos.size === 1) { movimento = 0; tInicio = performance.now(); cv.classList.add('arrastando'); }
+    if (ativos.size === 2) {
+      const [a, b] = [...ativos.values()];
+      pinca = { d: Math.hypot(a.x - b.x, a.y - b.y), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 };
+    }
+  });
+
+  cv.addEventListener('pointermove', e => {
+    const ant = ativos.get(e.pointerId);
+    if (!ant) { inspecionar(e); return; }   // cursor livre: só realça e mostra o tooltip
+    const dx = e.offsetX - ant.x, dy = e.offsetY - ant.y;
+    ativos.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
+    movimento += Math.abs(dx) + Math.abs(dy);
+
+    if (ativos.size >= 2 && pinca) {
+      const [a, b] = [...ativos.values()];
+      const d = Math.hypot(a.x - b.x, a.y - b.y);
+      const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
+      if (pinca.d > 0) aplicarZoom(d / pinca.d, cx, cy);
+      vista.x += cx - pinca.cx; vista.y += cy - pinca.cy;
+      pinca = { d, cx, cy };
+    } else {
+      vista.x += dx; vista.y += dy;
+    }
+    tip.classList.remove('on');
+    agendar(true);
+  });
+
+  const soltar = e => {
+    const era = ativos.size;
+    ativos.delete(e.pointerId);
+    if (ativos.size < 2) pinca = null;
+    if (ativos.size === 0) {
+      cv.classList.remove('arrastando');
+      if (era === 1 && movimento < 8 && performance.now() - tInicio < 500) selecionar(e);
+      agendar(false);
+    }
+  };
+  cv.addEventListener('pointerup', soltar);
+  cv.addEventListener('pointercancel', soltar);
+  cv.addEventListener('pointerleave', () => {
+    tip.classList.remove('on');
+    realcar(selecao);
+    repintar();
+  });
+
+  function alvo(sx, sy, tol) {
+    if (mostrarRes) { const u = acharPonto(RES, sx, sy, tol); if (u) return { u }; }
+    if (mostrarEst) { const e = acharPonto(D.estacoes, sx, sy, tol); if (e) return { e }; }
+    const i = acharTrecho(sx, sy, tol);
+    return i >= 0 ? { i } : null;
+  }
+
+  // realçar é barato e acontece a cada movimento; escrever a ficha, não —
+  // ela só muda quando há clique, senão o painel fica pulando debaixo do cursor
+  function realcar(a) {
+    realce = a && a.i !== undefined ? a.i : -1;
+    estRealce = a && a.e ? a.e : null;
+    resRealce = a && a.u ? a.u : null;
+  }
+  function aplicar(a) {
+    selecao = a || null;
+    realcar(a);
+    if (!a) fichaVazia();
+    else if (a.u) fichaUsina(a.u);
+    else if (a.e) fichaEstacao(a.e);
+    else fichaTrecho(a.i);
+  }
+
+  function inspecionar(ev) {
+    const a = alvo(ev.offsetX, ev.offsetY, 9);
+    realcar(a || selecao);        // sem alvo, o realce volta para o que está fixado
+    repintar();
+    if (!a) { tip.classList.remove('on'); return; }
+    const html = a.u
+      ? '<b>' + a.u.nome + '</b><div class="linha">Turbinada <em>' + fmt(a.u.turb || 0) + ' m³/s</em></div>'
+      : a.e
+        ? '<b>' + a.e.nome + '</b><div class="linha">Vazão média <em>' + fmt(a.e.q, a.e.q < 10 ? 1 : 0) + ' m³/s</em></div>'
+        : '<b>' + (D.nomes[nomeIdx[a.i]] || 'Curso d’água sem nome') + '</b>' +
+          '<div class="linha">Vazão média <em>' + fmt(q[a.i], q[a.i] < 10 ? 1 : 0) + ' m³/s</em></div>';
+    mostrarTip(html, ev);
+  }
+
+  function selecionar(ev) {
+    const a = alvo(ev.offsetX, ev.offsetY, 18);
+    fixado = !!a;
+    aplicar(a);
+    if (!a) tip.classList.remove('on');
+    repintar();
+    // no mobile a faixa recolhida sobe sozinha para mostrar a ficha
+    if (a && window.matchMedia('(max-width: 760px)').matches) abrirHud();
+  }
+
+  function aplicarZoom(fator, cx, cy) {
+    // teto de zoom no limite do que a rede comporta: com só os trechos de
+    // Strahler 5 ou mais, aproximar além disso mostra tela vazia
+    const k2 = Math.max(kBase() * 0.9, Math.min(kBase() * 40, vista.k * fator));
+    const r = k2 / vista.k;
+    vista.x = cx - (cx - vista.x) * r;
+    vista.y = cy - (cy - vista.y) * r;
+    vista.k = k2;
+  }
+
+  cv.addEventListener('wheel', e => {
+    e.preventDefault();
+    aplicarZoom(Math.exp(-e.deltaY * 0.0016), e.offsetX, e.offsetY);
+    tip.classList.remove('on');
+    agendar(true);
+  }, { passive: false });
+
+  /* ---------- controles ---------- */
+  document.getElementById('btMais').addEventListener('click', () => { aplicarZoom(1.6, W / 2, H / 2); agendar(false); });
+  document.getElementById('btMenos').addEventListener('click', () => { aplicarZoom(1 / 1.6, W / 2, H / 2); agendar(false); });
+  document.getElementById('btReset').addEventListener('click', () => {
+    enquadrar(); fixado = false; aplicar(null); agendar(false);
+  });
+
+  const alterna = (id, ler, escrever) => {
+    const b = document.getElementById(id);
+    b.addEventListener('click', () => {
+      escrever(!ler());
+      b.setAttribute('aria-pressed', String(ler()));
+    });
+  };
+  alterna('btEst', () => mostrarEst, v => {
+    mostrarEst = v;
+    if (!v && estRealce) { fixado = false; aplicar(null); }
+    repintarFundo();
+  });
+  alterna('btRes', () => mostrarRes, v => {
+    mostrarRes = v;
+    if (!v && resRealce) { fixado = false; aplicar(null); }
+    repintarFundo();
+  });
+  alterna('btFluxo', () => animando, v => {
+    animando = v;
+    if (v) tocar(); else { parar(); fctx.clearRect(0, 0, W, H); quadroUnico(); }
+    contadores();
+  });
+
+  const rg = document.getElementById('rgOrdem');
+  const rgTexto = document.getElementById('rgTexto');
+  const contaAcima = v => { let n = 0; for (let i = 0; i < N; i++) if (q[i] >= v) n++; return n; };
+  function textoOrdem() {
+    const n = contaAcima(qMinUsuario);
+    rgTexto.innerHTML = (qMinUsuario === 0
+      ? '<b>' + fmt(n) + '</b> trechos — a rede inteira, até os córregos de cabeceira'
+      : 'Rios acima de <b>' + fmt(qMinUsuario, 1) + ' m³/s</b>: <b>' + fmt(n) + '</b> trechos')
+      + (n > 60000 ? '<br><span style="opacity:.72">Nesta escala cabem os '
+         + fmt(60000) + ' maiores; aproxime para os menores aparecerem.</span>' : '');
+  }
+  rg.addEventListener('input', () => {
+    qMinUsuario = LIMIARES[+rg.value];
+    textoOrdem();
+    agendar(false);
+  });
+
+  const gaveta = document.getElementById('gaveta');
+  const veu = document.getElementById('veu');
+  const abrirGaveta = on => {
+    gaveta.classList.toggle('on', on);
+    veu.classList.toggle('on', on);
+    gaveta.setAttribute('aria-hidden', String(!on));
+  };
+  document.getElementById('btSobre').addEventListener('click', () => abrirGaveta(true));
+  document.getElementById('btFechar').addEventListener('click', () => abrirGaveta(false));
+  veu.addEventListener('click', () => abrirGaveta(false));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') abrirGaveta(false); });
+
+  // no mobile o HUD recolhe para uma faixa, deixando o mapa inteiro à vista
+  const hud = document.getElementById('hud');
+  const puxador = document.getElementById('puxador');
+  const seta = document.getElementById('puxadorSeta');
+  const marcarHud = () => {
+    const recolhido = hud.classList.contains('recolhido');
+    puxador.setAttribute('aria-expanded', String(!recolhido));
+    seta.textContent = recolhido ? '▴' : '▾';
+  };
+  const abrirHud = () => { hud.classList.remove('recolhido'); marcarHud(); };
+  puxador.addEventListener('click', () => { hud.classList.toggle('recolhido'); marcarHud(); });
+  if (window.matchMedia('(max-width: 760px)').matches) {
+    hud.classList.add('recolhido');
+    marcarHud();
+  }
+
+  /* ---------- números e tabela ---------- */
+  const val = D.validacao || {};
+  const anoIni = D.periodo ? D.periodo[0] : '1995', anoFim = D.periodo ? D.periodo[1] : '2025';
+  document.getElementById('stats').innerHTML = [
+    [fmt(N), 'trechos de rio'],
+    [fmt(D.estacoes.length), 'estações medindo'],
+    [fmt(RES.length), 'reservatórios'],
+    [(val.dentro2x || 0) + '%', 'acerto na validação'],
+  ].map(([a, b]) => '<div class="stat"><b>' + a + '</b><span>' + b + '</span></div>').join('');
+
+  // Só nomes que começam em "Rio": a BHO às vezes arrasta o nome de um afluente
+  // pequeno por um trecho de tronco, e aparecem "córregos" com milhares de m³/s.
+  const porRio = new Map();
+  for (let i = 0; i < N; i++) {
+    const nm = D.nomes[nomeIdx[i]];
+    if (!nm || !nm.startsWith('Rio ') || foraBr.has(i)) continue;
+    const at = porRio.get(nm);
+    if (at === undefined || q[i] > q[at]) porRio.set(nm, i);
+  }
+  const top = [...porRio.values()].sort((a, b) => q[b] - q[a]).slice(0, 20);
+  const qMax = q[top[0]];
+  document.getElementById('tb').innerHTML = top.map(i =>
+    '<tr data-i="' + i + '"><td>' + D.nomes[nomeIdx[i]] +
+    // barra proporcional à vazão, não ao log dela: comprimento tem que sair do zero
+    '<span class="barra" style="width:' + Math.max(2, 100 * q[i] / qMax) + '%"></span></td>' +
+    '<td class="num">' + fmt(q[i]) + '</td>' +
+    '<td class="num">' + fmt(areas[i]) + '</td></tr>').join('');
+
+  document.getElementById('tb').addEventListener('click', ev => {
+    const tr = ev.target.closest('tr');
+    if (!tr) return;
+    const i = +tr.dataset.i;
+    fixado = true; aplicar({ i });
+    const cx = (bbox[i * 4] + bbox[i * 4 + 2]) / 2, cy = (bbox[i * 4 + 1] + bbox[i * 4 + 3]) / 2;
+    const larg = Math.max(bbox[i * 4 + 2] - bbox[i * 4], bbox[i * 4 + 3] - bbox[i * 4 + 1], 1e-4);
+    vista.k = Math.max(kBase(), Math.min(kBase() * 40, Math.min(W, H) / (larg * 6)));
+    vista.x = W / 2 - cx * vista.k; vista.y = H / 2 - cy * vista.k;
+    agendar(false);
+    abrirGaveta(false);
+    if (window.matchMedia('(max-width: 760px)').matches) abrirHud();
+  });
+
+  const preenche = (sel, v) => document.querySelectorAll(sel).forEach(el => { el.textContent = v; });
+  preenche('[data-ini]', anoIni);
+  preenche('[data-fim]', anoFim);
+  preenche('[data-2x]', val.dentro2x);
+  preenche('[data-15x]', val.dentro15x);
+  preenche('[data-vies]', String(val.vies).replace('.', ','));
+
+  document.getElementById('rodape').textContent =
+    'Rede de drenagem: Base Hidrográfica Ottocodificada 2017 (1:5.000), ANA. ' +
+    'Vazões: séries históricas das estações fluviométricas da ANA, ' + anoIni + '–' + anoFim + '. ' +
+    'Reservatórios: Sistema de Acompanhamento de Reservatórios da ANA, operação diária 2000–2022.';
+
+  /* ---------- início ---------- */
+  lerCores();
+  montaLegenda();
+  textoOrdem();
+  window.__contadores = () => contadores();
+  redimensionar(); enquadrar(); desenhar();
+  if (animando) tocar();
+  let timerResize;
+  window.addEventListener('resize', () => {
+    clearTimeout(timerResize);
+    timerResize = setTimeout(() => { redimensionar(); enquadrar(); agendar(false); }, 120);
+  });
+  const trocouTema = () => { lerCores(); montaLegenda(); agendar(false); };
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', trocouTema);
+  new MutationObserver(trocouTema)
+    .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  semMovimento.addEventListener('change', e => {
+    if (e.matches) { animando = false; parar(); quadroUnico(); }
+  });
+})();
+</script>

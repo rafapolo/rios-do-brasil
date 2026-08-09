@@ -1,0 +1,26 @@
+name: Aciona o deploy no rodado
+
+# Em vez de depender de cron, é o push aqui que dispara o deploy: manda um
+# repository_dispatch para o rodado, que reconstrói o conteúdo em
+# /analises/rios-do-brasil/ já neste commit. Mesmo padrão do tse-bens.
+on:
+  push:
+    branches: [main]
+
+jobs:
+  dispatch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Avisa o rodado
+        env:
+          TOKEN: ${{ secrets.RODADO_DEPLOY_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "RODADO_DEPLOY_TOKEN ainda não está definido; deploy não acionado."
+            exit 0
+          fi
+          curl -sS -o /dev/null -w "%{http_code}\n" \
+            -X POST "https://api.github.com/repos/rafapolo/rodado/dispatches" \
+            -H "Authorization: Bearer $TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -d "{\"event_type\":\"rios-updated\",\"client_payload\":{\"sha\":\"${{ github.sha }}\"}}"
