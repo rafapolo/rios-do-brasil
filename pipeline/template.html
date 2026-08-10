@@ -27,6 +27,12 @@
     --ink-3:    #6f838a;
     --accent:   #eb6834;
     --usina:    #b07800;
+    /* Estação de tratamento. Verde-azulado por eliminação: laranja já é a
+       estação fluviométrica, âmbar o reservatório, azul a rampa de vazão e
+       amarelo-vermelho a de efluente. Sobra o verde, que ainda por cima é a
+       leitura certa -- é a única camada que mostra esgoto sendo tirado do
+       rio, e não posto nele. */
+    --ete:      #0f7d70;
     --ramp-0: #cde2fb; --ramp-1: #9ec5f4; --ramp-2: #6da7ec; --ramp-3: #3987e5;
     --ramp-4: #256abf; --ramp-5: #184f95; --ramp-6: #0d366b;
     --fluxo:  #0d366b;
@@ -35,8 +41,21 @@
     --pol-0: #ffe9a3; --pol-1: #fed36f; --pol-2: #feb44c; --pol-3: #fd8d3c;
     --pol-4: #f65330; --pol-5: #d82424; --pol-6: #a3061d;
     --pol-ind: #7b5bd6;
+    /* Outorga: rampa própria, em magenta. Não reaproveita a do efluente de
+       propósito — os modos são exclusivos, mas quem alterna entre eles carrega
+       o significado da cor de um para o outro, e vermelho ali quer dizer "rio
+       sujo". Aqui quer dizer "rio já prometido", que é outra coisa. */
+    --out-0: #f7dcec; --out-1: #f0b6d8; --out-2: #e88ac0; --out-3: #d95fa4;
+    --out-4: #bf3a85; --out-5: #991f64; --out-6: #660d43;
     --rede-fria: #ccd6da;
     --sem-dado: #9aa9af;
+    /* Fundo dos painéis flutuantes. Precisa ser uma COR, não só o realce
+       diagonal: com apenas o gradiente de 4,5% de branco os cartões dependiam
+       inteiramente do backdrop-filter, e o mapa colorido atravessava — no
+       celular, onde o HUD cobre metade da tela cheia de rio azul e estação
+       laranja, o painel virava um borrão e as amostras da legenda liam errado. */
+    --vidro:  rgba(248, 250, 251, .90);
+    --realce: linear-gradient(115deg, rgba(255, 255, 255, .045), transparent 25%);
     --sombra: 0 6px 26px rgba(11, 20, 22, .13);
     --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
     --mono: "Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
@@ -55,6 +74,7 @@
       --ink-3:    #7c8f96;
       --accent:   #f07a49;
       --usina:    #eda100;
+      --ete:      #35c3b0;
       --ramp-0: #0d366b; --ramp-1: #184f95; --ramp-2: #256abf; --ramp-3: #3987e5;
       --ramp-4: #6da7ec; --ramp-5: #9ec5f4; --ramp-6: #cde2fb;
       --fluxo:  #dbeafd;
@@ -62,8 +82,12 @@
       --pol-0: #4a2f16; --pol-1: #6f4319; --pol-2: #96511e; --pol-3: #bd5824;
       --pol-4: #dd542c; --pol-5: #f24634; --pol-6: #ff5f4d;
       --pol-ind: #a894ee;
+      --out-0: #4a1030; --out-1: #6d1a46; --out-2: #92255c; --out-3: #b83373;
+      --out-4: #d94a91; --out-5: #f269ae; --out-6: #ff8cc6;
       --rede-fria: #2b363c;
       --sem-dado: #64757c;
+      --vidro:  rgba(16, 22, 26, .90);
+      --realce: linear-gradient(115deg, rgba(255, 255, 255, .045), transparent 25%);
       --sombra: 0 6px 26px rgba(0, 0, 0, .45);
     }
   }
@@ -82,15 +106,26 @@
     --ink-3:    #7c8f96;
     --accent:   #f07a49;
     --usina:    #eda100;
+    --ete:      #35c3b0;
     --ramp-0: #0d366b; --ramp-1: #184f95; --ramp-2: #256abf; --ramp-3: #3987e5;
     --ramp-4: #6da7ec; --ramp-5: #9ec5f4; --ramp-6: #cde2fb;
     --fluxo:  #dbeafd;
     --pol-0: #4a2f16; --pol-1: #6f4319; --pol-2: #96511e; --pol-3: #bd5824;
     --pol-4: #dd542c; --pol-5: #f24634; --pol-6: #ff5f4d;
     --pol-ind: #a894ee;
+    --out-0: #4a1030; --out-1: #6d1a46; --out-2: #92255c; --out-3: #b83373;
+    --out-4: #d94a91; --out-5: #f269ae; --out-6: #ff8cc6;
     --rede-fria: #2b363c;
     --sem-dado: #64757c;
+    --vidro:  rgba(16, 22, 26, .90);
+    --realce: linear-gradient(115deg, rgba(255, 255, 255, .045), transparent 25%);
     --sombra: 0 6px 26px rgba(0, 0, 0, .45);
+  }
+
+  /* Sem desfoque atrás do painel, 90% de opacidade ainda deixa o rio passar.
+     Onde o navegador não tem backdrop-filter, o vidro vira parede. */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    :root { --vidro: var(--panel); }
   }
 
   body {
@@ -122,8 +157,8 @@
     /* itens de coluna flex encolhem por padrão: sem isto o cartão da ficha era
        espremido e o gráfico de regime vazava por baixo da borda */
     flex: none;
-    background: linear-gradient(115deg, rgba(255, 255, 255, .045), transparent 25%);
-    backdrop-filter: blur(20px);
+    background: var(--realce), var(--vidro);
+    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
     border: 1px solid var(--rule); border-radius: 4px;
     padding: 14px 16px; box-shadow: var(--sombra);
     pointer-events: auto;
@@ -195,6 +230,7 @@
   }
   .selo.neutro { color: var(--ink-2); }
   .selo.usina { color: var(--usina); }
+  .selo.ete { color: var(--ete); }
 
   /* ---------- regime mensal ---------- */
   .regime { margin-top: 11px; }
@@ -220,10 +256,16 @@
   .classes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
   .classe { display: flex; align-items: center; gap: 8px; font-size: 0.73rem; color: var(--ink-2); }
   .amostra { width: 26px; border-radius: 99px; flex: none; }
+  /* O modo vazão troca a grade de classes por uma barra única: são 5,4 décadas
+     entre o riacho e o Amazonas, e nenhuma lista de seis faixas cobre isso sem
+     deixar os dois tons mais escuros de fora. A cunha tem viewBox — ao contrário
+     dos gráficos do series.html — então encolhe em vez de cortar. */
+  .classes.cunha { display: block; }
+  .cunha svg { display: block; width: 100%; height: auto; }
   .nota { font-size: 0.72rem; color: var(--ink-3); margin: 8px 0 0; line-height: 1.5; }
 
   /* ---------- seletor do que a cor mostra ---------- */
-  .modos { display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; }
+  .modos { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; }
   .modos .modo {
     justify-content: center; text-align: center; padding: 8px 4px;
     min-height: 34px; font-size: 0.6rem;
@@ -279,6 +321,7 @@
   .icone.est { color: var(--accent); background: color-mix(in srgb, var(--accent) 18%, transparent); }
   .icone.res { color: var(--usina); background: color-mix(in srgb, var(--usina) 18%, transparent); }
   .icone.flu { color: var(--ramp-3); background: color-mix(in srgb, var(--ramp-3) 20%, transparent); }
+  .icone.ete { color: var(--ete); background: color-mix(in srgb, var(--ete) 18%, transparent); }
   .switch {
     width: 34px; height: 20px; border-radius: 99px; flex: none; position: relative;
     background: color-mix(in srgb, var(--ink-3) 40%, transparent);
@@ -300,8 +343,8 @@
     display: flex; flex-direction: column; gap: 6px;
   }
   .zoom button, .abrir {
-    background: linear-gradient(115deg, rgba(255, 255, 255, .045), transparent 25%);
-    backdrop-filter: blur(14px); box-shadow: var(--sombra);
+    background: var(--realce), var(--vidro);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: var(--sombra);
     justify-content: center; min-width: 40px; padding: 9px;
     font-size: 0.88rem; letter-spacing: 0;
   }
@@ -318,15 +361,15 @@
   }
   .sobre-topo {
     width: 100%; justify-content: space-between;
-    background: linear-gradient(115deg, rgba(255, 255, 255, .045), transparent 25%);
-    backdrop-filter: blur(14px); box-shadow: var(--sombra);
+    background: var(--realce), var(--vidro);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: var(--sombra);
     border-radius: 2px; text-transform: none; font-family: var(--sans);
     font-size: 0.8rem; font-weight: 550; letter-spacing: 0; padding: 9px 13px;
   }
   .sobre-corpo {
     display: none; margin-top: 6px; padding: 13px 15px;
-    background: linear-gradient(115deg, rgba(255, 255, 255, .045), transparent 25%);
-    backdrop-filter: blur(14px); box-shadow: var(--sombra);
+    background: var(--realce), var(--vidro);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); box-shadow: var(--sombra);
     border: 1px solid var(--rule); border-radius: 3px;
     max-height: calc(100dvh - 90px); overflow-y: auto;
   }
@@ -344,8 +387,8 @@
 
   .gaveta {
     position: fixed; top: 0; right: 0; bottom: 0; z-index: 6;
-    width: min(430px, 100vw); background: linear-gradient(115deg, rgba(255, 255, 255, .045), transparent 25%);
-    backdrop-filter: blur(18px);
+    width: min(430px, 100vw); background: var(--realce), var(--vidro);
+    backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
     border-left: 1px solid var(--rule); box-shadow: var(--sombra);
     padding: 20px 22px 40px; overflow-y: auto; overscroll-behavior: contain;
     transform: translateX(101%); transition: transform .22s ease;
@@ -383,7 +426,7 @@
   /* ---------- sobreposições ---------- */
   .tip {
     position: fixed; pointer-events: none; opacity: 0; transition: opacity .1s; z-index: 4;
-    background: linear-gradient(115deg, rgba(255, 255, 255, .045), transparent 25%); backdrop-filter: blur(14px);
+    background: var(--realce), var(--vidro); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
     border: 1px solid var(--rule); border-radius: 3px;
     padding: 9px 11px; font-size: 0.77rem; max-width: 244px; box-shadow: var(--sombra);
   }
@@ -419,8 +462,8 @@
     .puxador {
       display: flex; align-items: center; justify-content: space-between; gap: 10px;
       width: 100%; pointer-events: auto; text-transform: none; font-size: 0.75rem;
-      background: linear-gradient(115deg, rgba(255, 255, 255, .045), transparent 25%);
-      backdrop-filter: blur(14px); border: 1px solid var(--rule); border-radius: 6px;
+      background: var(--realce), var(--vidro);
+      backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid var(--rule); border-radius: 6px;
       box-shadow: var(--sombra); padding: 11px 15px; min-height: 46px;
       font-family: var(--sans); font-weight: 600; letter-spacing: 0;
     }
@@ -484,6 +527,7 @@
       <button class="modo" data-modo="vazao" aria-pressed="true">Vazão</button>
       <button class="modo" data-modo="esgoto" aria-pressed="false">Esgoto</button>
       <button class="modo" data-modo="industria" aria-pressed="false">Indústria</button>
+      <button class="modo" data-modo="outorga" aria-pressed="false">Outorga</button>
     </div>
     <p class="nota" id="notaModo"></p>
   </div>
@@ -510,6 +554,11 @@
         <span class="rotulo">Reservatórios <b id="nRes"></b></span>
         <span class="switch"></span>
       </button>
+      <button id="btEtes" class="chave" aria-pressed="false">
+        <span class="icone ete">▲</span>
+        <span class="rotulo">Tratamento de esgoto <b id="nEtes"></b></span>
+        <span class="switch"></span>
+      </button>
       <button id="btFluxo" class="chave" aria-pressed="false">
         <span class="icone flu">≈</span>
         <span class="rotulo">Fluxo animado <b id="nFluxo"></b></span>
@@ -519,8 +568,8 @@
   </div>
 
   <div class="cartao">
-    <h2>Vazão média</h2>
-    <div class="classes" id="classes"></div>
+    <h2 id="tituloLegenda">Vazão média (m³/s)</h2>
+    <div class="classes cunha" id="classes"></div>
   </div>
 </div>
 
@@ -594,6 +643,7 @@
 
 <script id="dados" type="text/plain">/*__DADOS__*/</script>
 <script id="usinas" type="text/plain">/*__RESERV__*/</script>
+<script id="etes" type="text/plain">/*__ETES__*/</script>
 <script>
 (async function () {
   /* Os dados vão embutidos em gzip+base64 e são descomprimidos aqui. O ganho é
@@ -615,7 +665,17 @@
     return;
   }
 
-  const [D, RES] = await Promise.all([carrega('dados'), carrega('usinas')]);
+  /* As ETEs são a única camada opcional na montagem: quem roda o pipeline sem
+     o baixa_etes.py fica com o marcador intacto, e aí a camada some do painel
+     em vez de derrubar a página inteira no atob. */
+  const opcional = async id => {
+    const el = document.getElementById(id);
+    const t = el && el.textContent.trim();
+    if (!t || t.startsWith('/*')) return [];
+    try { return await carrega(id); } catch { return []; }
+  };
+  const [D, RES, ETES] = await Promise.all([
+    carrega('dados'), carrega('usinas'), opcional('etes')]);
   const ESC = D.esc;
   const N = D.n;
 
@@ -743,6 +803,11 @@
   // vem em décimos de milésimo, 10000 = o rio inteiro é efluente.
   const fEsg = D.esg ? Float32Array.from(varints(D.esg, 0, D.esg.length), v => v / 10000) : null;
   const fInd = D.ind ? Float32Array.from(varints(D.ind, 0, D.ind.length), v => v / 10000) : null;
+  /* Licença de retirada acumulada a montante, na mesma unidade. Diferente das
+     duas de cima, esta passa de 1: o outorga.py só corta em 3 (300% da vazão
+     média), porque "mais licença do que rio" é o que a camada existe para
+     mostrar, e clipar em 100% apagaria justamente isso. */
+  const fOut = D.out ? Float32Array.from(varints(D.out, 0, D.out.length), v => v / 10000) : null;
   // Cidades que coletam esgoto e não têm outorga de lançamento nenhuma: o rio
   // delas não está limpo, está sem registro. Sem isso o branco viraria atestado.
   const semDado = D.semDado ? acumula(D.semDado) : new Set();
@@ -818,19 +883,30 @@
   const P0 = Math.log10(PMIN), P1 = Math.log10(PMAX);
   const p01 = v => (Math.log10(Math.max(PMIN, Math.min(PMAX, v))) - P0) / (P1 - P0);
 
+  /* Escala da outorga. Começa em 1% e não em 0,1% como a do efluente: uma
+     licença de um milésimo da vazão não é notícia, e o piso mais alto tira
+     40 mil trechos do desenho sem tirar nada da leitura. O topo é 100% — a
+     licença igual ao rio inteiro — e tudo acima satura no tom mais escuro,
+     porque 400% e 900% dizem a mesma coisa e o olho não separa os dois. */
+  const OMIN = 0.01, OMAX = 1.0;
+  const O0 = Math.log10(OMIN), O1 = Math.log10(OMAX);
+  const o01 = v => (Math.log10(Math.max(OMIN, Math.min(OMAX, v))) - O0) / (O1 - O0);
+
   const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-  let RAMPA = [], POL = [], COR_FLUXO = '', COR_UF = '', COR_ACC = '', COR_USINA = '', COR_LEITO = '', COR_TERRA = '', COR_DIVISA = '';
+  let RAMPA = [], POL = [], OUT = [], COR_FLUXO = '', COR_UF = '', COR_ACC = '', COR_USINA = '', COR_ETE = '', COR_LEITO = '', COR_TERRA = '', COR_DIVISA = '';
   let COR_FRIA = '', COR_IND = '', COR_SEM = '';
   const lerCores = () => {
     RAMPA = [0, 1, 2, 3, 4, 5, 6].map(i => css('--ramp-' + i));
     POL = [0, 1, 2, 3, 4, 5, 6].map(i => css('--pol-' + i));
+    OUT = [0, 1, 2, 3, 4, 5, 6].map(i => css('--out-' + i));
     COR_FLUXO = css('--fluxo'); COR_UF = css('--uf-line'); COR_ACC = css('--accent');
-    COR_USINA = css('--usina'); COR_LEITO = css('--leito');
+    COR_USINA = css('--usina'); COR_LEITO = css('--leito'); COR_ETE = css('--ete');
     COR_TERRA = css('--terra'); COR_DIVISA = css('--divisa');
     COR_FRIA = css('--rede-fria'); COR_IND = css('--pol-ind'); COR_SEM = css('--sem-dado');
   };
   const cor = v => RAMPA[Math.max(0, Math.min(6, Math.round(t01(v) * 6)))];
   const corPol = v => POL[Math.max(0, Math.min(6, Math.round(p01(v) * 6)))];
+  const corOut = v => OUT[Math.max(0, Math.min(6, Math.round(o01(v) * 6)))];
   const largura = (v, z) => (0.35 + 3.4 * Math.pow(t01(v), 2.1)) * (1 + 0.5 * Math.log2(z));
 
   /* ---------- estado ---------- */
@@ -850,6 +926,9 @@
   const vista = { x: 0, y: 0, k: 1 };
   const semMovimento = window.matchMedia('(prefers-reduced-motion: reduce)');
   let mostrarEst = true, mostrarRes = true;
+  // Começa desligada: são 3,6 mil marcadores e a pergunta de entrada do mapa
+  // é a vazão, não o saneamento. Quem quer, liga.
+  let mostrarEtes = false;
   // O filtro é por vazão, não por ordem de Strahler: a BHO não mapeia as
   // cabeceiras fora do Brasil, então rios grandes de país vizinho ficam com
   // ordem 1 e sumiriam do mapa junto com os córregos.
@@ -859,24 +938,24 @@
   // que é efluente. O mapa nasce no modo de sempre.
   let modo = 'vazao';
   const fracDe = i => modo === 'esgoto' ? (fEsg ? fEsg[i] : 0)
-    : modo === 'industria' ? (fInd ? fInd[i] : 0) : 0;
+    : modo === 'industria' ? (fInd ? fInd[i] : 0)
+    : modo === 'outorga' ? (fOut ? fOut[i] : 0) : 0;
   /* O desenho normal prioriza por vazão, e o teto por quadro corta os menores
      primeiro. Na poluição isso apagaria exatamente o que interessa: os trechos
      mais sujos do país são córregos urbanos de vazão baixa. Daí uma ordem
      própria, por quanto o trecho está poluído, usada só na passada colorida. */
   const ordemPol = {};
-  if (fEsg || fInd) {
-    for (const [m, arr] of [['esgoto', fEsg], ['industria', fInd]]) {
-      if (!arr) continue;
-      const lista = [];
-      for (let i = 0; i < N; i++) if (arr[i] >= PMIN) lista.push(i);
-      lista.sort((a, b) => arr[b] - arr[a]);
-      ordemPol[m] = lista;
-    }
+  for (const [m, arr, piso] of [['esgoto', fEsg, PMIN], ['industria', fInd, PMIN],
+                                ['outorga', fOut, OMIN]]) {
+    if (!arr) continue;
+    const lista = [];
+    for (let i = 0; i < N; i++) if (arr[i] >= piso) lista.push(i);
+    lista.sort((a, b) => arr[b] - arr[a]);
+    ordemPol[m] = lista;
   }
   let animando = false;
   let estaticoSujo = true;
-  let realce = -1, estRealce = null, resRealce = null, fixado = false, selecao = null;
+  let realce = -1, estRealce = null, resRealce = null, eteRealce = null, fixado = false, selecao = null;
 
   // no mobile a faixa recolhida come o rodapé da tela: o enquadramento
   // centraliza no que sobra, não no retângulo inteiro
@@ -915,6 +994,13 @@
     [0.0015, '0,1 – 0,3%'], [0.005, '0,3 – 1%'], [0.017, '1 – 3%'],
     [0.055, '3 – 10%'], [0.18, '10 – 30%'], [0.55, 'acima de 30%'],
   ];
+  // A da outorga fala em % da vazão média já licenciada. A última classe é a
+  // que a camada existe para mostrar, e por isso tem rótulo próprio em vez de
+  // "acima de X".
+  const CLASSES_OUT = [
+    [0.015, '1 – 3%'], [0.035, '3 – 8%'], [0.08, '8 – 18%'],
+    [0.18, '18 – 40%'], [0.45, '40 – 100%'], [1.0, 'licença ≥ o rio inteiro'],
+  ];
   function montaLegenda() {
     const el = document.getElementById('classes');
     if (modo === 'vazao') {
@@ -924,6 +1010,12 @@
         return '<div class="classe"><span class="amostra" style="height:' + esp.toFixed(1) +
           'px;background:' + cor(ref) + '"></span>' + rot + '</div>';
       }).join('');
+      return;
+    }
+    if (modo === 'outorga') {
+      el.innerHTML = CLASSES_OUT.map(([ref, rot]) =>
+        '<div class="classe"><span class="amostra" style="height:4px;background:' +
+        corOut(ref) + '"></span>' + rot + '</div>').join('');
       return;
     }
     const linhas = CLASSES_POL.map(([ref, rot]) => {
@@ -950,16 +1042,61 @@
       'Ali o rio não está limpo, está sem registro (o que não quer dizer sem licença ambiental, ' +
       'que é outro balcão e não entra aqui).',
     industria: 'Efluente industrial, de mineração e de termelétrica, pela mesma conta do esgoto.',
+    outorga: 'Quanto deste rio já está prometido em licença de retirada, somando tudo que foi ' +
+      'outorgado rio acima. Vem das outorgas de captação vigentes no SNIRH — 95 mil tomadas ' +
+      'd\'água casadas à rede, 4.451 m³/s, dos quais cerca de três quartos para irrigação. ' +
+      'No extremo da escala a licença iguala ou passa a vazão média do próprio rio: são 2.558 ' +
+      'trechos. ' +
+      'Três ressalvas, e nenhuma é pequena. É LICENÇA, não uso: ninguém garante que a água ' +
+      'autorizada seja retirada, nem que a retirada real caiba na licença. É RETIRADA, não ' +
+      'consumo: a irrigação consome quase tudo o que tira, a indústria devolve boa parte, e a ' +
+      'base não informa a devolução. E é só água de superfície — a captação em poço ficou de ' +
+      'fora, o que no oeste da Bahia esconde justamente o bombeamento do Urucuia.',
   };
   const TITULO_MODO = {
     vazao: 'Os rios do Brasil, por vazão',
     esgoto: 'Os rios do Brasil, por esgoto',
     industria: 'Os rios do Brasil, por efluente industrial',
+    outorga: 'Os rios do Brasil, por licença de retirada',
   };
+
+  /* Triângulo, não círculo nem quadrado: com estação (círculo laranja) e
+     reservatório (quadrado âmbar) já na tela, a terceira camada precisa se
+     separar pela FORMA também, senão quem não distingue os matizes vê três
+     nuvens de pontos iguais. Vazado = a ETE não está ativa. */
+  function desenhaEtes(cx, z) {
+    if (!mostrarEtes || !ETES.length) return;
+    /* São 3,6 mil marcadores contra 1,8 mil estações, e concentrados: no
+       Sudeste eles se encostam. Em escala nacional o triângulo fica pequeno e
+       sem contorno -- o traço claro em volta engorda cada marca em 2 px e é o
+       que fazia a mancha fechar sobre os rios. O contorno volta a partir do
+       zoom em que os pontos já se separam sozinhos. */
+    const l = Math.min(8.5, 2.9 + 1.15 * z);
+    const contorna = z > 2.6;
+    cx.lineWidth = 1.1;
+    cx.globalAlpha = z > 4 ? 0.9 : 0.62;
+    for (const e of ETES) {
+      const [sx, sy] = paraTela(projX(e.lon), merc(e.lat));
+      if (sx < -12 || sy < -12 || sx > W + 12 || sy > H + 12) continue;
+      cx.beginPath();
+      cx.moveTo(sx, sy - l * 0.62);
+      cx.lineTo(sx + l * 0.55, sy + l * 0.38);
+      cx.lineTo(sx - l * 0.55, sy + l * 0.38);
+      cx.closePath();
+      if (e.status === 'ativa') {
+        cx.fillStyle = COR_ETE; cx.fill();
+        if (contorna) { cx.strokeStyle = COR_LEITO; cx.stroke(); }
+      } else {
+        cx.strokeStyle = COR_ETE; cx.stroke();
+      }
+    }
+    cx.globalAlpha = 1;
+  }
 
   const contadores = () => {
     document.getElementById('nEst').textContent = '(' + D.estacoes.length + ')';
     document.getElementById('nRes').textContent = '(' + RES.length + ')';
+    document.getElementById('nEtes').textContent = '(' + ETES.length + ')';
     // conta com o mesmo corte da camada de fluxo, sobre o que está de fato à vista
     const corte = Math.max(5, 240 / Math.pow(zAtual, 1.35));
     let n = 0;
@@ -1102,7 +1239,7 @@
 
       // Onde a cidade coleta esgoto e não há outorga nenhuma: não é rio limpo,
       // é rio sem registro. Vai antes da rampa para nunca cobrir um dado real.
-      if (semDado.size) {
+      if (semDado.size && modo !== 'outorga') {
         octx.save();
         octx.setLineDash([3, 4]);
         octx.strokeStyle = COR_SEM;
@@ -1134,9 +1271,10 @@
         if (bbox[i * 4 + 2] < w0x || bbox[i * 4] > w1x ||
             bbox[i * 4 + 3] < w0y || bbox[i * 4 + 1] > w1y) continue;
         const f = fracDe(i);
-        if (f < PMIN) continue;
+        if (f < (modo === 'outorga' ? OMIN : PMIN)) continue;
         const t = p01(f);
-        const c = modo === 'industria' ? COR_IND : corPol(f);
+        const c = modo === 'industria' ? COR_IND
+                : modo === 'outorga' ? corOut(f) : corPol(f);
         const alfa = modo === 'industria' ? (2 + Math.round(t * 6)) / 8 : 1;
         const lw = Math.round(largura(q[i], z) * 3) / 3;
         if (c !== corAtual || lw !== larAtual || alfa !== alfaAtual) {
@@ -1178,6 +1316,7 @@
       }
       octx.globalAlpha = 1;
     }
+    desenhaEtes(octx, z);
     estaticoSujo = false;
     vazioEl.classList.toggle('on', visiveis.length === 0 && z > 2);
   }
@@ -1280,6 +1419,8 @@
       ctx.globalAlpha = 1;
     }
 
+    desenhaEtes(ctx, z);
+
     const anel = (o, c, raio) => {
       const [sx, sy] = paraTela(projX(o.lon), merc(o.lat));
       ctx.beginPath(); ctx.arc(sx, sy, raio, 0, 6.2832);
@@ -1287,6 +1428,7 @@
     };
     if (estRealce && mostrarEst) anel(estRealce, COR_ACC, 8);
     if (resRealce && mostrarRes) anel(resRealce, COR_USINA, 11);
+    if (eteRealce && mostrarEtes) anel(eteRealce, COR_ETE, 10);
   }
 
   /* laço de animação: só roda com o fluxo ligado */
@@ -1350,6 +1492,18 @@
   const vazao = v => v < 0.1 ? fmt(v * 1000, v < 0.01 ? 1 : 0) + ' L/s'
     : fmt(v, v < 10 ? 1 : 0) + ' m³/s';
 
+  /* Extensão em texto, do jeito que a ficha e o tooltip precisam mostrar: o rio
+     inteiro quando o nome agrupa vários trechos, o trecho sozinho quando não.
+     `trechosDoRio` é O(1) e o grupo é curto, então dá para chamar no hover. */
+  function extensao(i) {
+    if (!comps) return '';
+    const grupo = trechosDoRio(i);
+    if (grupo.length <= 1) return fmt(comps[i] / 10, 1) + ' km';
+    let comp = 0;
+    for (const k of grupo) comp += comps[k];
+    return fmt(comp / 10, 1) + ' km';
+  }
+
   function fichaTrecho(i) {
     const grupo = trechosDoRio(i);
     // o rio inteiro: soma o comprimento, acha a foz (maior vazão) e conta postos
@@ -1375,6 +1529,7 @@
       linha('Estações no rio', String(postos)) +
       (fora ? linha('Território', 'fora do Brasil') : '') +
       efluenteHTML(i) +
+      outorgaHTML(i) +
       '<div class="selo' + (medido ? '' : ' neutro') + '">' +
       (medido ? 'vazão medida em estação' : 'vazão estimada') + '</div>';
   }
@@ -1394,6 +1549,17 @@
     }
     return (e >= 0.001 ? linha('Esgoto na água', pct(e) + ' — ' + vazao(e * q[i])) : '') +
       (n >= 0.001 ? linha('Efluente industrial', pct(n) + ' — ' + vazao(n * q[i])) : '');
+  }
+
+  /* A licença acumulada a montante, na ficha do trecho. Acima de 100% ganha
+     selo em vez de linha: a essa altura o número deixou de ser um atributo do
+     rio e virou a notícia. */
+  function outorgaHTML(i) {
+    if (!fOut) return '';
+    const o = fOut[i];
+    if (o < OMIN) return '';
+    return linha('Outorgado rio acima', pct(o) + ' da vazão — ' + vazao(o * q[i])) +
+      (o >= 1 ? '<div class="selo">licença de retirada igual ou maior que a vazão média</div>' : '');
   }
 
   const MESES = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
@@ -1445,9 +1611,27 @@
       (u.ini ? ' · média ' + u.ini + '–' + u.fim : '') + '</div>';
   }
 
+  /* A remoção de DBO é o número que decide se a ETE resolve: 90% e 30% são
+     obras diferentes com o mesmo nome. Vem do Atlas como fração e já chega
+     aqui em porcentagem. */
+  function fichaEte(t) {
+    fichaEl.className = 'cartao ficha';
+    fichaEl.innerHTML =
+      '<div class="nome">' + t.nome + '</div>' +
+      (t.tipo ? linha('Tipo de tratamento', t.tipo) : '') +
+      (t.dbo != null ? linha('Remoção de DBO', t.dbo + '%') : '') +
+      (t.corpo ? linha('Corpo receptor', t.corpo) : '') +
+      (t.mun > 1 ? linha('Municípios atendidos', String(t.mun)) : '') +
+      (t.ano ? linha('Em operação desde', String(t.ano)) : '') +
+      '<div class="selo ete">' + (t.status === 'ativa' ? 'estação de tratamento ativa'
+                                                       : 'ETE ' + t.status) + '</div>';
+  }
+
   function fichaVazia() {
     fichaEl.className = 'cartao ficha vazia';
-    fichaEl.textContent = 'Toque num rio, numa estação ou num reservatório para ver a vazão.';
+    fichaEl.textContent = mostrarEtes
+      ? 'Toque num rio, numa estação, num reservatório ou numa estação de tratamento.'
+      : 'Toque num rio, numa estação ou num reservatório para ver a vazão.';
   }
 
   function mostrarTip(html, ev) {
@@ -1516,6 +1700,7 @@
 
   function alvo(sx, sy, tol) {
     if (mostrarRes) { const u = acharPonto(RES, sx, sy, tol); if (u) return { u }; }
+    if (mostrarEtes) { const t = acharPonto(ETES, sx, sy, tol); if (t) return { t }; }
     if (mostrarEst) { const e = acharPonto(D.estacoes, sx, sy, tol); if (e) return { e }; }
     const i = acharTrecho(sx, sy, tol);
     return i >= 0 ? { i } : null;
@@ -1527,12 +1712,14 @@
     realce = a && a.i !== undefined ? a.i : -1;
     estRealce = a && a.e ? a.e : null;
     resRealce = a && a.u ? a.u : null;
+    eteRealce = a && a.t ? a.t : null;
   }
   function aplicar(a) {
     selecao = a || null;
     realcar(a);
     if (!a) fichaVazia();
     else if (a.u) fichaUsina(a.u);
+    else if (a.t) fichaEte(a.t);
     else if (a.e) fichaEstacao(a.e);
     else fichaTrecho(a.i);
   }
@@ -1544,10 +1731,15 @@
     if (!a) { tip.classList.remove('on'); return; }
     const html = a.u
       ? '<b>' + a.u.nome + '</b><div class="linha">Turbinada <em>' + fmt(a.u.turb || 0) + ' m³/s</em></div>'
+      : a.t
+        ? '<b>' + a.t.nome + '</b><div class="linha">Remoção de DBO <em>' +
+          (a.t.dbo != null ? a.t.dbo + '%' : '—') + '</em></div>'
       : a.e
         ? '<b>' + a.e.nome + '</b><div class="linha">Vazão média <em>' + vazao(a.e.q) + '</em></div>'
         : '<b>' + (D.nomes[nomeIdx[a.i]] || 'Curso d’água sem nome') + '</b>' +
-          '<div class="linha">Vazão média <em>' + vazao(q[a.i]) + '</em></div>';
+          '<div class="linha">Vazão média <em>' + vazao(q[a.i]) + '</em></div>' +
+          // vazão sem extensão não diz se é um fio de 3 km ou um rio de 2 mil
+          (comps ? '<div class="linha">Extensão <em>' + extensao(a.i) + '</em></div>' : '');
     mostrarTip(html, ev);
   }
 
@@ -1603,6 +1795,11 @@
     if (!v && resRealce) { fixado = false; aplicar(null); }
     repintarFundo();
   });
+  alterna('btEtes', () => mostrarEtes, v => {
+    mostrarEtes = v;
+    if (!v && eteRealce) { fixado = false; aplicar(null); }
+    repintarFundo();
+  });
   alterna('btFluxo', () => animando, v => {
     animando = v;
     if (v) tocar(); else { parar(); fctx.clearRect(0, 0, W, H); quadroUnico(); }
@@ -1653,8 +1850,17 @@
     agendar(false);
   }
   for (const b of botoesModo) b.addEventListener('click', () => aplicaModo(b.dataset.modo));
-  // sem os dados de poluição embutidos o mapa segue funcionando só com a vazão
-  if (!fEsg) for (const b of botoesModo) if (b.dataset.modo !== 'vazao') b.remove();
+  /* Sem os dados embutidos o mapa segue funcionando só com a vazão. Cada modo
+     cai por conta própria: poluição e outorga vêm de scripts diferentes do
+     pipeline, e rodar um sem o outro é normal. */
+  for (const b of botoesModo) {
+    const m = b.dataset.modo;
+    if ((m === 'esgoto' || m === 'industria') && !fEsg) b.remove();
+    else if (m === 'outorga' && !fOut) b.remove();
+  }
+  // idem para as ETEs: interruptor que não acende nada é pior que interruptor
+  // nenhum, porque o leitor conclui que não existe ETE no Brasil
+  if (!ETES.length) document.getElementById('btEtes').remove();
 
   const gaveta = document.getElementById('gaveta');
   const veu = document.getElementById('veu');
@@ -1775,7 +1981,9 @@
   document.getElementById('rodape').textContent =
     'Rede de drenagem: Base Hidrográfica Ottocodificada 2017 (1:5.000), ANA. ' +
     'Vazões: séries históricas das estações fluviométricas da ANA, ' + anoIni + '–' + anoFim + '. ' +
-    'Reservatórios: Sistema de Acompanhamento de Reservatórios da ANA, operação diária 2000–2022.';
+    'Reservatórios: Sistema de Acompanhamento de Reservatórios da ANA, operação diária 2000–2022.' +
+    (ETES.length ? ' Tratamento de esgoto: camada ETE 2019 do Atlas Esgotos da ANA, ' +
+      ETES.length + ' estações — a remoção de DBO é a declarada no Atlas, não medida no rio.' : '');
 
   /* ---------- início ---------- */
   lerCores();
@@ -1783,7 +1991,10 @@
   montaLegenda();
   textoOrdem();
   window.__contadores = () => contadores();
-  redimensionar(); enquadrar(); desenhar();
+  // `desenhar()` direto não passa por quadroUnico(), que é quem chama os
+  // contadores — sem esta linha os números ao lado de cada camada só apareciam
+  // depois do primeiro arrasto, e o painel abria com "Estações ( )".
+  redimensionar(); enquadrar(); desenhar(); contadores();
   if (animando) tocar();
   let timerResize;
   window.addEventListener('resize', () => {

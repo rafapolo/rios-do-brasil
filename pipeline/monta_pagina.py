@@ -20,6 +20,12 @@ def embutir(nome):
 tpl = (S / "template.html").read_text()
 pagina = tpl.replace("/*__FONTE__*/", (S / "fonte_mono.txt").read_text().strip())
 pagina = pagina.replace("/*__RESERV__*/", embutir("reservatorios.json"))
+# Opcional: quem não rodou o baixa_etes.py monta a página sem a camada, e o
+# template esconde o interruptor sozinho em vez de quebrar.
+if (S / "etes.json").exists():
+    pagina = pagina.replace("/*__ETES__*/", embutir("etes.json"))
+else:
+    print("  etes.json ausente — mapa sai sem a camada de tratamento")
 pagina = pagina.replace("/*__DADOS__*/", embutir("rede_vazao.json"))
 out = S / "rios_brasil.html"
 out.write_text(pagina)

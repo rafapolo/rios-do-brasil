@@ -57,8 +57,11 @@ cd pipeline
 python3 baixa_rede.py 1
 python3 baixa_vazao.py            # SOAP da ANA, ~35 min
 python3 baixa_reservatorios.py
+python3 baixa_etes.py           # camada ETE do Atlas Esgotos, ~1 min (opcional)
 python3 terra_fronteiras.py
 python3 processa.py               # regionaliza + valida, ~5 min
+python3 baixa_outorgas.py         # lançamento e captação do SNIRH, ~4 min
+python3 outorga.py                # camada de licença de retirada, ~12 min
 python3 monta_pagina.py
 
 # séries históricas (series.html) — só depende do lake
@@ -138,6 +141,31 @@ Todos os JSON intermediários são gitignored. Os HTML gerados são versionados 
   código como número e devolvem 7 (`1036005` onde todo o resto tem `01036005`). Um join contra o
   inventário sai vazio, calado — foi assim que o painel de chuva nasceu sem nenhum ponto. O ETL
   faz `zfill(8)`; qualquer fonte nova precisa fazer o mesmo.
+- **A camada `SPR/ETE_2019` traz uma linha por município atendido, não por ETE.** "ETE Barueri"
+  aparece 13 vezes, "ETE ABC" 9 — contar linha infla o total em ~3%. O grão real é `ETE_CD`, e é
+  por ele que o `baixa_etes.py` deduplica (3.774 linhas → 3.667 estações). No mesmo dado,
+  `ETE_DS_STATUS` chega com mojibake da origem ("Não localizadas" vira `Nto`, `Nmo`, `Nro`,
+  `Nno`, cada uma contando separado), `ETE_QT_POPPROJ` vem zerado até nas grandes da RMSP e
+  `ETE_NM_CORPORECEPTOR` vem em branco em 86% das linhas. Os sete códigos de
+  `ETE_DS_TIPOLOGRESUMIDA` (LAG, RAN, LAT, SIM, QBI, MIS, ESP) não têm dicionário publicado — o
+  do ETL foi lido do campo longo `ETE_DS_TIPOLOGIA` que acompanha cada linha.
+- **A remoção de DBO da ETE vem como fração (0,88), não porcentagem**, e é a *declarada* no
+  Atlas — projeto, não medição no rio. Não é comparável com a carga que o `poluicao.py` faz
+  descer pela rede, que sai de outorga.
+- **A outorga de captação tem coordenada, apesar de o `baixa_outorgas.py` ter passado muito
+  tempo sem pedi-la.** A camada do SNIRH é de ponto e traz os mesmos 80 campos do lançamento,
+  incluindo `int_nu_latitude`/`int_nu_longitude` e `ing_cd_ottobacia_trecho`. Enquanto só se
+  baixava município, o cruzamento com a vazão ficava preso ao grão municipal — e é daí que vem
+  a ressalva do painel de outorga do `series.html` (no Ribeirão do Gama o total do DF dá dez
+  vezes o córrego). O `outorga.py` usa a coordenada; aquele painel ainda não, porque
+  `tendencia.json` só tem lat/lon da estação, não da bacia dela.
+- **`tch_ds == 'Poço'` é um terço das captações** (181.902 → 105.101 sem elas). São água
+  subterrânea e não saem de leito nenhum, então ficam fora da camada do mapa. Isso deixa de
+  fora justamente o bombeamento do Urucuia, que é o centro da denúncia sobre o oeste da Bahia —
+  a nota do modo diz isso, e qualquer afirmação sobre pressão hídrica ali precisa repetir.
+- **A vazão da outorga vem em m³/h e nula em um terço dos registros.** Os nulos entram como
+  presença e somam zero, igual ao que `poluicao.py` faz com lançamento sem vazão declarada;
+  descartá-los faria a contagem de tomadas d'água mentir.
 
 ## Publicação
 

@@ -5,6 +5,7 @@ bho/
 *.csv
 rede_vazao.json
 reservatorios.json
+etes.json
 tendencia.json
 paineis.json
 *.json.gz
