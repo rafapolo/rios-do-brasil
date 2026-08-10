@@ -500,7 +500,7 @@
 
 <div class="hud" id="hud">
   <button class="puxador" id="puxador" aria-expanded="true" aria-controls="hud">
-    <span>Os rios do Brasil, por vazão</span>
+    <span id="puxadorRotulo">Os rios do Brasil, por vazão</span>
     <span class="estado" id="puxadorSeta">▾</span>
   </button>
 
@@ -1886,6 +1886,7 @@
     }
     for (const b of botoesModo) b.setAttribute('aria-pressed', String(b.dataset.modo === novo));
     document.getElementById('titulo').textContent = TITULO_MODO[novo] || TITULO_MODO.vazao;
+    document.getElementById('puxadorRotulo').textContent = TITULO_MODO[novo] || TITULO_MODO.vazao;
     notaModo.textContent = NOTA_MODO[novo] || '';
     montaLegenda();
     if (selecao) aplicar(selecao);   // a ficha aberta reescreve com a leitura do modo
