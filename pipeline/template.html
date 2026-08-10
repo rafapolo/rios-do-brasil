@@ -1,3 +1,5 @@
+<!doctype html>
+<html lang="pt-BR">
 <meta charset="utf-8">
 <!-- Sem isto o celular usa viewport de 980px e reduz a página por zoom:
      nenhuma media query de max-width dispara e o painel lateral não vira
@@ -556,7 +558,7 @@
   </div>
 
   <div class="cartao">
-    <h2>O que pintar</h2>
+    <h2>O que ver</h2>
     <div class="modos" role="group" aria-label="O que a cor mostra">
       <button class="modo" data-modo="vazao" aria-pressed="true">Vazão</button>
       <button class="modo" data-modo="esgoto" aria-pressed="false">Esgoto</button>
@@ -1901,12 +1903,29 @@
       camadasAntes = null;
     }
     for (const b of botoesModo) b.setAttribute('aria-pressed', String(b.dataset.modo === novo));
-    document.getElementById('titulo').textContent = TITULO_MODO[novo] || TITULO_MODO.vazao;
-    document.getElementById('puxadorRotulo').textContent = TITULO_MODO[novo] || TITULO_MODO.vazao;
+    const titulo = TITULO_MODO[novo] || TITULO_MODO.vazao;
+    document.getElementById('titulo').textContent = titulo;
+    document.getElementById('puxadorRotulo').textContent = titulo;
+    document.title = titulo;
     notaModo.textContent = NOTA_MODO[novo] || '';
     montaLegenda();
     if (selecao) aplicar(selecao);   // a ficha aberta reescreve com a leitura do modo
     agendar(false);
+    escreveModoNaURL(novo);
+  }
+
+  /* A URL acompanha o modo, para que ?mapa=esgoto seja um link que abre o mapa
+     de esgoto. replaceState e não pushState: trocar de camada não é navegar, e
+     empilhar histórico faria o botão voltar do celular gastar quatro toques
+     antes de sair da página. Vazão é o padrão e sai da URL em vez de virar
+     ?mapa=vazao. Por file:// o navegador recusa reescrever a barra — a página
+     tem que abrir assim, então a recusa é esperada e não vira erro. */
+  function escreveModoNaURL(m) {
+    try {
+      const u = new URL(location.href);
+      if (m === 'vazao') u.searchParams.delete('mapa'); else u.searchParams.set('mapa', m);
+      history.replaceState(null, '', u);
+    } catch (e) { /* file:// */ }
   }
   for (const b of botoesModo) b.addEventListener('click', () => aplicaModo(b.dataset.modo));
   /* Sem os dados embutidos o mapa segue funcionando só com a vazão. Cada modo
@@ -2041,8 +2060,18 @@
 
   /* ---------- início ---------- */
   lerCores();
-  notaModo.textContent = NOTA_MODO[modo] || '';
-  montaLegenda();
+  /* O modo também entra pela URL: .../rios-do-brasil/?mapa=esgoto abre já
+     pintado. Só vale modo cujo botão sobreviveu à checagem de dados logo acima
+     — pedir ?mapa=outorga numa montagem sem a camada de outorga daria um mapa
+     inteiro cinza, sem botão para desfazer e sem nada que explicasse. */
+  const modoDaURL = new URLSearchParams(location.search).get('mapa');
+  if (modoDaURL && modoDaURL !== modo &&
+      botoesModo.some(b => b.isConnected && b.dataset.modo === modoDaURL)) {
+    aplicaModo(modoDaURL);
+  } else {
+    notaModo.textContent = NOTA_MODO[modo] || '';
+    montaLegenda();
+  }
   textoOrdem();
   window.__contadores = () => contadores();
   // `desenhar()` direto não passa por quadroUnico(), que é quem chama os

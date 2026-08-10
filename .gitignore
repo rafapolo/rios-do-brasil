@@ -13,3 +13,7 @@ __pycache__/
 
 # Saída do monta_pagina.py: o que vai ao ar é o index.html na raiz
 pipeline/rios_brasil.html
+
+# desenvolvimento: a suíte de testes usa bun + playwright,
+# nada disso entra nas páginas publicadas
+node_modules/
