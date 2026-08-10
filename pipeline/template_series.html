@@ -171,7 +171,9 @@
   .rank { display: grid; gap: 2px; }
   .linha {
     display: grid; align-items: center; gap: 10px;
-    grid-template-columns: minmax(0, 1fr) 300px 74px;
+    /* Trilho proporcional, não 300px fixos: em tela larga sobrava um terço do
+       cartão vazio e as barras pequenas ficavam ilegíveis por falta de escala. */
+    grid-template-columns: minmax(0, 1fr) 46% 74px;
     padding: 1px 0; cursor: default;
   }
   .linha:hover .rot b { color: var(--accent); }
@@ -209,6 +211,9 @@
 
   /* ---------- svg comum ---------- */
   .svgwrap { overflow-x: auto; overscroll-behavior-x: contain; }
+  /* Gráfico que precisa manter proporção 1:1 não enche o cartão; centralizar
+     deixa a sobra simétrica em vez de um buraco só do lado direito. */
+  .svgwrap.meio { display: flex; justify-content: center; }
   svg { display: block; max-width: 100%; }
   svg text { font-family: var(--mono); fill: var(--ink-3); font-size: 10px; }
   svg .eixo { stroke: var(--rule); stroke-width: 1; }
@@ -279,7 +284,7 @@
   #carregando { padding: 60px 20px; text-align: center; color: var(--ink-3); }
 
   @media (max-width: 780px) {
-    .linha { grid-template-columns: minmax(0, 1fr) 130px 60px; gap: 7px; }
+    .linha { grid-template-columns: minmax(0, 1fr) 38% 58px; gap: 7px; }
     .rot { font-size: 0.72rem; }
     .cartao { padding: 18px 15px; }
   }
@@ -383,6 +388,14 @@
     const pos = ticks(lim, alvo).filter(v => v > 0 && v <= lim);
     return [...pos.map(v => -v).reverse(), 0, ...pos];
   }
+
+  // Largura interna de um cartão: .folha tem max 1120 e padding lateral de 20,
+  // .cartao tem padding de 24. Os gráficos eram fixos em 640–700 px e sobrava
+  // um terço do cartão vazio à direita.
+  const larguraUtil = () => Math.min(1120, innerWidth) - 40 - 48;
+  // Piso: abaixo disso o gráfico rola dentro do .svgwrap em vez de espremer
+  // rótulo sobre rótulo no celular.
+  const largura = (min = 560) => Math.max(min, larguraUtil());
 
   const SVGNS = 'http://www.w3.org/2000/svg';
   const s = (tag, attrs = {}, txt) => {
@@ -648,7 +661,9 @@
         '<span><i style="background:var(--enche-2)"></i>vazão sobe</span>';
       c.append(leg);
 
-      const W = 660, H = 480, M = { t: 16, r: 16, b: 46, l: 56 };
+      // Largo de propósito: o que o leitor precisa comparar é a posição no
+      // eixo da CHUVA, e é nele que a resolução extra rende.
+      const W = largura(600), H = 470, M = { t: 16, r: 16, b: 46, l: 56 };
       const lx = Math.max(6, ...com.map(r => Math.abs(r.chuva_pct))) * 1.05;
       const ly = Math.max(10, ...com.map(r => Math.abs(r.pct))) * 1.05;
       const px = v => M.l + (v + lx) / (2 * lx) * (W - M.l - M.r);
@@ -735,7 +750,7 @@
 
     // Barras por ano: quantas estações registraram ao menos um dia sem rio.
     const dados = seco.por_ano.filter(l => l[0] >= 1960 && l[0] <= 2022);
-    const W = Math.max(680, dados.length * 11), H = 210;
+    const W = Math.max(largura(), dados.length * 13), H = 240;
     const M = { t: 12, r: 10, b: 26, l: 42 };
     const marcas = ticks(Math.max(...dados.map(l => l[2])));
     const maxE = marcas[marcas.length - 1];
@@ -824,7 +839,7 @@
       tile(num(cedo), 'cheia mais cedo'));
     c.append(resumo);
 
-    const W = 700, H = 240, M = { t: 16, r: 16, b: 44, l: 46 };
+    const W = largura(), H = 260, M = { t: 16, r: 16, b: 44, l: 46 };
     const bins = new Map();
     for (const r of mexeu) {
       const k = Math.round(r.desloc * 2) / 2;
@@ -903,7 +918,9 @@
 
     // Log-log: Q7,10 vai de milésimos a milhares de m³/s. Linear viraria uma
     // nuvem colada na origem com três pontos soltos.
-    const W = 640, H = 420, M = { t: 14, r: 14, b: 42, l: 54 };
+    // Quadrado, e não esticado até a borda: os dois eixos são a mesma
+    // grandeza e a diagonal tracejada só lê como igualdade a 45°.
+    const W = Math.min(largura(520), 620), H = W, M = { t: 14, r: 14, b: 42, l: 54 };
     const pos = q.filter(r => r.antes > 0 && r.depois > 0);
     const vals = pos.flatMap(r => [r.antes, r.depois]);
     const lo = Math.max(1e-3, Math.min(...vals)), hi = Math.max(...vals);
@@ -943,7 +960,7 @@
     const rotY = s('text', { x: 12, y: (M.t + H - M.b) / 2, 'text-anchor': 'middle', class: 'rotulo',
       transform: `rotate(-90 12 ${(M.t + H - M.b) / 2})` }, `Q7,10 em ${jd[0]}–${jd[1]} (m³/s)`);
     svg.append(rotY);
-    const wrap = el('div', { class: 'svgwrap' });
+    const wrap = el('div', { class: 'svgwrap meio' });
     wrap.append(svg);
     c.append(wrap);
 
@@ -990,7 +1007,7 @@
       '<span><i style="background:var(--accent)"></i>com dado consistido pela ANA</span>';
     c.append(leg);
 
-    const W = Math.max(700, cons.length * 10), H = 260, M = { t: 14, r: 14, b: 30, l: 46 };
+    const W = Math.max(largura(), cons.length * 12), H = 280, M = { t: 14, r: 14, b: 30, l: 46 };
     const marcas = ticks(Math.max(...cons.map(l => l[3])));
     const maxV = marcas[marcas.length - 1];
     const px = (a) => M.l + (a - cons[0][0]) / (cheio - cons[0][0]) * (W - M.l - M.r);
