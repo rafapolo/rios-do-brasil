@@ -243,21 +243,11 @@
      aquela faixa — são geradas em JS a partir das funções de cor e largura,
      então não há como legenda e mapa divergirem. */
   .classes { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
-  .classe { display: flex; align-items: center; gap: 8px; font-size: 0.73rem; color: var(--ink-2); }
-  .amostra { width: 26px; border-radius: 99px; flex: none; }
-  /* O modo vazão troca a grade de classes por uma barra única: são 5,4 décadas
-     entre o riacho e o Amazonas, e nenhuma lista de seis faixas cobre isso sem
-     deixar os dois tons mais escuros de fora. A cunha tem viewBox — ao contrário
-     dos gráficos do series.html — então encolhe em vez de cortar. */
-  .classes.cunha { display: block; }
-  .cunha svg { display: block; width: 100%; height: auto; }
-  .cunha line { stroke: var(--rule); stroke-width: 1; }
-  .cunha text {
-    /* 7,5 px é o que deixa "10 mil" e "100 mil" separados: as décadas ficam a
-       52,7 unidades uma da outra e o último rótulo tem 7 caracteres. */
-    fill: var(--ink-3); font-family: var(--mono); font-size: 7.5px;
-    font-variant-numeric: tabular-nums;
+  .classe {
+    display: flex; align-items: center; gap: 8px; font-size: 0.73rem;
+    color: var(--ink-2); font-variant-numeric: tabular-nums;
   }
+  .amostra { width: 26px; border-radius: 99px; flex: none; }
   .nota { font-size: 0.72rem; color: var(--ink-3); margin: 8px 0 0; line-height: 1.5; }
 
   /* ---------- seletor do que a cor mostra ---------- */
@@ -557,7 +547,7 @@
 
   <div class="cartao">
     <h2 id="tituloLegenda">Vazão média (m³/s)</h2>
-    <div class="classes cunha" id="classes"></div>
+    <div class="classes" id="classes"></div>
   </div>
 
   <div class="cartao">
@@ -986,45 +976,16 @@
 
   // contagem em cada controle
   // A legenda sai das mesmas funções que desenham o mapa
-  /* No modo vazão ela é uma cunha só, e não uma lista de faixas. Entre o riacho
-     e o Amazonas vão 5,4 décadas: qualquer corte em seis linhas acaba repetindo
-     tom e ainda deixa os dois azuis mais escuros — tudo acima de 5.400 m³/s, que
-     é onde estão Amazonas, Solimões, Madeira e Negro — sem entrada nenhuma. Na
-     barra os sete tons aparecem inteiros, em corte duro na fronteira exata em que
-     cor() troca de valor, e a silhueta engrossa pela mesma largura() do canvas.
-     O eixo são as décadas, que é o jeito honesto de mostrar uma escala log. */
-  const DECADAS = [[1, '1'], [10, '10'], [100, '100'], [1e3, '1.000'],
-                   [1e4, '10 mil'], [1e5, '100 mil']];
+  /* As faixas são as da própria cor(): o tom i cobre t01 de (i−0,5)/6 a
+     (i+0,5)/6, o que em vazão cai em 1,4 · 11 · 87 · 690 · 5.400 · 43.000 m³/s
+     (o último corte exato é 42.740; arredondar move a fronteira menos de 1%, o
+     que não troca o tom de trecho nenhum). São sete e não seis: a lista de seis
+     parava em "acima de 500" e deixava os dois azuis mais escuros sem entrada,
+     que é onde estão Amazonas, Solimões, Madeira e Negro. A unidade mora no
+     título do cartão, então os rótulos são só número. */
+  const CLASSES = ['até 1,4', '1,4 – 11', '11 – 87', '87 – 690',
+                   '690 – 5.400', '5.400 – 43.000', 'acima de 43.000'];
   const vDeT = t => Math.pow(10, L0 + t * (L1 - L0));   // o inverso de t01()
-  function cunhaVazao() {
-    const X0 = 2, X1 = 286, MEIO = 12, K = 3.6, AMOSTRAS = 60;
-    const x = t => X0 + t * (X1 - X0);
-    const topo = [], base = [];
-    for (let i = 0; i <= AMOSTRAS; i++) {
-      const t = i / AMOSTRAS, px = x(t).toFixed(1);
-      const h = largura(vDeT(t), 1) * K / 2;
-      topo.push(px + ',' + (MEIO - h).toFixed(2));
-      base.push(px + ',' + (MEIO + h).toFixed(2));
-    }
-    const silhueta = 'M' + topo.join('L') + 'L' + base.reverse().join('L') + 'Z';
-    const faixas = [0, 1, 2, 3, 4, 5, 6].map(i => {
-      const a = x(Math.max(0, (i - 0.5) / 6)), b = x(Math.min(1, (i + 0.5) / 6));
-      return '<rect x="' + a.toFixed(1) + '" y="0" width="' + (b - a).toFixed(1) +
-        '" height="' + (MEIO * 2) + '" fill="' + cor(vDeT(i / 6)) + '"/>';
-    }).join('');
-    const marcas = DECADAS.map(([v, rot], i) => {
-      const px = x(t01(v)).toFixed(1);
-      // o último rótulo é o mais largo e encostaria na borda se fosse centrado
-      const anc = i === DECADAS.length - 1 ? 'end' : 'middle';
-      return '<line x1="' + px + '" y1="22" x2="' + px + '" y2="25.5"/>' +
-        '<text x="' + px + '" y="34" text-anchor="' + anc + '">' + rot + '</text>';
-    }).join('');
-    return '<svg viewBox="0 0 288 36" role="img" aria-label="A cor e a espessura ' +
-      'crescem com a vazão média, de menos de 1 m³/s nas cabeceiras a mais de 100 ' +
-      'mil no Amazonas.">' +
-      '<defs><clipPath id="cunhaClip"><path d="' + silhueta + '"/></clipPath></defs>' +
-      '<g clip-path="url(#cunhaClip)">' + faixas + '</g>' + marcas + '</svg>';
-  }
   // a legenda da poluição fala em % do rio que é efluente, que é a própria métrica
   const CLASSES_POL = [
     [0.0015, '0,1 – 0,3%'], [0.005, '0,3 – 1%'], [0.017, '1 – 3%'],
@@ -1039,10 +1000,17 @@
   ];
   function montaLegenda() {
     const el = document.getElementById('classes');
-    el.classList.toggle('cunha', modo === 'vazao');
     tituloLegenda.textContent = TITULO_LEGENDA[modo] || TITULO_LEGENDA.vazao;
     if (modo === 'vazao') {
-      el.innerHTML = cunhaVazao();
+      /* A amostra sai do centro do tom — vDeT(i/6) é o valor em que cor()
+         devolve exatamente RAMPA[i] —, então a cor e a espessura da legenda são
+         as mesmas que o canvas desenha para aquela faixa. */
+      el.innerHTML = CLASSES.map((rot, i) => {
+        const ref = vDeT(i / 6);
+        const esp = Math.max(2, Math.min(9, largura(ref, 1) * 1.9));
+        return '<div class="classe"><span class="amostra" style="height:' + esp.toFixed(1) +
+          'px;background:' + cor(ref) + '"></span>' + rot + '</div>';
+      }).join('');
       return;
     }
     if (modo === 'outorga') {

@@ -86,22 +86,23 @@ describe("celular", () => {
     expect(await pg.$eval("#hud", (e) => e.scrollTop)).toBeGreaterThan(50);
   });
 
-  test("a cunha encolhe em vez de cortar", async () => {
-    /* É o ponto de ela ter viewBox: os SVG do series.html não têm, e por isso
-       max-width neles corta a metade direita em vez de reduzir. */
+  test("as sete faixas da legenda cabem na largura do cartão", async () => {
+    /* "5.400 – 43.000" e "acima de 43.000" são os rótulos mais largos da
+       página, e a grade de duas colunas dá pouco mais de 130 px a cada um. */
     const r = await roda<any>(pg, `() => {
-      const svg = document.querySelector('#classes svg');
-      const cartao = svg.closest('.cartao');
-      const s = svg.getBoundingClientRect(), c = cartao.getBoundingClientRect();
-      const ults = [...svg.querySelectorAll('text')].pop().getBoundingClientRect();
-      return { largura: s.width, cartaoLargura: c.width, viewBox: svg.getAttribute('viewBox'),
-               ultimoRotuloDentro: ults.right <= s.right + 1,
+      const el = document.getElementById('classes');
+      const c = el.closest('.cartao').getBoundingClientRect();
+      const linhas = [...el.querySelectorAll('.classe')];
+      return { n: linhas.length,
+               vazam: linhas.filter(l => l.getBoundingClientRect().right > c.right + 1)
+                            .map(l => l.textContent),
+               transbordam: linhas.filter(l => l.scrollWidth > l.clientWidth + 1)
+                                  .map(l => l.textContent),
                corpoRola: document.documentElement.scrollWidth > window.innerWidth + 1 };
     }`);
-    expect(r.viewBox).toBe("0 0 288 36");
-    expect(r.largura).toBeLessThanOrEqual(r.cartaoLargura + 1);
-    expect(r.largura).toBeGreaterThan(200);
-    expect(r.ultimoRotuloDentro, '"100 mil" vazou para fora da cunha').toBe(true);
+    expect(r.n).toBe(7);
+    expect(r.vazam, "faixa passou da borda do cartão").toEqual([]);
+    expect(r.transbordam, "rótulo maior que a célula da grade").toEqual([]);
     expect(r.corpoRola, "a página rola na horizontal no celular").toBe(false);
   });
 

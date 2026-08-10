@@ -120,6 +120,12 @@ export async function abrir(url: string, o: Opcoes = {}): Promise<Pagina> {
   return p;
 }
 
+/** As cores das amostras da legenda, na ordem em que aparecem. Estilo
+ *  computado e não `style.background`: o inline traz o hex do token e cada
+ *  motor serializa de um jeito. */
+export const amostras = (pg: Page) =>
+  pg.$$eval("#classes .amostra", (e) => e.map((a) => getComputedStyle(a).backgroundColor));
+
 export async function fecharTudo() {
   cache.clear();
   for (const b of abertos.values()) await b.close();

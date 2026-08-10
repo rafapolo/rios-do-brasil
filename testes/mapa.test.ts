@@ -2,7 +2,7 @@
  * Tudo no chromium — a checagem entre motores fica em navegadores.test.ts. */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { Page } from "playwright";
-import { LENTO, INDEX, abrir, copiaSondada, fecharTudo, reinicia, roda, servidor, urlDe } from "./comum";
+import { LENTO, INDEX, abrir, amostras, copiaSondada, fecharTudo, reinicia, roda, servidor, urlDe } from "./comum";
 
 let pg: Page;
 let erros: string[];
@@ -48,36 +48,43 @@ describe("carregamento", () => {
   });
 });
 
-describe("legenda em cunha", () => {
-  test("tem sete tons distintos, e não seis faixas repetindo cor", async () => {
+describe("legenda em classes", () => {
+  test("tem sete faixas com tons distintos, e a última é a do Amazonas", async () => {
     await reinicia(pg);
-    const tons = await pg.$$eval("#classes rect", (e) => e.map((r) => r.getAttribute("fill")));
+    const tons = await amostras(pg);
     expect(tons).toHaveLength(7);
     expect(new Set(tons).size).toBe(7);
-    /* Com viewBox a cunha encolhe; os gráficos do series.html não têm, e por
-       isso max-width neles corta em vez de encolher. */
-    expect(await pg.getAttribute("#classes svg", "viewBox")).toBe("0 0 288 36");
-    const rot = await pg.$$eval("#classes text", (e) => e.map((t) => t.textContent));
-    expect(rot).toEqual(["1", "10", "100", "1.000", "10 mil", "100 mil"]);
+    /* Os cortes são os da própria cor(). Uma lista de seis pararia em "acima de
+       500" e deixaria sem entrada os dois azuis mais escuros, que é onde estão
+       Amazonas, Solimões, Madeira e Negro. */
+    const rot = await pg.$$eval("#classes .classe", (e) => e.map((c) => c.textContent));
+    expect(rot).toEqual(["até 1,4", "1,4 – 11", "11 – 87", "87 – 690",
+                         "690 – 5.400", "5.400 – 43.000", "acima de 43.000"]);
   });
 
-  test("a silhueta engrossa da esquerda para a direita", async () => {
-    const d = (await pg.getAttribute("#classes path", "d")) ?? "";
-    const pts = [...d.matchAll(/([\d.]+),([\d.]+)/g)].map((m) => [+m[1], +m[2]] as const);
-    const meia = (x: number) => {
-      const perto = pts.filter((p) => Math.abs(p[0] - x) < 3);
-      return Math.max(...perto.map((p) => p[1])) - Math.min(...perto.map((p) => p[1]));
-    };
-    expect(meia(280)).toBeGreaterThan(meia(140));
-    expect(meia(140)).toBeGreaterThan(meia(10));
+  test("a amostra engrossa da primeira faixa para a última", async () => {
+    const esp = await pg.$$eval("#classes .amostra", (e) =>
+      e.map((a) => parseFloat(getComputedStyle(a).height)));
+    expect(esp).toHaveLength(7);
+    expect(esp[6]).toBeGreaterThan(esp[4]);
+    expect(esp[4]).toBeGreaterThan(esp[3]);
+    // o piso de 2 px existe para as três primeiras não sumirem
+    expect(Math.min(...esp)).toBeGreaterThanOrEqual(2);
   });
 
   test("as cores saem da mesma cor() que pinta o mapa", async () => {
+    /* cor() devolve o hex do token e o estilo computado devolve rgb(); os dois
+       passam pelo mesmo serializador do navegador antes da comparação. */
     const ok = await roda(sonda, `() => {
       const t = window.__testes;
-      const fills = [...document.querySelectorAll('#classes rect')].map(r => r.getAttribute('fill'));
+      const prova = document.createElement('span');
+      document.body.appendChild(prova);
+      const norm = c => { prova.style.background = c; return getComputedStyle(prova).backgroundColor; };
       const L0 = Math.log10(0.5), L1 = Math.log10(120000);
-      return fills.every((f, i) => f === t.cor(Math.pow(10, L0 + (i / 6) * (L1 - L0))));
+      const ok = [...document.querySelectorAll('#classes .amostra')].every((a, i) =>
+        getComputedStyle(a).backgroundColor === norm(t.cor(Math.pow(10, L0 + (i / 6) * (L1 - L0)))));
+      prova.remove();
+      return ok;
     }`);
     expect(ok).toBe(true);
   });
@@ -99,12 +106,17 @@ describe("legenda em cunha", () => {
     expect(new Set(Object.values(visto)).size).toBe(4);
   });
 
-  test("fora da vazão a legenda volta às linhas discretas", async () => {
+  test("cada modo traz a sua própria lista de faixas", async () => {
+    await reinicia(pg);
+    const faixas = () => pg.$$eval("#classes .classe", (e) => e.map((c) => c.textContent));
+    const vaz = await faixas();
     await pg.click('.modo[data-modo="esgoto"]');
     await pg.waitForTimeout(300);
-    expect(await pg.$$eval("#classes svg", (e) => e.length)).toBe(0);
-    expect(await pg.$$eval("#classes .classe", (e) => e.length)).toBeGreaterThan(3);
-    expect(await pg.$eval("#classes", (e) => getComputedStyle(e).display)).not.toBe("block");
+    const esg = await faixas();
+    expect(esg).not.toEqual(vaz);
+    // a poluição mede % do rio que é efluente; a vazão, m³/s
+    expect(esg.join(" ")).toContain("%");
+    expect(vaz.join(" ")).not.toContain("%");
   });
 });
 
@@ -405,18 +417,17 @@ describe("tema e layout", () => {
   test("o tema escuro troca as cores do traço", async () => {
     const claro = await abrir(urlDe(INDEX), { ctx: { colorScheme: "light" } });
     const escuro = await abrir(urlDe(INDEX), { ctx: { colorScheme: "dark" } });
-    const cor = (p: Page) =>
-      p.$eval("#classes rect:last-of-type", (e) => e.getAttribute("fill"));
+    // a última faixa é o azul mais escuro no claro e o mais claro no escuro
+    const cor = async (p: Page) => (await amostras(p)).at(-1);
     expect(await cor(claro.pg)).not.toBe(await cor(escuro.pg));
     const fundo = (p: Page) => p.$eval("body", (e) => getComputedStyle(e).backgroundColor);
     expect(await fundo(claro.pg)).not.toBe(await fundo(escuro.pg));
 
     // e data-theme=light vence o escuro do sistema, pelo MutationObserver
-    const antes = await escuro.pg.$eval("#classes rect:last-of-type", (e) => e.getAttribute("fill"));
+    const antes = await cor(escuro.pg);
     await roda(escuro.pg, `() => document.documentElement.setAttribute('data-theme', 'light')`);
     await escuro.pg.waitForTimeout(600);
-    expect(await escuro.pg.$eval("#classes rect:last-of-type", (e) => e.getAttribute("fill")))
-      .not.toBe(antes);
+    expect(await cor(escuro.pg)).not.toBe(antes);
     await roda(escuro.pg, `() => document.documentElement.removeAttribute('data-theme')`);
   }, LENTO);
 

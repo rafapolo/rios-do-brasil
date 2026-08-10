@@ -144,12 +144,16 @@ describe("tokens de cor", () => {
 describe("mudanças recentes, nos dois arquivos", () => {
   const DOIS: [string, string][] = [["template.html", TEMPLATE], ["index.html", INDEX]];
 
-  test("a legenda de vazão é a cunha, e a tabela de classes sumiu", () => {
+  test("a legenda de vazão são sete faixas, e a cunha sumiu", () => {
     for (const [nome, p] of DOIS) {
       const s = texto(p);
-      expect(s, nome).toContain(".classes.cunha");
-      expect(s, nome).toContain("function cunhaVazao");
-      expect(s, `${nome}: sobrou a tabela de classes antiga`).not.toContain("const CLASSES = [");
+      // sete rótulos, um por tom da rampa — a lista de seis deixava de fora os
+      // dois azuis mais escuros, que são os rios acima de 5.400 m³/s
+      const m = s.match(/const CLASSES = \[([^\]]*)\]/);
+      expect(m, `${nome}: sumiu a tabela de classes`).not.toBeNull();
+      expect(m![1].match(/'/g)!.length / 2, nome).toBe(7);
+      expect(s, `${nome}: sobrou a cunha`).not.toContain("cunhaVazao");
+      expect(s, `${nome}: sobrou o CSS da cunha`).not.toContain(".classes.cunha");
     }
   });
 

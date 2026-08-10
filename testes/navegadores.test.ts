@@ -4,7 +4,7 @@
  * ficam sem fundo. Firefox e WebKit chegaram nessas duas coisas anos depois do
  * Chromium, e nenhuma delas falha visivelmente — a página abre, só que errada. */
 import { afterAll, describe, expect, test } from "bun:test";
-import { INDEX, LENTO, MOTORES, abrir, fecharTudo, roda, urlDe } from "./comum";
+import { INDEX, LENTO, MOTORES, abrir, amostras, fecharTudo, roda, urlDe } from "./comum";
 
 afterAll(fecharTudo);
 
@@ -45,9 +45,9 @@ for (const motor of MOTORES) {
       for (const [k, v] of Object.entries(s)) expect(v, `${motor} sem ${k}`).toBe(true);
     }, LENTO);
 
-    test(`${motor}: a cunha tem sete tons e o modo entra pela URL`, async () => {
+    test(`${motor}: a legenda tem sete tons e o modo entra pela URL`, async () => {
       const { pg } = await abrir(urlDe(INDEX), { motor });
-      const tons = await pg.$$eval("#classes rect", (e) => e.map((r) => r.getAttribute("fill")));
+      const tons = await amostras(pg);
       expect(tons).toHaveLength(7);
       expect(new Set(tons).size, `${motor}: a rampa perdeu tons`).toBe(7);
 
