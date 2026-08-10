@@ -288,6 +288,41 @@
   details.tabela th { color: var(--ink-3); font-weight: 500; }
   details.tabela .rolo { max-height: 340px; overflow: auto; }
 
+  /* ---------- pequenos múltiplos ---------- */
+  /* Cada rio com a escala do próprio leito. Uma escala comum faria o Itaguari,
+     de 56 m³/s, achatar o Santo Antônio, de 1,3, até a linha reta — e é
+     justamente a forma da curva de cada um que este bloco afirma. O que
+     compara entre eles é o rótulo em %, não a altura do traço. */
+  /* Borda por quadro, e não o truque do `gap` de 1px sobre fundo colorido que
+     o resto da página usa: a última fileira quase nunca fecha completa, e ali
+     o fundo do contêiner aparecia como um bloco cinza do tamanho das células
+     que faltavam. */
+  .mini {
+    display: grid; gap: 9px; margin: 0 0 4px;
+    grid-template-columns: repeat(auto-fit, minmax(212px, 1fr));
+  }
+  .mini > div {
+    background: var(--panel); padding: 12px 13px 9px;
+    border: 1px solid var(--rule); border-radius: 3px;
+  }
+  /* Série curta ou sem significância: entra porque o levantamento de campo
+     nomeia o rio, mas não pode parecer com as que passaram no teste. */
+  .mini > div.fraco { border-style: dashed; }
+  .mini h3 {
+    font-family: var(--serif); font-size: 0.9rem; font-weight: 640;
+    letter-spacing: -0.01em; margin: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .mini .sub {
+    font-family: var(--mono); font-size: 0.55rem; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--ink-3); margin: 2px 0 7px;
+  }
+  .mini .fim {
+    font-family: var(--mono); font-size: 0.67rem; font-variant-numeric: tabular-nums;
+    color: var(--ink-3); margin: 5px 0 0;
+  }
+  .mini .fim b { color: var(--seca-2); font-weight: 620; }
+
   /* Tabela fora do <details>: mesma tipografia, visível de saída. */
   .tabout { overflow-x: auto; margin: 0 0 4px; }
   .tabout table {
@@ -456,17 +491,26 @@
   // Marcas de eixo em números redondos. Dividir o máximo em quatro dá rótulos
   // como 197/148/99/49, que o leitor não usa para nada — ninguém compara contra
   // 148.
+  /* A última marca tem que COBRIR o máximo, não parar antes dele. Quem chama
+     usa `marcas[marcas.length - 1]` como topo da escala, então uma marca curta
+     vira um teto: com pico de 2.260 estações as marcas iam a 2.000, e o miolo
+     da curva da rede — justamente 2013-2018, o pico — era desenhado acima de
+     y = 0 e sumia recortado pela borda do SVG, deixando um buraco na linha. */
   function ticks(max, alvo = 4) {
+    if (!(max > 0)) return [0];
     const cru = max / alvo;
     const mag = Math.pow(10, Math.floor(Math.log10(cru)));
-    const passo = [1, 2, 2.5, 5, 10].find(m => m * mag >= cru) * mag;
+    const passo = ([1, 2, 2.5, 5, 10].find(m => m * mag >= cru) || 10) * mag;
+    const topo = Math.ceil(max / passo) * passo;
     const saida = [];
-    for (let v = 0; v <= max * 1.0001; v += passo) saida.push(v);
+    for (let v = 0; v <= topo * 1.0001; v += passo) saida.push(v);
     return saida;
   }
 
-  // Marcas simétricas em torno do zero, sem o "-0" que sai de concatenar a
-  // lista positiva com a negada.
+  /* Marcas simétricas em torno do zero, sem o "-0" que sai de concatenar a
+     lista positiva com a negada. Aqui `lim` já é o limite da escala e não o
+     máximo do dado — a marca que sobra por cima dele não cabe no desenho, e
+     por isso este filtro fica, ao contrário do que `ticks` faz. */
   function ticksSim(lim, alvo = 3) {
     const pos = ticks(lim, alvo).filter(v => v > 0 && v <= lim);
     return [...pos.map(v => -v).reverse(), 0, ...pos];
@@ -876,7 +920,7 @@
       }
     });
     svg.append(s('line', { class: 'eixo', x1: M.l, x2: W - M.r, y1: py(0), y2: py(0) }));
-    const wrap = el('div', { class: 'svgwrap' });
+    const wrap = el('div', { class: 'svgwrap recente' });
     wrap.append(svg);
     c.append(wrap);
 
@@ -1085,17 +1129,33 @@
     const cons = rede.consistencia.filter(l => l[0] >= 1960 && l[0] <= cheio);
     const pico = cons.slice().sort((a, b) => b[3] - a[3])[0];
     const ult = cons[cons.length - 1];
+    /* A consistência só é observável até onde vai o arquivo zip; depois dele
+       tudo chega bruto pelo SOAP. Desenhar a curva laranja até o fim faria ela
+       despencar a zero e o painel afirmaria que a ANA parou de conferir, quando
+       o que parou foi a fonte que informa isso. */
+    const fimCons = rede.ultimo_ano_consistido || cheio;
+    const consVis = cons.filter(l => l[0] <= fimCons);
+    const ultCons = consVis[consVis.length - 1];
+    const picoCons = consVis.slice().sort((a, b) => b[1] - a[1])[0];
 
     c.append(el('h2', {}, 'Quem ainda mede, e quem ainda confere'));
+    // As duas quedas medidas na MESMA janela; comparar o pico de uma curva com
+    // o fim da outra dava a diferença de calendário, não de comportamento.
+    const noAno = a => cons.find(l => l[0] === a) || ultCons;
+    const quedaCons = 100 * (1 - ultCons[1] / picoCons[1]);
+    const quedaRede = 100 * (1 - noAno(fimCons)[3] / noAno(picoCons[0])[3]);
     const p = el('p', { class: 'desc' });
     p.innerHTML =
       `Esta é a barra de erro de tudo que está acima. A rede reportando encolheu de ` +
-      `<strong>${num(pico[3])} estações em ${pico[0]}</strong> para ${num(ult[3])} em ${cheio}. ` +
-      `Parte disso é defasagem de publicação — dado recente ainda está chegando. Mas a outra ` +
-      `curva não tem essa desculpa: a ANA <strong>consistiu ` +
-      `${num((cons.find(l => l[0] === 2014) || [0, 0])[1])} estações em 2014 e ` +
-      `${num(ult[1])} em ${cheio}</strong>. ` +
-      `O dado bruto continua entrando; quase ninguém mais o está conferindo.`;
+      `<strong>${num(pico[3])} estações em ${pico[0]} para ${num(ult[3])} em ${cheio}</strong> — ` +
+      `pouco mais da metade do pico. Parte disso é defasagem de publicação: dado recente ainda ` +
+      `está chegando. A revisão acompanhou essa queda sem agravá-la — a ANA consistiu ` +
+      `<strong>${num(picoCons[1])} estações em ${picoCons[0]} e ${num(ultCons[1])} em ${fimCons}</strong>, ` +
+      `${num(quedaCons, 0)}% a menos, contra ${num(quedaRede, 0)}% da rede que reporta no mesmo ` +
+      `intervalo. Quem sumiu foi a estação, não o revisor. ` +
+      `Depois de ${fimCons} não dá para saber: o nível de consistência só existe no arquivo ` +
+      `histórico, e o que vem pelo serviço chega sempre marcado como bruto — é por isso que a ` +
+      `curva laranja para ali, e não porque a agência tenha deixado de conferir.`;
     c.append(p);
 
     const leg = el('div', { class: 'legenda' });
@@ -1116,12 +1176,22 @@
       svg.append(s('line', { class: 'grade', x1: M.l, x2: W - M.r, y1: py(v), y2: py(v) }));
       svg.append(s('text', { x: M.l - 6, y: py(v) + 3.5, 'text-anchor': 'end' }, num(v)));
     }
-    const caminho = (idx) => cons.map((l, i) =>
+    const caminho = (linhas, idx) => linhas.map((l, i) =>
       (i ? 'L' : 'M') + px(l[0]).toFixed(1) + ' ' + py(l[idx]).toFixed(1)).join(' ');
-    svg.append(s('path', { d: caminho(3), fill: 'none', stroke: 'var(--enche-2)',
+    svg.append(s('path', { d: caminho(cons, 3), fill: 'none', stroke: 'var(--enche-2)',
       'stroke-width': 2, 'stroke-linejoin': 'round' }));
-    svg.append(s('path', { d: caminho(1), fill: 'none', stroke: 'var(--accent)',
+    svg.append(s('path', { d: caminho(consVis, 1), fill: 'none', stroke: 'var(--accent)',
       'stroke-width': 2, 'stroke-linejoin': 'round' }));
+    // Onde a laranja acaba, uma linha tracejada marca o fim do arquivo — sem
+    // ela a curva parece ter sido cortada por descuido.
+    if (fimCons < cheio) {
+      svg.append(s('line', { x1: px(fimCons), x2: px(fimCons), y1: M.t, y2: py(0),
+        stroke: 'var(--ink-3)', 'stroke-width': 1, 'stroke-dasharray': '3 3' }));
+      // À direita da tracejada só sobram dois anos de gráfico: o rótulo cai
+      // fora do SVG e some. Ancora à esquerda dela.
+      svg.append(s('text', { x: px(fimCons) - 5, y: M.t + 10, 'text-anchor': 'end' },
+                   'fim do arquivo'));
+    }
     for (const l of cons) {
       if (l[0] % 10 === 0) {
         svg.append(s('text', { x: px(l[0]), y: H - 11, 'text-anchor': 'middle' }, l[0]));
@@ -1130,11 +1200,12 @@
         x: px(l[0]) - 5, y: M.t, width: 10, height: H - M.t - M.b, fill: 'transparent'
       });
       liga(alvo, `<b>${l[0]}</b><span class="mn"><u>${num(l[3])}</u> estações reportando<br>` +
-        `<u>${num(l[1])}</u> com dado consistido</span>`);
+        (l[0] <= fimCons ? `<u>${num(l[1])}</u> com dado consistido`
+                         : 'consistência não informada pela fonte') + '</span>');
       svg.append(alvo);
     }
     svg.append(s('line', { class: 'eixo', x1: M.l, x2: W - M.r, y1: py(0), y2: py(0) }));
-    const wrap = el('div', { class: 'svgwrap' });
+    const wrap = el('div', { class: 'svgwrap recente' });
     wrap.append(svg);
     c.append(wrap);
 
@@ -1229,17 +1300,283 @@
       `que ela causou a queda. ${num(comOut.length)} das ${num(T.resumo.ranking)} estações do ` +
       `ranking têm outorga registrada no município.`;
     c.append(nota0);
-
-    const nota = el('p', { class: 'nota' });
-    nota.innerHTML =
-      `Sobre as janelas desta página: a série <strong>mensal</strong> combina o arquivo ` +
-      `histórico (1901 a agosto de 2023) com o serviço SOAP da ANA, e chega a maio de 2026 — ` +
-      `é ela que sustenta as tendências, o calendário da cheia e o tamanho da rede. A série ` +
-      `<strong>diária</strong> existe só no arquivo e para em 2023, porque o serviço devolve ` +
-      `apenas agregado mensal; por isso os painéis de rio seco e de Q7,10 terminam antes. ` +
-      `Nada aqui foi extrapolado para cobrir a diferença.`;
-    c.append(nota);
     pag.append(c);
+  }
+
+  // =========================================================
+  //  7 · o Oeste da Bahia, onde as três coisas se encontram
+  // =========================================================
+  /* Este painel é um recorte geográfico do que os anteriores mostram espalhado
+     pelo país. Entra porque nele os três eixos da página — tendência, chuva e
+     outorga — apontam na mesma direção ao mesmo tempo, o que não acontece em
+     nenhuma outra região deste tamanho, e porque há um levantamento de campo
+     independente dizendo a mesma coisa (CPT-BA, 2024).
+
+     A região é definida por caixa de coordenada, não por bacia: `tendencia.json`
+     não carrega o código de ottobacia da estação, só lat/lon. A caixa é a
+     margem esquerda do São Francisco entre 10°S e 16°S — a área de recarga do
+     Urucuia. O tronco do próprio São Francisco sai fora de propósito: ele
+     atravessa a caixa recebendo água de fora dela, e a sua tendência mediria
+     outra coisa. Esse critério está escrito na nota do painel, porque um
+     recorte escolhido pelo autor precisa ser auditável pelo leitor. */
+  {
+    const naCaixa = r => r.lat > -16.2 && r.lat < -10.0 &&
+                         r.lon > -46.8 && r.lon < -44.0 &&
+                         !/SÃO FRANCISCO/.test(r.rio || '');
+    // Duas listas de propósito. A do ranking sustenta a contagem e as barras —
+    // é o mesmo critério do resto da página (>= 30 anos, significativo, fora de
+    // estrutura hidráulica), e afrouxá-lo aqui para engordar o número seria
+    // trocar o padrão no painel que mais precisa dele. A caixa inteira serve
+    // para os quadros de série e para a conta de outorga, onde o que está em
+    // jogo é a forma da curva e a licença, não um teste estatístico.
+    const naCaixaTodas = T.estacoes.filter(naCaixa);
+    const regiao = naCaixaTodas.filter(r => r.rank);
+    const sig = regiao.filter(r => r.sig);
+    const caindo = sig.filter(r => r.pct < 0);
+    const subindo = sig.filter(r => r.pct > 0);
+
+    if (caindo.length >= 10) {
+      const c = el('div', { class: 'cartao' });
+      const mediana = (rs, f) => {
+        const v = rs.map(f).filter(x => x != null).sort((a, b) => a - b);
+        return v.length ? v[Math.floor(v.length / 2)] : 0;
+      };
+      const comChuva = caindo.filter(r => r.chuva_pct != null);
+      const medVaz = mediana(comChuva, r => r.pct);
+      const medChu = mediana(comChuva, r => r.chuva_pct);
+      const medOut = mediana(regiao.filter(r => r.out_frac != null), r => r.out_frac);
+      const outBR = mediana(T.estacoes.filter(r => r.out_frac != null), r => r.out_frac);
+
+      c.append(el('h2', {}, 'O Oeste da Bahia, onde tudo isso se encontra'));
+      const p = el('p', { class: 'desc' });
+      p.innerHTML =
+        `Em 2023 e 2024, a Comissão Pastoral da Terra e as comunidades das sub-bacias do ` +
+        `Corrente e do Carinhanha percorreram os leitos e mapearam ` +
+        `<strong>3.050 trechos de água seca, 7.120 km</strong> de córregos, riachos e ` +
+        `nascentes que pararam de correr. É um levantamento de campo, feito a pé, sem relação ` +
+        `com esta base. As estações da ANA na mesma região dizem a mesma coisa: das ` +
+        `<strong>${num(sig.length)} com tendência comprovada, ${num(caindo.length)} estão em ` +
+        `queda e ${subindo.length === 0 ? '<strong>nenhuma</strong> em alta' :
+                  num(subindo.length) + ' em alta'}</strong>. ` +
+        `É o recorte mais unânime desta página — no país inteiro são ` +
+        `${num(T.resumo.caindo)} em queda para ${num(T.resumo.subindo)} em alta.`;
+      c.append(p);
+
+      const tiles = el('div', { class: 'tiles' });
+      const tile = (v, rot, cls) => {
+        const t = el('div', { class: 'tile' + (cls ? ' ' + cls : '') });
+        t.append(el('b', {}, v), el('span', {}, rot));
+        return t;
+      };
+      tiles.append(
+        tile(`${num(caindo.length)} / ${num(sig.length)}`, 'estações em queda', 'cai'),
+        tile(sinal(medVaz) + '%', 'vazão, mediana por década', 'cai'),
+        tile(sinal(medChu) + '%', 'chuva, mediana por década'),
+        tile(num(medOut) + '%', 'da vazão já outorgada'));
+      c.append(tiles);
+
+      // --- barras pareadas: vazão contra chuva, mesma escala ---
+      const p2 = el('p', { class: 'desc' });
+      p2.innerHTML =
+        `A chuva caiu na região — mas caiu <strong>${num(medVaz / medChu, 1)} vezes menos</strong> ` +
+        `que o rio. Cada linha é uma estação: a barra clara é o quanto a chuva sobre ela ` +
+        `recuou por década, a escura é o quanto o rio recuou. A diferença entre as duas é a ` +
+        `parte da perda que a seca não explica.`;
+      c.append(p2);
+
+      const leg = el('div', { class: 'legenda' });
+      leg.innerHTML =
+        '<span><i style="background:var(--seca-2)"></i>queda da vazão</span>' +
+        '<span><i style="background:var(--neutro)"></i>queda da chuva</span>';
+      c.append(leg);
+
+      const linhas = comChuva.slice().sort((a, b) => a.pct - b.pct);
+      const ALT = 17;
+      const W = largura(560), H = linhas.length * ALT + 46;
+      // 214 px de calha à esquerda: o rótulo é "RIO · MUNICÍPIO" em mono de
+      // 10,5 px, e com margem menor ele transbordava para fora do SVG e era
+      // cortado pela borda — "SÃO DESIDÉRIO · SÃO DESIDÉRIO" virava "O DESIDÉRIO".
+      const M = { t: 8, r: 54, b: 30, l: 214 };
+      const ROT_MAX = 31;
+      // Escala em MAGNITUDE de queda, crescendo para a direita; os rótulos do
+      // eixo levam o sinal negativo. Desenhar a barra para a esquerda a partir
+      // de um zero à direita deixaria o nome do rio espremido contra a borda.
+      const marcas = ticks(Math.max(...linhas.map(r => -r.pct)));
+      const lim = marcas[marcas.length - 1];
+      const px = v => M.l + v / lim * (W - M.l - M.r);
+      const py = i => M.t + i * ALT;
+
+      const svg = s('svg', { width: W, height: H, role: 'img',
+        'aria-label': 'queda da vazão e queda da chuva por estação, no oeste do São Francisco' });
+      for (const v of marcas) {
+        svg.append(s('line', { class: 'grade', x1: px(v), x2: px(v), y1: M.t, y2: H - M.b }));
+        svg.append(s('text', { x: px(v), y: H - M.b + 14, 'text-anchor': 'middle' },
+                    v === 0 ? '0' : '−' + num(v)));
+      }
+      linhas.forEach((r, i) => {
+        const y = py(i);
+        // Chuva atrás, mais grossa e clara; vazão na frente, fina e escura.
+        // Sobrepostas e não empilhadas: o que o leitor compara é o comprimento
+        // de uma contra o da outra, e lado a lado ele compararia posições.
+        svg.append(s('rect', { x: M.l, y: y + 2, width: Math.max(0, px(-r.chuva_pct) - M.l),
+          height: ALT - 5, fill: 'var(--neutro)', 'fill-opacity': .42, rx: 1.5 }));
+        svg.append(s('rect', { x: M.l, y: y + 5, width: Math.max(0, px(-r.pct) - M.l),
+          height: ALT - 11, fill: 'var(--seca-2)', rx: 1.5 }));
+        svg.append(s('text', { x: M.l - 8, y: y + ALT / 2 + 2.5, 'text-anchor': 'end',
+          fill: 'var(--ink-2)', 'font-size': 10.5 },
+          (t => t.length > ROT_MAX ? t.slice(0, ROT_MAX - 1) + '…' : t)(
+            `${(r.rio || 'sem nome').replace(/^RIO /, '')} · ${r.mun || ''}`)));
+        svg.append(s('text', { x: W - M.r + 6, y: y + ALT / 2 + 2.5, fill: 'var(--ink-2)' },
+          sinal(r.pct, 0) + '%'));
+        const alvo = s('rect', { x: M.l, y, width: W - M.l - M.r, height: ALT,
+          fill: 'transparent' });
+        liga(alvo, fichaHTML(r) + `<br><span class="mn">chuva ` +
+          `<u>${sinal(r.chuva_pct)}%</u> por década` +
+          (r.out_frac != null
+            ? `<br>outorgado no município: <u>${num(r.out_frac)}%</u> da vazão` : '') +
+          '</span>');
+        svg.append(alvo);
+      });
+      svg.append(s('line', { class: 'eixo', x1: M.l, x2: M.l, y1: M.t, y2: H - M.b }));
+      svg.append(s('text', { x: (M.l + W - M.r) / 2, y: H - 6, 'text-anchor': 'middle',
+        class: 'rotulo' }, 'queda por década (%)'));
+      const wrap = el('div', { class: 'svgwrap' });
+      wrap.append(svg);
+      c.append(wrap);
+
+      // --- os rios que a CPT nomeia, um a um ---
+      const NOMEADOS = ['GUARÁ', 'DO MEIO', 'SANTO ANTÔNIO', 'CORRENTINA',
+                        'ARROJADO', 'FORMOSO', 'ITAGUARI'];
+      const nomeados = naCaixaTodas
+        .filter(r => NOMEADOS.includes((r.rio || '').replace(/^RIO /, '')))
+        .sort((a, b) => a.pct - b.pct);
+      const foraRank = nomeados.filter(r => !r.rank);
+
+      if (nomeados.length) {
+        const p3 = el('p', { class: 'desc' });
+        p3.innerHTML =
+          `Os rios que o levantamento nomeia têm estação da ANA e série medida. Cada quadro ` +
+          `abaixo é a média anual de um deles, na escala do próprio leito, com a média da ` +
+          `primeira década medida ao lado da média da última. As comunidades ` +
+          `dizem que as águas começaram a secar nos anos 1980, cerca de quinze anos depois da ` +
+          `chegada dos projetos de desmatamento — e é onde a série longa do Itaguari vira.` +
+          (foraRank.length
+            ? ` Os quadros de <span style="border-bottom:1px dashed var(--ink-3)">borda ` +
+              `tracejada</span> ficaram fora da contagem acima por série curta ou por não ` +
+              `passarem no teste; entram aqui porque o levantamento nomeia o rio, e a curva ` +
+              `medida é a curva medida.`
+            : '');
+        c.append(p3);
+
+        const grade = el('div', { class: 'mini' });
+        for (const r of nomeados) {
+          const d = el('div', r.rank ? {} : { class: 'fraco' });
+          d.append(el('h3', {}, (r.rio || 'sem nome').replace(/^RIO /, '')));
+          d.append(el('p', { class: 'sub' }, `${r.mun || ''} · ${r.ini}–${r.fim}`));
+
+          const w = 200, h = 62, m = { t: 6, b: 12 };
+          const q = r.serie.map(pt => pt[1]);
+          const a0 = r.serie[0][0], a1 = r.serie[r.serie.length - 1][0];
+          // Piso em zero: um rio que caiu de 65 para 33 m³/s tem que ocupar
+          // metade da altura, não o quadro inteiro. Escala de base móvel
+          // transformaria qualquer oscilação em despenhadeiro.
+          const hi = Math.max(...q);
+          const sx = an => a1 > a0 ? (an - a0) / (a1 - a0) * (w - 2) + 1 : w / 2;
+          const sy = v => h - m.b - v / hi * (h - m.t - m.b);
+          const g = s('svg', { width: w, height: h, role: 'img',
+            'aria-label': `média anual do ${r.rio}, ${r.ini} a ${r.fim}` });
+          g.append(s('path', {
+            d: r.serie.map((pt, i) => (i ? 'L' : 'M') +
+                 sx(pt[0]).toFixed(1) + ' ' + sy(pt[1]).toFixed(1)).join(' ') +
+               ` L${sx(a1).toFixed(1)} ${sy(0).toFixed(1)} L${sx(a0).toFixed(1)} ${sy(0).toFixed(1)} Z`,
+            fill: 'var(--seca-2)', 'fill-opacity': .13, stroke: 'none' }));
+          g.append(s('path', {
+            d: r.serie.map((pt, i) => (i ? 'L' : 'M') +
+                 sx(pt[0]).toFixed(1) + ' ' + sy(pt[1]).toFixed(1)).join(' '),
+            fill: 'none', stroke: 'var(--seca-2)', 'stroke-width': 1.4,
+            'stroke-linejoin': 'round' }));
+          g.append(s('line', { class: 'eixo', x1: 0, x2: w, y1: sy(0), y2: sy(0) }));
+          d.append(g);
+
+          // Primeira contra última década medida: é a frase que o leitor
+          // repete, e ela não pode depender de um ano isolado. Cinco anos era
+          // curto demais — 2022 foi cheio no oeste baiano e sozinho puxava a
+          // ponta direita do Guará de volta ao patamar dos anos 2000, fazendo
+          // o rótulo dizer "quase não mudou" ao lado de uma curva que desce.
+          const jan = Math.min(10, Math.max(3, Math.floor(q.length / 3)));
+          const med = xs => xs.reduce((s2, v) => s2 + v, 0) / xs.length;
+          const ini = med(q.slice(0, jan)), fim = med(q.slice(-jan));
+          const dec = v => num(v, v < 10 ? 1 : 0);
+          const f = el('p', { class: 'fim' });
+          f.innerHTML = `${dec(ini)} → <b>${dec(fim)} m³/s</b> · <b>${sinal(r.pct)}%</b>/déc`;
+          d.append(f);
+          liga(d, fichaHTML(r) +
+            `<br><span class="mn">média de ${r.serie[0][0]}–${r.serie[jan - 1][0]}: ` +
+            `<u>${dec(ini)}</u> m³/s<br>média de ${r.serie[r.serie.length - jan][0]}–` +
+            `${r.serie[r.serie.length - 1][0]}: <u>${dec(fim)}</u> m³/s</span>` +
+            (r.chuva_pct != null
+              ? `<br><span class="mn">chuva <u>${sinal(r.chuva_pct)}%</u> por década</span>` : ''));
+          grade.append(d);
+        }
+        c.append(grade);
+      }
+
+      // --- a licença comparada ao leito ---
+      // Só rios que estão perdendo água. O Rio da Boa Sorte, em Barreiras, tem
+      // outorga municipal de 2.123% da sua vazão e é o campeão da caixa — mas
+      // sobe 37% por década, e liderar a lista com ele seria usar o artefato
+      // que o painel anterior adverte (município grande, córrego pequeno) para
+      // fazer exatamente a afirmação que o artefato não sustenta.
+      const acima = naCaixaTodas.filter(r => r.out_frac >= 100 && r.pct < 0)
+                                .sort((a, b) => b.out_frac - a.out_frac);
+      const acimaBR = T.estacoes.filter(r => r.out_frac >= 100 && r.pct < 0);
+      const p4 = el('p', { class: 'desc' });
+      p4.innerHTML =
+        `E a terceira coisa: a licença de retirada. Na caixa a outorga mediana é ` +
+        `<strong>${num(medOut, 1)}% da vazão média</strong> do rio, contra ` +
+        `${num(outBR, 1)}% na mediana do país — ${num(medOut / outBR, 0)} vezes mais` +
+        (acima.length
+          ? `. E em ${num(acima.length)} ${acima.length === 1 ? 'estação' : 'estações'} ` +
+            `o município tem licença para retirar <strong>mais água do que o rio carrega</strong>: ` +
+            acima.slice(0, 4).map(r =>
+              `${(r.rio || '').replace(/^RIO /, '')} em ${r.mun || ''}, ${num(r.out_frac)}%`)
+              .join('; ') +
+            (acima.length > 4 ? `; e mais ${num(acima.length - 4)}` : '') +
+            `. São ${num(acima.length)} das ${num(acimaBR.length)} do país inteiro — ` +
+            `numa caixa que tem ${num(naCaixaTodas.length)} das ` +
+            `${num(T.estacoes.length)} estações analisadas.`
+          : '.');
+      c.append(p4);
+
+      const nota = el('p', { class: 'nota' });
+      nota.innerHTML =
+        `<strong>O recorte.</strong> Não é a bacia do Corrente e do Carinhanha, que é o que a ` +
+        `CPT mapeou: este arquivo não traz o código de ottobacia da estação, só coordenada. ` +
+        `A caixa usada aqui é a margem esquerda do São Francisco entre 10°S e 16°S — a área de ` +
+        `recarga do Urucuia — e cobre também o Grande e o alto Urucuia mineiro, além das duas ` +
+        `sub-bacias do levantamento. O tronco do São Francisco foi excluído: ele cruza a caixa ` +
+        `carregando água de fora dela. São ${num(regiao.length)} estações no ranking, ` +
+        `${num(comChuva.length)} com pluviômetro perto o bastante para o par chuva–vazão. ` +
+        `As ressalvas do painel anterior valem inteiras aqui: a outorga é do município e não ` +
+        `da bacia, é licença e não uso, e é a foto de hoje e não uma série — ` +
+        `<strong>ela caracteriza a pressão atual, não prova que causou a queda</strong>. ` +
+        `O que este painel afirma é mais modesto e mais firme do que isso: os três sinais ` +
+        `coincidem aqui, e coincidem com quem mora no lugar. ` +
+        `Levantamento de campo: <em>A morte das águas no Oeste da Bahia</em>, CPT-BA, Pastoral ` +
+        `do Meio Ambiente, Thiago Damas (UFF) e Eduardo Barcelos (IFBaiano), dezembro de 2024.`;
+      c.append(nota);
+
+      const nota2 = el('p', { class: 'nota' });
+      nota2.innerHTML =
+        `Sobre as janelas desta página: a série <strong>mensal</strong> combina o arquivo ` +
+        `histórico (1901 a agosto de 2023) com o serviço SOAP da ANA, e chega a maio de 2026 — ` +
+        `é ela que sustenta as tendências, o calendário da cheia e o tamanho da rede. A série ` +
+        `<strong>diária</strong> existe só no arquivo e para em 2023, porque o serviço devolve ` +
+        `apenas agregado mensal; por isso os painéis de rio seco e de Q7,10 terminam antes. ` +
+        `Nada aqui foi extrapolado para cobrir a diferença.`;
+      c.append(nota2);
+      pag.append(c);
+    }
   }
 
   // Só marca como rolável o que de fato transborda — o aviso tem que
@@ -1249,6 +1586,16 @@
       w.classList.toggle('rola', w.scrollWidth > w.clientWidth + 2);
     }
   }
+  /* Gráfico de eixo temporal que rola abre no fim, não no começo. No celular o
+     recorte visível cabia só 1960–1985 e o leitor via a rede crescer, sem nunca
+     alcançar a queda dos anos 2020 — que é justamente o que o painel afirma.
+     Só na abertura: depois disso a posição é do leitor. */
+  function abreNoFim() {
+    for (const w of document.querySelectorAll('.svgwrap.recente')) {
+      if (w.scrollWidth > w.clientWidth + 2) w.scrollLeft = w.scrollWidth;
+    }
+  }
+  requestAnimationFrame(abreNoFim);
   requestAnimationFrame(marcaRolagem);
   addEventListener('resize', marcaRolagem, { passive: true });
 })();

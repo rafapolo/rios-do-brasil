@@ -259,6 +259,13 @@ def painel_rede() -> dict:
          WHERE media IS NOT NULL
          GROUP BY 1 ORDER BY 1;""")
 
+    # O nível de consistência só existe no arquivo zip, que para em set/2023: de
+    # 2024 em diante tudo vem do SOAP e chega marcado como bruto. Zerar a curva
+    # ali sugeriria que a ANA parou de conferir, quando o que parou foi a fonte
+    # que carrega essa informação -- então a curva tem que terminar no último ano
+    # em que a consistência é observável, medido aqui e não fixado no código.
+    ultimo_consistido = max((r["ano"] for r in consist if r["consistido"] > 0), default=0)
+
     return {
         "bacias": bacias,
         "anos": [[a] + [por_ano[a].get(b, 0) for b in bacias] for a in sorted(por_ano)],
@@ -266,6 +273,7 @@ def painel_rede() -> dict:
         # Último ano civil fechado da série mensal unificada. 2026 está pela
         # metade (o SOAP vai a maio) e cairia como se a rede tivesse sumido.
         "ultimo_ano_cheio": 2025,
+        "ultimo_ano_consistido": ultimo_consistido,
     }
 
 
