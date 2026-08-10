@@ -40,6 +40,7 @@ import json
 import math
 import re
 import subprocess
+import unicodedata
 from pathlib import Path
 
 import numpy as np
@@ -100,6 +101,24 @@ SQL_PLUVIO = f"""SET enable_progress_bar=false;
 SELECT Codigo AS codigo, Latitude AS lat, Longitude AS lon
 FROM read_parquet('{INVENTARIO}')
 WHERE TipoEstacao = 'PLU' AND Latitude IS NOT NULL AND Longitude IS NOT NULL;"""
+
+CAPTACOES = "~/rodado/br_ana_outorgas/captacoes/*.parquet"
+
+# A vazão outorgada vem em m³/h (documentado em baixa_outorgas.py) — dividir
+# por 3600 antes de comparar com vazão de rio, que está em m³/s.
+#
+# Limite grande e assumido: as captações do SNIRH vêm sem coordenada, só com
+# município. Então a pressão de retirada é municipal, não da bacia da estação:
+# uma outorga no mesmo município pode estar em outro rio. Serve para
+# caracterizar pressão, não para fechar balanço hídrico.
+SQL_OUTORGAS = f"""SET enable_progress_bar=false;
+SELECT upper(strip_accents(trim(ing_nm_municipio))) || '/' ||
+       upper(trim(ing_sg_ufmunicipio)) AS chave,
+       round(sum(int_qt_vazaomedia) / 3600.0, 5) AS m3s,
+       count(*) AS n
+FROM read_parquet('{CAPTACOES}')
+WHERE int_qt_vazaomedia IS NOT NULL AND ing_nm_municipio IS NOT NULL
+GROUP BY 1;"""
 
 SQL_INVENTARIO = f"""SET enable_progress_bar=false;
 SELECT Codigo AS codigo, Nome AS nome, RioNome AS rio, EstadoSigla AS uf,
@@ -248,6 +267,50 @@ def anexa_chuva(resultados: list[dict]) -> int:
     return casados
 
 
+def _chave_municipio(mun: str | None, uf: str | None) -> str | None:
+    """Mesma normalização do `strip_accents` do DuckDB, do lado do Python."""
+    if not mun or not uf:
+        return None
+    sem = "".join(c for c in unicodedata.normalize("NFD", mun)
+                  if unicodedata.category(c) != "Mn")
+    return f"{sem.strip().upper()}/{uf.strip().upper()}"
+
+
+def anexa_outorgas(resultados: list[dict]) -> int:
+    """Pressão de retirada de água outorgada no município da estação.
+
+    Onde a chuva não explica a queda, sobra "uso" — mas uso é um saco vazio:
+    irrigação, abastecimento, indústria e mudança de cobertura do solo cabem
+    todos ali. As outorgas de captação vigentes do SNIRH são a evidência
+    independente mais próxima de apontar retirada.
+
+    Três ressalvas que precisam viajar junto com o número:
+
+    1. **Município, não bacia.** As captações vêm sem coordenada; uma outorga
+       no mesmo município pode estar em outro rio.
+    2. **Outorga é licença, não uso.** Ninguém garante que a água autorizada
+       seja retirada — nem que a retirada real caiba na licença.
+    3. **É estoque, não série.** São as outorgas vigentes hoje, sem data de
+       emissão utilizável aqui. Caracteriza a pressão atual; não prova que
+       ela causou a queda observada.
+    """
+    outorgas = {r["chave"]: r for r in consulta(SQL_OUTORGAS)}
+    print(f"  {len(outorgas):,} municípios com outorga de captação")
+    casados = 0
+    for r in resultados:
+        chave = _chave_municipio(r.get("mun"), r.get("uf"))
+        o = outorgas.get(chave) if chave else None
+        if not o or r["qmlt"] <= 0:
+            continue
+        r["out_m3s"] = round(o["m3s"], 4)
+        r["out_n"] = o["n"]
+        # Fração da vazão média do rio que está outorgada para retirada no
+        # município. Passa de 100% em rio pequeno com muita licença.
+        r["out_frac"] = round(o["m3s"] / r["qmlt"] * 100, 1)
+        casados += 1
+    return casados
+
+
 def main() -> int:
     print("puxando médias anuais do beelink...")
     anuais = consulta(SQL_ANUAL)
@@ -313,6 +376,10 @@ def main() -> int:
 
     com_chuva = anexa_chuva(resultados)
     print(f"  {com_chuva:,} estações com tendência de chuva pareada")
+
+    print("puxando outorgas de captação...")
+    com_out = anexa_outorgas(resultados)
+    print(f"  {com_out:,} estações com outorga no município")
 
     q_fdr = benjamini_hochberg(np.array([r["p"] for r in resultados]))
     for r, qv in zip(resultados, q_fdr):

@@ -256,6 +256,20 @@
   details.tabela th { color: var(--ink-3); font-weight: 500; }
   details.tabela .rolo { max-height: 340px; overflow: auto; }
 
+  /* Tabela fora do <details>: mesma tipografia, visível de saída. */
+  .tabout { overflow-x: auto; margin: 0 0 4px; }
+  .tabout table {
+    width: 100%; border-collapse: collapse;
+    font-family: var(--mono); font-size: 0.72rem; font-variant-numeric: tabular-nums;
+  }
+  .tabout th, .tabout td {
+    text-align: right; padding: 4px 9px; border-bottom: 1px solid var(--rule);
+    white-space: nowrap;
+  }
+  .tabout th:first-child, .tabout td:first-child { text-align: left; }
+  .tabout th { color: var(--ink-3); font-weight: 500; }
+  .tabout tbody tr:hover { background: var(--grade); }
+
   footer {
     margin-top: 34px; padding-top: 20px; border-top: 1px solid var(--rule);
     font-size: 0.82rem; color: var(--ink-3);
@@ -290,9 +304,11 @@
 
   <footer>
     <p>
-      Fonte: Agência Nacional de Águas e Saneamento Básico, séries históricas das estações
-      fluviométricas convencionais, retrato de 04/08/2023
-      (<code>anagovbr/hidro-dados-estacoes-convencionais</code>).
+      Fontes, todas da Agência Nacional de Águas e Saneamento Básico: séries históricas das
+      estações convencionais (<code>anagovbr/hidro-dados-estacoes-convencionais</code>, retrato de
+      04/08/2023) fundidas com o serviço <code>HidroSerieHistorica</code> até maio de 2026;
+      chuva das estações pluviométricas do mesmo arquivo; e outorgas de captação vigentes do
+      SNIRH.
       Método e código em <a href="https://github.com/rafapolo/todos-rios-brasil">rafapolo/todos-rios-brasil</a>.
     </p>
     <p>
@@ -1023,14 +1039,83 @@
   // =========================================================
   {
     const c = el('div', { class: 'cartao' });
-    c.append(el('h2', {}, 'O que este recorte ainda não responde'));
+    c.append(el('h2', {}, 'Quanto desses rios já está prometido em licença'));
+
+    const LIM = 2;
+    const comOut = T.estacoes.filter(r => r.rank && r.out_frac != null && r.chuva_pct != null);
+    const grupo = {
+      uso:   comOut.filter(r => r.pct < 0 && r.chuva_pct >= -LIM),
+      clima: comOut.filter(r => r.pct < 0 && r.chuva_pct < -LIM),
+      sobe:  comOut.filter(r => r.pct >= 0),
+    };
+    const mediana = rs => {
+      const v = rs.map(r => r.out_frac).sort((a, b) => a - b);
+      return v.length ? v[Math.floor(v.length / 2)] : 0;
+    };
+
     const p = el('p', { class: 'desc' });
     p.innerHTML =
-      `Onde a chuva não explica a queda, esta página mostra que sobrou uma causa — não mostra ` +
-      `<strong>qual</strong>. Irrigação, abastecimento urbano, mudança de cobertura do solo e ` +
-      `assoreamento produzem a mesma assinatura aqui. Separar um do outro exige cruzar as ` +
-      `outorgas de captação com a série de cada bacia, e é o passo seguinte.`;
+      `A ANA publica as outorgas de captação vigentes — quanta água cada usuário tem licença ` +
+      `para retirar. Somando por município e comparando com a vazão média do rio, dá para ver ` +
+      `onde a licença já é grande diante do que o rio carrega.`;
     c.append(p);
+
+    // O resultado agregado é NULO e está dito como tal. Vender o contrário
+    // seria fácil e errado: quem lê precisa saber que este cruzamento não
+    // separou os grupos, e por quê.
+    const nulo = el('p', { class: 'desc' });
+    nulo.innerHTML =
+      `<strong>O cruzamento não confirma a hipótese no agregado.</strong> Entre os rios que ` +
+      `perdem água sem seca, a outorga mediana é de ${num(mediana(grupo.uso), 1)}% da vazão ` +
+      `média — <em>menor</em> que os ${num(mediana(grupo.clima), 1)}% dos que perdem com seca. ` +
+      `A razão é o dado: a captação do SNIRH vem sem coordenada, só com município, e um ` +
+      `município grande mistura licenças de rios diferentes. Para separar causa isso é grosso ` +
+      `demais.`;
+    c.append(nulo);
+
+    const p2 = el('p', { class: 'desc' });
+    p2.innerHTML =
+      `Onde ele serve é caso a caso. Estes rios perdem vazão sem que a chuva tenha caído ` +
+      `<em>e</em> têm, no município, licença de retirada da ordem da própria vazão média. ` +
+      `Não é prova — é onde olhar primeiro.`;
+    c.append(p2);
+
+    const alvos = grupo.uso.filter(r => r.out_frac >= 25)
+                           .sort((a, b) => b.out_frac - a.out_frac).slice(0, 12);
+    if (alvos.length) {
+      const tb = el('table');
+      tb.innerHTML = '<thead><tr><th>rio · estação</th><th>UF</th><th>vazão</th>' +
+        '<th>chuva</th><th>outorga</th></tr></thead>';
+      const corpo = el('tbody');
+      for (const r of alvos) {
+        const tr = el('tr');
+        tr.innerHTML = `<td>${titulo(r)}</td><td>${r.uf || ''}</td>` +
+          `<td style="color:var(--seca-2)">${sinal(r.pct)}%</td>` +
+          `<td>${sinal(r.chuva_pct)}%</td>` +
+          `<td><b>${num(r.out_frac)}%</b></td>`;
+        liga(tr, `<b>${titulo(r)}</b><span class="mn">` +
+          `vazão média ${num(r.qmlt, 1)} m³/s<br>` +
+          `outorgado no município: ${num(r.out_m3s, 2)} m³/s em ${num(r.out_n)} licenças<br>` +
+          `= ${num(r.out_frac)}% da vazão do rio</span>`);
+        corpo.append(tr);
+      }
+      tb.append(corpo);
+      const rolo = el('div', { class: 'rolo tabout' });
+      rolo.append(tb);
+      c.append(rolo);
+    }
+    const nota0 = el('p', { class: 'nota' });
+    nota0.innerHTML =
+      `Três coisas que o número de outorga <strong>não</strong> é. Não é da bacia: é do ` +
+      `município inteiro, e uma licença ali pode estar em outro rio — no Ribeirão do Gama, no ` +
+      `Distrito Federal, o total municipal chega a dez vezes a vazão do córrego, o que mede o ` +
+      `DF e não o córrego. Não é uso: é licença, e ninguém garante que a água autorizada seja ` +
+      `retirada, nem que a retirada real caiba na licença. E não é série: são as outorgas ` +
+      `vigentes hoje, sem data utilizável aqui, então caracterizam a pressão atual e não provam ` +
+      `que ela causou a queda. ${num(comOut.length)} das ${num(T.resumo.ranking)} estações do ` +
+      `ranking têm outorga registrada no município.`;
+    c.append(nota0);
+
     const nota = el('p', { class: 'nota' });
     nota.innerHTML =
       `Sobre as janelas desta página: a série <strong>mensal</strong> combina o arquivo ` +

@@ -46,6 +46,13 @@ têm queda de chuva junto. A correlação entre as duas tendências é de apenas
 sistema Cantareira, perde 29,6% por década com a chuva parada em −0,1%; o Apodí-Mossoró perde
 30,2% com a chuva **subindo** 8,5%.
 
+Cruzar isso com as **outorgas de captação vigentes** do SNIRH não confirma a hipótese no
+agregado — a licença mediana nos rios que perdem sem seca é de 1,6% da vazão média, *menor* que
+os 3,3% dos que perdem com seca. O motivo é o dado: a captação vem sem coordenada, só com
+município, e município grande mistura licenças de rios diferentes. Onde serve é caso a caso: o
+São Desidério (BA) perde 25,6%/década com licença municipal de 314% da própria vazão, e o
+Ribeirão do Feijão (SP), 5,4% com 71%. Não é prova de causa; é onde olhar primeiro.
+
 **Duas janelas, de propósito.** A série mensal funde o arquivo histórico (1901 a agosto de 2023)
 com o serviço SOAP da ANA e chega a maio de 2026 — é ela que sustenta as tendências, o calendário
 da cheia e o tamanho da rede. A série **diária** existe só no arquivo e para em 2023, porque o
