@@ -21,6 +21,7 @@ def embutir(nome):
 
 tpl = (S / "template_series.html").read_text()
 pagina = tpl.replace("/*__FONTE__*/", (S / "fonte_mono.txt").read_text().strip())
+pagina = pagina.replace("/*__SERIF__*/", (S / "fonte_serif.txt").read_text().strip())
 pagina = pagina.replace("/*__TENDENCIA__*/", embutir("tendencia.json"))
 pagina = pagina.replace("/*__PAINEIS__*/", embutir("paineis.json"))
 

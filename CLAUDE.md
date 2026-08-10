@@ -95,6 +95,13 @@ Todos os JSON intermediários são gitignored. Os HTML gerados são versionados 
 
 - **Português** em nomes, comentários e commits (`type: descrição em minúscula`). Os scripts do
   `../rodado` são em inglês; os daqui não.
+- **`<meta name="viewport">` é obrigatório** e as duas páginas ficaram sem ele por muito tempo.
+  Sem a tag, o celular adota um viewport de 980 px e reduz tudo por zoom: o texto sai minúsculo
+  e **nenhuma media query de `max-width` dispara**, então todo o CSS de celular vira letra
+  morta. Não dá para flagrar com `page.set_viewport_size` do Playwright — só emulando com
+  `is_mobile=True`, que é quando o Chromium passa a respeitar (ou não) a tag.
+- **Os SVG dos gráficos não têm `viewBox`.** Logo `max-width: 100%` neles não encolhe, **corta**
+  — a metade direita do gráfico some e não há como alcançá-la. Quem rola é o `.svgwrap` em volta.
 - **Tokens CSS compartilhados** entre as duas páginas (`--ink`, `--rule`, `--accent`,
   `--ramp-0..6`), definidos em três blocos: `:root`, `@media (prefers-color-scheme: dark)` com
   guarda `:root:not([data-theme="light"])`, e `:root[data-theme="dark"]`. Nunca defina cor só

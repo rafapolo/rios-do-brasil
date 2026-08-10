@@ -1,9 +1,27 @@
+<meta charset="utf-8">
+<!-- Sem esta linha o celular adota um viewport de 980px e reduz a página
+     inteira por zoom: o texto sai minúsculo e NENHUMA media query de
+     max-width dispara, então todo o layout de celular abaixo era letra morta.
+     É o ajuste de mobile que vale mais que todos os outros somados. -->
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Os rios do Brasil estão secando?</title>
 <style>
   @font-face {
     font-family: "Mono";
     src: url(data:font/woff2;base64,/*__FONTE__*/) format("woff2-variations");
     font-weight: 100 800;
+    font-display: swap;
+  }
+  /* Newsreader (SIL OFL 1.1), a face de leitura. Embutida, e não puxada do
+     fonts.gstatic.com: a página tem que abrir de file:// sem rede, e um src
+     remoto faria cada leitor bater no servidor do Google.
+     Reduzida de 131 KB para 36 KB fixando o eixo óptico em 16 (não uso a
+     variação de opsz) e mantendo só os pesos 400–800 — com um peso só, o
+     negrito sairia sintetizado, que numa serifada fica borrado. */
+  @font-face {
+    font-family: "Serif";
+    src: url(data:font/woff2;base64,/*__SERIF__*/) format("woff2-variations");
+    font-weight: 400 800;
     font-display: swap;
   }
 
@@ -34,6 +52,7 @@
 
     --sombra: 0 6px 26px rgba(11, 20, 22, .13);
     --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    --serif: "Serif", Georgia, "Times New Roman", serif;
     --mono: "Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   }
   /* O escuro é escolhido passo a passo contra o fundo escuro, não um espelho
@@ -76,8 +95,8 @@
   body {
     background: var(--fundo);
     color: var(--ink);
-    font-family: var(--sans);
-    line-height: 1.55;
+    font-family: var(--serif);
+    line-height: 1.6;
     margin: 0;
     -webkit-font-smoothing: antialiased;
   }
@@ -91,12 +110,14 @@
     margin: 0 0 10px;
   }
   h1 {
-    font-size: clamp(1.9rem, 5vw, 2.9rem); line-height: 1.04;
-    letter-spacing: -0.035em; font-weight: 680; margin: 0 0 14px;
+    font-family: var(--serif);
+    font-size: clamp(1.75rem, 6vw, 2.9rem); line-height: 1.08;
+    letter-spacing: -0.02em; font-weight: 700; margin: 0 0 14px;
     text-wrap: balance;
   }
   h2 {
-    font-size: 1.28rem; letter-spacing: -0.02em; font-weight: 660;
+    font-family: var(--serif);
+    font-size: 1.32rem; letter-spacing: -0.01em; font-weight: 650;
     margin: 0 0 4px; text-wrap: balance;
   }
   /* Texto ocupa a largura do cartão, igual aos gráficos. */
@@ -215,7 +236,12 @@
   /* Gráfico que precisa manter proporção 1:1 não enche o cartão; centralizar
      deixa a sobra simétrica em vez de um buraco só do lado direito. */
   .svgwrap.meio { display: flex; justify-content: center; }
-  svg { display: block; max-width: 100%; }
+  /* Sem `max-width: 100%`. Estes SVG têm width/height e NÃO têm viewBox, então
+     max-width não os encolhe — ele os CORTA, e a metade direita do gráfico
+     ficava invisível e inalcançável no celular, com o aviso de rolagem
+     mentindo logo abaixo. Sem a regra, o .svgwrap rola de verdade e o gráfico
+     é lido em tamanho nativo, que é melhor que espremido a 300 px. */
+  svg { display: block; }
   svg text { font-family: var(--mono); fill: var(--ink-3); font-size: 10px; }
   svg .eixo { stroke: var(--rule); stroke-width: 1; }
   svg .grade { stroke: var(--grade); stroke-width: 1; }
@@ -284,10 +310,66 @@
 
   #carregando { padding: 60px 20px; text-align: center; color: var(--ink-3); }
 
+  /* ---------- celular ---------- */
   @media (max-width: 780px) {
-    .linha { grid-template-columns: minmax(0, 1fr) 38% 58px; gap: 7px; }
-    .rot { font-size: 0.72rem; }
-    .cartao { padding: 18px 15px; }
+    .folha { padding: 26px 14px 56px; }
+    .cartao { padding: 17px 14px; margin-bottom: 18px; border-radius: 3px; }
+    body { line-height: 1.55; }
+    .abertura { font-size: 1rem; }
+    h2 { font-size: 1.16rem; }
+    .desc { margin-bottom: 14px; }
+
+    /* O nome do rio quebra em duas linhas em vez de virar reticências: num
+       ranking, "RIO SÃO FRANC…" não identifica nada. */
+    .linha {
+      grid-template-columns: minmax(0, 1fr) 34% 52px;
+      gap: 6px; padding: 3px 0; align-items: center;
+    }
+    /* 3 linhas, não 2: o nome do rio já usa até duas e a UF com o número de
+       anos vive na terceira — cortar ali tira justamente o que identifica a
+       estação. */
+    .rot {
+      font-size: 0.72rem; line-height: 1.25;
+      white-space: normal; text-overflow: clip;
+      display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .rot em { display: block; margin-left: 0; }
+    .val { font-size: 0.66rem; }
+
+    .tiles { grid-template-columns: 1fr 1fr; }
+    /* Grupo ímpar (3 tiles) deixava uma célula vazia mostrando o fundo da
+       grade — o último ocupa a linha inteira. */
+    .tile:last-child:nth-child(odd) { grid-column: 1 / -1; }
+    .tile { padding: 12px 13px; }
+    .tile b { font-size: 1.34rem; }
+
+    /* Controles viram uma pilha legível em vez de sete blocos embaralhados. */
+    .controles { gap: 9px 12px; }
+    .grupo { flex: 1 1 100%; justify-content: space-between; }
+    .seg button { padding: 6px 11px; font-size: 0.72rem; }
+    select { padding: 6px 9px; font-size: 0.72rem; }
+
+    .tabout table, details.tabela table { font-size: 0.66rem; }
+    .tabout th, .tabout td { padding: 4px 7px; }
+    #dica { max-width: 250px; font-size: 0.74rem; }
+  }
+
+  /* Aviso de que o gráfico rola para o lado — sem isto o leitor de celular vê
+     o gráfico cortado e conclui que ele acaba ali. Só aparece onde há toque. */
+  @media (hover: none) {
+    .svgwrap { position: relative; }
+    /* `.rola` é posto pelo JS medindo a rolagem de verdade. Aplicar o aviso a
+       todo .svgwrap fazia dois deles mentirem no tablet, onde o gráfico já
+       cabia inteiro. */
+    .svgwrap.rola::after {
+      content: "arraste para o lado →";
+      position: sticky; left: 0; bottom: 0; display: block;
+      font-family: var(--mono); font-size: 0.55rem; letter-spacing: 0.08em;
+      text-transform: uppercase; color: var(--ink-3);
+      padding-top: 4px;
+    }
+    .svgwrap.meio::after { content: none; }
   }
   @media (prefers-reduced-motion: reduce) {
     * { transition: none !important; animation: none !important; }
@@ -424,11 +506,22 @@
     dica.style.opacity = '0';
     dica.setAttribute('aria-hidden', 'true');
   };
+  // Em toque não existe hover, e é no tooltip que mora a ficha da estação —
+  // sem isto metade da informação da página some no celular. Um toque abre,
+  // outro toque em qualquer lugar fecha.
   function liga(node, html) {
     node.addEventListener('mousemove', ev => mostra(ev, html));
     node.addEventListener('mouseleave', some);
+    node.addEventListener('touchstart', ev => {
+      const t = ev.touches[0];
+      if (!t) return;
+      ev.stopPropagation();
+      // Acima do dedo: embaixo ficaria coberto pela própria mão.
+      mostra({ clientX: t.clientX - 130, clientY: t.clientY - 20 }, html);
+    }, { passive: true });
   }
   addEventListener('scroll', some, { passive: true });
+  addEventListener('touchstart', some, { passive: true });
 
   // ---------- sparkline da série anual ----------
   function faisca(serie, w = 230, h = 34) {
@@ -552,8 +645,11 @@
       }
 
       const ord = filtradas.slice().sort((a, b) => a.pct - b.pct);
-      const caem = ord.filter(r => r.pct < 0).slice(0, 20);
-      const sobem = ord.filter(r => r.pct > 0).slice(-20).reverse();
+      // 20 por lado numa tela de 375 px são 40 linhas de rolagem antes do
+      // próximo gráfico; 10 já mostram a forma da cauda.
+      const N = innerWidth < 780 ? 10 : 20;
+      const caem = ord.filter(r => r.pct < 0).slice(0, N);
+      const sobem = ord.filter(r => r.pct > 0).slice(-N).reverse();
       const lista = caem.concat(sobem);
       // Escala simétrica: com meia-largura por lado, um domínio assimétrico
       // faria uma queda de 20% parecer maior que uma alta de 20%.
@@ -583,7 +679,7 @@
       c.querySelector('.nota').textContent =
         `${num(filtradas.length)} estações atendem aos critérios; ` +
         `${num(nCai)} com vazão em queda e ${num(filtradas.length - nCai)} em alta. ` +
-        `O gráfico mostra os 20 extremos de cada lado. ` +
+        `O gráfico mostra os ${N} extremos de cada lado. ` +
         `A escala é simétrica: ${num(teto, 1)}% por década em cada ponta.`;
 
       // tabela equivalente, para leitura sem cor
@@ -1145,5 +1241,15 @@
     c.append(nota);
     pag.append(c);
   }
+
+  // Só marca como rolável o que de fato transborda — o aviso tem que
+  // corresponder ao que o dedo consegue fazer.
+  function marcaRolagem() {
+    for (const w of document.querySelectorAll('.svgwrap')) {
+      w.classList.toggle('rola', w.scrollWidth > w.clientWidth + 2);
+    }
+  }
+  requestAnimationFrame(marcaRolagem);
+  addEventListener('resize', marcaRolagem, { passive: true });
 })();
 </script>
