@@ -183,19 +183,6 @@
     font-weight: 680; margin: 0 0 8px; text-wrap: balance;
   }
 
-  .stats {
-    display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px;
-    margin-top: 13px; padding-top: 12px; border-top: 1px solid var(--rule);
-  }
-  .stat b {
-    display: block; font-family: var(--mono); font-size: 0.96rem; font-weight: 550;
-    letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.2;
-  }
-  .stat span {
-    font-family: var(--mono); font-size: 0.55rem; color: var(--ink-3);
-    text-transform: uppercase; letter-spacing: 0.09em; display: block; line-height: 1.5;
-  }
-
   h2 {
     font-size: 0.63rem; margin: 0 0 9px; font-family: var(--mono); font-weight: 500;
     text-transform: uppercase; letter-spacing: 0.13em; color: var(--ink-3);
@@ -264,7 +251,9 @@
   .cunha svg { display: block; width: 100%; height: auto; }
   .cunha line { stroke: var(--rule); stroke-width: 1; }
   .cunha text {
-    fill: var(--ink-3); font-family: var(--mono); font-size: 8px;
+    /* 7,5 px é o que deixa "10 mil" e "100 mil" separados: as décadas ficam a
+       52,7 unidades uma da outra e o último rótulo tem 7 caracteres. */
+    fill: var(--ink-3); font-family: var(--mono); font-size: 7.5px;
     font-variant-numeric: tabular-nums;
   }
   .nota { font-size: 0.72rem; color: var(--ink-3); margin: 8px 0 0; line-height: 1.5; }
@@ -474,7 +463,7 @@
     }
     .titulo-cartao { order: 9; }
     .titulo-cartao .eyebrow, .titulo-cartao h1 { display: none; }
-    .titulo-cartao .stats { margin-top: 0; padding-top: 0; border-top: none; }
+    
     h1 { font-size: 1.28rem; }
     .zoom { top: auto; bottom: 76px; right: 12px; }
     .abrir { bottom: auto; top: 12px; right: 12px; }
@@ -518,7 +507,7 @@
   <div class="cartao titulo-cartao">
     <p class="eyebrow">Rede de drenagem · Agência Nacional de Águas</p>
     <h1 id="titulo">Os rios do Brasil, por vazão</h1>
-    <div class="stats" id="stats"></div>
+    
     <p class="ir-series"><a href="series.html">Estes rios estão secando? →</a></p>
   </div>
 
@@ -990,10 +979,45 @@
 
   // contagem em cada controle
   // A legenda sai das mesmas funções que desenham o mapa
-  const CLASSES = [
-    [0, 2, 'até 2 m³/s'], [2, 10, '2 – 10'], [10, 40, '10 – 40'],
-    [40, 150, '40 – 150'], [150, 500, '150 – 500'], [500, 1e6, 'acima de 500'],
-  ];
+  /* No modo vazão ela é uma cunha só, e não uma lista de faixas. Entre o riacho
+     e o Amazonas vão 5,4 décadas: qualquer corte em seis linhas acaba repetindo
+     tom e ainda deixa os dois azuis mais escuros — tudo acima de 5.400 m³/s, que
+     é onde estão Amazonas, Solimões, Madeira e Negro — sem entrada nenhuma. Na
+     barra os sete tons aparecem inteiros, em corte duro na fronteira exata em que
+     cor() troca de valor, e a silhueta engrossa pela mesma largura() do canvas.
+     O eixo são as décadas, que é o jeito honesto de mostrar uma escala log. */
+  const DECADAS = [[1, '1'], [10, '10'], [100, '100'], [1e3, '1.000'],
+                   [1e4, '10 mil'], [1e5, '100 mil']];
+  const vDeT = t => Math.pow(10, L0 + t * (L1 - L0));   // o inverso de t01()
+  function cunhaVazao() {
+    const X0 = 2, X1 = 286, MEIO = 12, K = 3.6, AMOSTRAS = 60;
+    const x = t => X0 + t * (X1 - X0);
+    const topo = [], base = [];
+    for (let i = 0; i <= AMOSTRAS; i++) {
+      const t = i / AMOSTRAS, px = x(t).toFixed(1);
+      const h = largura(vDeT(t), 1) * K / 2;
+      topo.push(px + ',' + (MEIO - h).toFixed(2));
+      base.push(px + ',' + (MEIO + h).toFixed(2));
+    }
+    const silhueta = 'M' + topo.join('L') + 'L' + base.reverse().join('L') + 'Z';
+    const faixas = [0, 1, 2, 3, 4, 5, 6].map(i => {
+      const a = x(Math.max(0, (i - 0.5) / 6)), b = x(Math.min(1, (i + 0.5) / 6));
+      return '<rect x="' + a.toFixed(1) + '" y="0" width="' + (b - a).toFixed(1) +
+        '" height="' + (MEIO * 2) + '" fill="' + cor(vDeT(i / 6)) + '"/>';
+    }).join('');
+    const marcas = DECADAS.map(([v, rot], i) => {
+      const px = x(t01(v)).toFixed(1);
+      // o último rótulo é o mais largo e encostaria na borda se fosse centrado
+      const anc = i === DECADAS.length - 1 ? 'end' : 'middle';
+      return '<line x1="' + px + '" y1="22" x2="' + px + '" y2="25.5"/>' +
+        '<text x="' + px + '" y="34" text-anchor="' + anc + '">' + rot + '</text>';
+    }).join('');
+    return '<svg viewBox="0 0 288 36" role="img" aria-label="A cor e a espessura ' +
+      'crescem com a vazão média, de menos de 1 m³/s nas cabeceiras a mais de 100 ' +
+      'mil no Amazonas.">' +
+      '<defs><clipPath id="cunhaClip"><path d="' + silhueta + '"/></clipPath></defs>' +
+      '<g clip-path="url(#cunhaClip)">' + faixas + '</g>' + marcas + '</svg>';
+  }
   // a legenda da poluição fala em % do rio que é efluente, que é a própria métrica
   const CLASSES_POL = [
     [0.0015, '0,1 – 0,3%'], [0.005, '0,3 – 1%'], [0.017, '1 – 3%'],
@@ -1008,13 +1032,10 @@
   ];
   function montaLegenda() {
     const el = document.getElementById('classes');
+    el.classList.toggle('cunha', modo === 'vazao');
+    tituloLegenda.textContent = TITULO_LEGENDA[modo] || TITULO_LEGENDA.vazao;
     if (modo === 'vazao') {
-      el.innerHTML = CLASSES.map(([a, b, rot]) => {
-        const ref = a === 0 ? 1 : Math.sqrt(a * Math.min(b, a * 25));
-        const esp = Math.max(2, Math.min(9, largura(ref, 1) * 1.9));
-        return '<div class="classe"><span class="amostra" style="height:' + esp.toFixed(1) +
-          'px;background:' + cor(ref) + '"></span>' + rot + '</div>';
-      }).join('');
+      el.innerHTML = cunhaVazao();
       return;
     }
     if (modo === 'outorga') {
@@ -1036,6 +1057,16 @@
     }
     el.innerHTML = linhas.join('');
   }
+
+  /* O cartão da legenda dizia "Vazão média" nos quatro modos, inclusive naqueles
+     em que as amostras mostram porcentagem. Ele nomeia o que a barra mede, e a
+     unidade da vazão mora aqui para não gastar uma linha dentro do SVG. */
+  const TITULO_LEGENDA = {
+    vazao: 'Vazão média (m³/s)',
+    esgoto: 'Quanto do rio é esgoto',
+    industria: 'Quanto do rio é efluente industrial',
+    outorga: 'Vazão já licenciada',
+  };
 
   const NOTA_MODO = {
     vazao: 'A cor e a espessura seguem a vazão média de longo termo.',
@@ -1744,7 +1775,13 @@
         : '<b>' + (D.nomes[nomeIdx[a.i]] || 'Curso d’água sem nome') + '</b>' +
           '<div class="linha">Vazão média <em>' + vazao(q[a.i]) + '</em></div>' +
           // vazão sem extensão não diz se é um fio de 3 km ou um rio de 2 mil
-          (comps ? '<div class="linha">Extensão <em>' + extensao(a.i) + '</em></div>' : '');
+          (comps ? '<div class="linha">Extensão <em>' + extensao(a.i) + '</em></div>' : '') +
+          /* A licença acumulada a montante, com o mesmo piso da camada: é o que
+             diz se o rio já chega aqui comprometido. Aparece em qualquer modo,
+             não só no da outorga, porque a pergunta vale enquanto se lê a vazão. */
+          (fOut && fOut[a.i] >= OMIN
+            ? '<div class="linha">Outorgado rio acima <em>' + pct(fOut[a.i]) + '</em></div>'
+            : '');
     mostrarTip(html, ev);
   }
 
@@ -1898,12 +1935,7 @@
   /* ---------- números e tabela ---------- */
   const val = D.validacao || {};
   const anoIni = D.periodo ? D.periodo[0] : '1995', anoFim = D.periodo ? D.periodo[1] : '2025';
-  document.getElementById('stats').innerHTML = [
-    [fmt(N), 'trechos de rio'],
-    [fmt(D.estacoes.length), 'estações com série'],
-    [fmt(RES.length), 'reservatórios'],
-    [(val.dentro2x || 0) + '%', 'acerto na validação'],
-  ].map(([a, b]) => '<div class="stat"><b>' + a + '</b><span>' + b + '</span></div>').join('');
+  
 
   // Só nomes que começam em "Rio": a BHO às vezes arrasta o nome de um afluente
   // pequeno por um trecho de tronco, e aparecem "córregos" com milhares de m³/s.
