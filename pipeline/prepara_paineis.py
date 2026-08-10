@@ -29,8 +29,13 @@ from collections import defaultdict
 from pathlib import Path
 
 S = Path(__file__).parent
-MENSAL = "~/rodado/br_ana_telemetria/series_vazao_mensal/**/*.parquet"
+# Duas janelas diferentes de propósito, e a diferença precisa aparecer na página:
+# o mensal é zip + SOAP e vai a 2026-05; o diário é só o zip e para em 2023-09,
+# porque `HidroSerieHistorica` devolve agregado mensal, não leitura por dia.
+# Painel que usa o diário (rio seco, Q7,10) não pode afirmar nada sobre 2024+.
+MENSAL = "~/rodado/br_ana_telemetria/series_vazao_mensal_completa/**/*.parquet"
 DIARIA = "~/rodado/br_ana_telemetria/series_vazao_diaria/**/*.parquet"
+FIM_DIARIO = 2022   # último ano completo da série diária (o zip para em set/2023)
 INVENTARIO = "~/rodado/br_ana_telemetria/estacoes_inventario_2023/*.parquet"
 
 # Duas janelas de 30 anos (norma climatológica da OMM), com o intervalo
@@ -258,9 +263,9 @@ def painel_rede() -> dict:
         "bacias": bacias,
         "anos": [[a] + [por_ano[a].get(b, 0) for b in bacias] for a in sorted(por_ano)],
         "consistencia": [[r["ano"], r["consistido"], r["bruto"], r["total"]] for r in consist],
-        # Último ano fechado do arquivo. Depois disso o dado existe mas está
-        # truncado em setembro; qualquer gráfico deve cortar aqui ou marcar.
-        "ultimo_ano_cheio": 2022,
+        # Último ano civil fechado da série mensal unificada. 2026 está pela
+        # metade (o SOAP vai a maio) e cairia como se a rede tivesse sumido.
+        "ultimo_ano_cheio": 2025,
     }
 
 
@@ -305,6 +310,15 @@ def main() -> int:
           f"{cons[cheio][1]} em {cheio}")
 
     paineis["janelas"] = {"antes": ANTES, "depois": DEPOIS}
+    # Procedência por painel: os dois grãos têm alcances diferentes e quem
+    # consumir este JSON precisa saber qual painel para onde.
+    paineis["fontes"] = {
+        "mensal": ("ANA — arquivo de estações convencionais (1901 a 2023-09) fundido "
+                   "com o SOAP HidroSerieHistorica (até 2026-05); alimenta cheia e rede"),
+        "diaria": ("ANA — apenas o arquivo de estações convencionais, para em 2023-09 "
+                   "(o SOAP só devolve agregado mensal); alimenta seco e q710"),
+        "ultimo_ano_diario": FIM_DIARIO,
+    }
     destino = S / "paineis.json"
     destino.write_text(json.dumps(paineis, ensure_ascii=False, separators=(",", ":")))
     print(f"\nescrito {destino} ({destino.stat().st_size / 1e6:.1f} MB)")

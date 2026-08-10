@@ -37,8 +37,10 @@ Tabelas em `~/rodado/br_ana_telemetria/` que este repo consome:
 
 | Tabela | Grão | Observação |
 |---|---|---|
-| `series_vazao_mensal` / `series_cota_mensal` | estação × mês | particionadas em `bacia=XX/` |
+| `series_vazao_mensal_completa` | estação × mês | **é esta que a análise usa**: zip + SOAP, 1901–2026, 4.218 estações |
+| `series_vazao_mensal` / `series_cota_mensal` | estação × mês | só o zip (1901–2023), particionadas em `bacia=XX/` |
 | `series_vazao_diaria` / `series_cota_diaria` | estação × dia | 36 M e 48 M de linhas |
+| `series_chuva_mensal` / `series_chuva_diaria` | estação × mês/dia | 5.389 pluviômetros, 69,8 M de linhas diárias |
 | `estacoes_inventario_2023` | estação | inventário de 04/08/2023, 58 colunas |
 | `estacoes` | estação | catálogo do SOAP, **sem nenhuma leitura** |
 
@@ -109,16 +111,26 @@ Todos os JSON intermediários são gitignored. Os HTML gerados são versionados 
 
 - **A ANA esvaziou** o repo `anagovbr/hidro-dados-estacoes-convencionais` em dez/2025. Um zip de
   `refs/heads/main` sai com zero byte; o commit `b8b65b0` ainda tem os 2,3 GB.
-- **O SOAP `telemetriaws1.ana.gov.br` devolve HTTP 429** sob concorrência. Precisa de backoff
-  exponencial e de um freio compartilhado entre threads; sem isso as tentativas queimam em
-  segundos e a estação é descartada silenciosamente. Ele recua até os anos 1930 — o corte em
-  1995 do `baixa_vazao.py` é escolha, não limite.
+- **O SOAP `telemetriaws1.ana.gov.br` devolve HTTP 429** sob concorrência, e o limite é **por
+  IP** (medido: um segundo host responde 200 em 2 s enquanto o primeiro apanha). Precisa de
+  backoff exponencial e de um freio compartilhado entre threads; sem isso as tentativas queimam
+  em segundos e a estação é descartada silenciosamente. Ele recua até os anos 1930 — o corte em
+  1995 do `baixa_vazao.py` é escolha, não limite. Para volume, distribua por hosts
+  (`beelink`/`finland`/`livre`), não por threads: ~40 estações/min por IP.
+- **A série diária não tem como ser atualizada pelo SOAP.** `HidroSerieHistorica` devolve
+  agregado mensal; o dia a dia (e portanto os estados de rio seco e a Q7,10) só existe no zip,
+  que para em setembro de 2023. Qualquer painel diário tem janela mais curta que os mensais, e
+  isso precisa estar escrito na página.
 - **`NivelConsistencia`**: 2 (consistido) sempre vence 1 (bruto) no dedup por
   `(codigo, mês)`. Inverter isso muda ~28 mil meses em 273 estações.
 - **A ordem de Strahler não vale fora do Brasil** na BHO, e o nome do trecho às vezes é de um
   afluente pequeno — por isso o filtro do mapa é por vazão, não por ordem.
 - **`MunicipioCodigo` da ANA não é IBGE**, e o inventário de 2023 marca descarga líquida como
   `'SIM'`/`'NÃO'` enquanto o do SOAP usa `'1'`/`'0'`.
+- **Código de estação: sempre 8 dígitos com zero à esquerda.** Os MDB pluviométricos guardam o
+  código como número e devolvem 7 (`1036005` onde todo o resto tem `01036005`). Um join contra o
+  inventário sai vazio, calado — foi assim que o painel de chuva nasceu sem nenhum ponto. O ETL
+  faz `zfill(8)`; qualquer fonte nova precisa fazer o mesmo.
 
 ## Publicação
 

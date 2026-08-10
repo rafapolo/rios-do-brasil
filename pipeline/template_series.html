@@ -275,14 +275,14 @@
 </style>
 
 <div class="folha">
-  <p class="eyebrow">Agência Nacional de Águas · séries históricas · 1901–2023</p>
+  <p class="eyebrow">Agência Nacional de Águas · séries históricas · 1901–2026</p>
   <h1>Os rios do Brasil estão secando?</h1>
   <p class="desc abertura">
     O <a href="index.html">mapa dos 462 mil trechos</a> mostra a vazão média de cada rio.
     Média não tem direção: uma estação estável e outra em queda contínua há quarenta anos
     aparecem iguais se a média bater. Aqui entra a série inteira de cada estação
-    fluviométrica da ANA — <strong>68 mil anos de medição</strong> acumulados desde 1901 —
-    para perguntar o que a média esconde.
+    fluviométrica da ANA — <strong><span id="totAnos">…</span> anos de medição</strong>
+    acumulados desde 1901 — para perguntar o que a média esconde.
   </p>
 
   <div id="carregando">descomprimindo as séries…</div>
@@ -361,6 +361,13 @@
     return saida;
   }
 
+  // Marcas simétricas em torno do zero, sem o "-0" que sai de concatenar a
+  // lista positiva com a negada.
+  function ticksSim(lim, alvo = 3) {
+    const pos = ticks(lim, alvo).filter(v => v > 0 && v <= lim);
+    return [...pos.map(v => -v).reverse(), 0, ...pos];
+  }
+
   const SVGNS = 'http://www.w3.org/2000/svg';
   const s = (tag, attrs = {}, txt) => {
     const n = document.createElementNS(SVGNS, tag);
@@ -425,6 +432,7 @@
   // =========================================================
   {
     const anos = T.estacoes.reduce((a, r) => a + r.n, 0);
+    document.getElementById('totAnos').textContent = num(anos);
     const tiles = el('div', { class: 'tiles' });
     const add = (v, rot, cls) => {
       const t = el('div', { class: 'tile' + (cls ? ' ' + cls : '') });
@@ -583,7 +591,115 @@
   }
 
   // =========================================================
-  //  2 · o relógio do rio seco
+  //  2 · é seca ou é consumo?
+  // =========================================================
+  {
+    const com = T.estacoes.filter(r => r.rank && r.chuva_pct != null);
+    if (com.length) {
+      const c = el('div', { class: 'cartao' });
+      const LIM = 2;   // ±2%/década: chuva praticamente parada
+      const caiQ = r => r.pct < 0;
+      const clima  = com.filter(r => caiQ(r) && r.chuva_pct < -LIM);
+      const uso    = com.filter(r => caiQ(r) && r.chuva_pct >= -LIM);
+      const subindo = com.filter(r => !caiQ(r));
+
+      c.append(el('h2', {}, 'É seca ou é consumo?'));
+      const p = el('p', { class: 'desc' });
+      p.innerHTML =
+        `Um rio pode perder vazão porque choveu menos ou porque se tirou mais água dele — e as ` +
+        `duas causas pedem respostas opostas. Aqui cada estação aparece com a tendência da sua ` +
+        `<strong>vazão</strong> contra a tendência da <strong>chuva</strong> que cai sobre ela. ` +
+        `Dos ${num(clima.length + uso.length)} rios em queda comprovada, ` +
+        `<strong>${num(uso.length)} perdem água sem que a chuva tenha caído</strong>.`;
+      c.append(p);
+
+      const tiles = el('div', { class: 'tiles' });
+      const tile = (v, rot, cls) => {
+        const t = el('div', { class: 'tile' + (cls ? ' ' + cls : '') });
+        t.append(el('b', {}, v), el('span', {}, rot));
+        return t;
+      };
+      tiles.append(
+        tile(num(uso.length), 'perdem sem seca', 'cai'),
+        tile(num(clima.length), 'perdem com seca'),
+        tile(num(subindo.length), 'ganham vazão', 'sobe'));
+      c.append(tiles);
+
+      const leg = el('div', { class: 'legenda' });
+      leg.innerHTML =
+        '<span><i style="background:var(--seca-2)"></i>vazão cai, chuva não caiu</span>' +
+        '<span><i style="background:var(--neutro)"></i>vazão cai e chuva também</span>' +
+        '<span><i style="background:var(--enche-2)"></i>vazão sobe</span>';
+      c.append(leg);
+
+      const W = 660, H = 480, M = { t: 16, r: 16, b: 46, l: 56 };
+      const lx = Math.max(6, ...com.map(r => Math.abs(r.chuva_pct))) * 1.05;
+      const ly = Math.max(10, ...com.map(r => Math.abs(r.pct))) * 1.05;
+      const px = v => M.l + (v + lx) / (2 * lx) * (W - M.l - M.r);
+      const py = v => H - M.b - (v + ly) / (2 * ly) * (H - M.t - M.b);
+
+      const svg = s('svg', { width: W, height: H, role: 'img',
+        'aria-label': 'tendência da vazão contra tendência da chuva, por estação' });
+
+      // Faixa da "chuva parada": é ela que separa clima de uso, então precisa
+      // ser visível, não inferida pelo leitor a partir dos pontos.
+      svg.append(s('rect', {
+        x: px(-LIM), y: M.t, width: px(LIM) - px(-LIM), height: H - M.t - M.b,
+        fill: 'var(--ink-3)', 'fill-opacity': .07
+      }));
+      for (const v of ticksSim(lx)) {
+        svg.append(s('line', { class: 'grade', x1: px(v), x2: px(v), y1: M.t, y2: H - M.b }));
+        svg.append(s('text', { x: px(v), y: H - 28, 'text-anchor': 'middle' },
+                    v === 0 ? '0' : sinal(v, 0)));
+      }
+      for (const v of ticksSim(ly)) {
+        svg.append(s('line', { class: 'grade', x1: M.l, x2: W - M.r, y1: py(v), y2: py(v) }));
+        svg.append(s('text', { x: M.l - 6, y: py(v) + 3.5, 'text-anchor': 'end' },
+                    v === 0 ? '0' : sinal(v, 0)));
+      }
+      svg.append(s('line', { class: 'eixo', x1: M.l, x2: W - M.r, y1: py(0), y2: py(0) }));
+      svg.append(s('line', { class: 'eixo', x1: px(0), x2: px(0), y1: M.t, y2: H - M.b }));
+
+      for (const r of com) {
+        const cor = r.pct >= 0 ? 'var(--enche-2)'
+                  : (r.chuva_pct >= -LIM ? 'var(--seca-2)' : 'var(--neutro)');
+        const pt = s('circle', {
+          cx: px(r.chuva_pct), cy: py(r.pct), r: 3.2, fill: cor,
+          'fill-opacity': .72, stroke: 'var(--panel)', 'stroke-width': 1
+        });
+        liga(pt, `<b>${titulo(r)}</b><span class="mn">${r.uf || ''} · ${r.n} anos<br>` +
+          `vazão <u>${sinal(r.pct)}%</u> por década<br>` +
+          `chuva <u>${sinal(r.chuva_pct)}%</u> por década ` +
+          `(${num(r.chuva_mm)} mm/ano, ${r.chuva_k} pluviômetros)</span>`);
+        svg.append(pt);
+      }
+      svg.append(s('text', { x: (M.l + W - M.r) / 2, y: H - 8, 'text-anchor': 'middle', class: 'rotulo' },
+        'tendência da CHUVA (%/década)'));
+      svg.append(s('text', { x: 13, y: (M.t + H - M.b) / 2, 'text-anchor': 'middle', class: 'rotulo',
+        transform: `rotate(-90 13 ${(M.t + H - M.b) / 2})` }, 'tendência da VAZÃO (%/década)'));
+
+      const wrap = el('div', { class: 'svgwrap' });
+      wrap.append(svg);
+      c.append(wrap);
+
+      const nota = el('p', { class: 'nota' });
+      nota.innerHTML =
+        `Quadrante inferior direito — vazão caindo com chuva estável ou subindo — é onde a seca ` +
+        `não explica. A chuva de cada bacia é a média dos até cinco pluviômetros mais próximos ` +
+        `dentro de 150 km, restrita aos mesmos anos da série de vazão, e só entram anos com os ` +
+        `doze meses medidos. <strong>É uma aproximação</strong>: o correto seria integrar a ` +
+        `precipitação sobre o polígono da bacia, por Thiessen ou krigagem. Para o sinal — sobe, ` +
+        `desce, parado — a média dos vizinhos serve; para o valor do coeficiente de escoamento ` +
+        `não serviria, e por isso o gráfico compara tendência com tendência, não o coeficiente. ` +
+        `${num(com.length)} das ${num(T.resumo.ranking)} estações do ranking têm pluviômetro ` +
+        `perto o bastante.`;
+      c.append(nota);
+      pag.append(c);
+    }
+  }
+
+  // =========================================================
+  //  3 · o relógio do rio seco
   // =========================================================
   {
     const c = el('div', { class: 'cartao' });
@@ -642,7 +758,10 @@
       `Pior ano da série: <strong>${pior[0]}</strong>, com ${num(pior[2])} estações ` +
       `registrando rio seco. Cada barra conta estações, não dias — uma estação que secou ` +
       `um dia e outra que secou o ano inteiro contam igual aqui; o total de dias está no ` +
-      `detalhe de cada barra. A série para em 2022, último ano completo do arquivo.`;
+      `detalhe de cada barra. <strong>Este gráfico para em 2022</strong>, e não em 2025 como ` +
+      `os de tendência: o estado dia a dia só existe no arquivo histórico, que é um retrato ` +
+      `de agosto de 2023. O serviço que preenche os anos recentes devolve média mensal, e ` +
+      `média mensal não sabe dizer em que dia o rio parou.`;
     c.append(nota);
     pag.append(c);
   }
@@ -820,7 +939,8 @@
       `anos por janela o percentil empírico é estável, e a escolha entre Gumbel e ` +
       `log-Pearson mudaria o número em poucos por cento, não a direção. A média móvel usa ` +
       `sete registros, não sete dias de calendário; por isso só entram anos com 330+ dias ` +
-      `medidos. ${zerou ? `As ${num(zerou)} estações que zeraram não aparecem no gráfico, que é logarítmico.` : ''}`;
+      `medidos. ${zerou ? `As ${num(zerou)} estações que zeraram não aparecem no gráfico, que é logarítmico. ` : ''}` +
+      `Como o painel do rio seco, este depende da série diária e por isso não alcança 2024–2026.`;
     c.append(nota);
     pag.append(c);
   }
@@ -841,9 +961,10 @@
     p.innerHTML =
       `Esta é a barra de erro de tudo que está acima. A rede reportando encolheu de ` +
       `<strong>${num(pico[3])} estações em ${pico[0]}</strong> para ${num(ult[3])} em ${cheio}. ` +
-      `Parte disso é defasagem de publicação — o arquivo é um retrato de agosto de 2023 e o ` +
-      `dado recente ainda estava chegando. Mas a outra curva não tem essa desculpa: a ANA ` +
-      `<strong>consistiu ${num(cons.find(l => l[0] === 2014)[1])} estações em 2014 e uma em ${cheio}</strong>. ` +
+      `Parte disso é defasagem de publicação — dado recente ainda está chegando. Mas a outra ` +
+      `curva não tem essa desculpa: a ANA <strong>consistiu ` +
+      `${num((cons.find(l => l[0] === 2014) || [0, 0])[1])} estações em 2014 e ` +
+      `${num(ult[1])} em ${cheio}</strong>. ` +
       `O dado bruto continua entrando; quase ninguém mais o está conferindo.`;
     c.append(p);
 
@@ -854,16 +975,16 @@
     c.append(leg);
 
     const W = Math.max(700, cons.length * 10), H = 260, M = { t: 14, r: 14, b: 30, l: 46 };
-    const maxV = Math.max(...cons.map(l => l[3]));
+    const marcas = ticks(Math.max(...cons.map(l => l[3])));
+    const maxV = marcas[marcas.length - 1];
     const px = (a) => M.l + (a - cons[0][0]) / (cheio - cons[0][0]) * (W - M.l - M.r);
     const py = (v) => H - M.b - v / maxV * (H - M.t - M.b);
 
     const svg = s('svg', { width: W, height: H, role: 'img',
       'aria-label': 'estações reportando e estações com dado consistido, por ano' });
-    for (let g = 0; g <= 4; g++) {
-      const v = maxV * g / 4;
+    for (const v of marcas) {
       svg.append(s('line', { class: 'grade', x1: M.l, x2: W - M.r, y1: py(v), y2: py(v) }));
-      svg.append(s('text', { x: M.l - 6, y: py(v) + 3.5, 'text-anchor': 'end' }, num(Math.round(v))));
+      svg.append(s('text', { x: M.l - 6, y: py(v) + 3.5, 'text-anchor': 'end' }, num(v)));
     }
     const caminho = (idx) => cons.map((l, i) =>
       (i ? 'L' : 'M') + px(l[0]).toFixed(1) + ' ' + py(l[idx]).toFixed(1)).join(' ');
@@ -890,9 +1011,9 @@
     const nota = el('p', { class: 'nota' });
     nota.innerHTML =
       `Consistido é o dado que passou pela crítica técnica da ANA; bruto é o que saiu do ` +
-      `sensor. A série para em ${cheio} porque o arquivo é um retrato de 04/08/2023 e 2023 ` +
-      `não é ano completo. Ler junto com o resto da página: as tendências que terminam nos ` +
-      `anos 2020 se apoiam, em boa parte, em série que a própria agência ainda não validou.`;
+      `sensor. A série para em ${cheio}, último ano civil fechado. Ler junto com o resto da ` +
+      `página: as tendências que terminam nos anos 2020 se apoiam, em boa parte, em série que ` +
+      `a própria agência ainda não validou.`;
     c.append(nota);
     pag.append(c);
   }
@@ -905,17 +1026,19 @@
     c.append(el('h2', {}, 'O que este recorte ainda não responde'));
     const p = el('p', { class: 'desc' });
     p.innerHTML =
-      `A pergunta que falta é a mais importante: <strong>é seca ou é consumo?</strong> ` +
-      `Um rio pode perder vazão porque choveu menos ou porque se tirou mais água dele, e as ` +
-      `duas causas pedem respostas opostas. O teste é o coeficiente de escoamento — vazão ` +
-      `anual dividida pela chuva anual da bacia: se a chuva se manteve e a vazão caiu, a ` +
-      `causa não está no céu. A ANA publica a chuva das 5.525 estações pluviométricas em ` +
-      `bancos Access, um por estação, que ainda não foram convertidos.`;
+      `Onde a chuva não explica a queda, esta página mostra que sobrou uma causa — não mostra ` +
+      `<strong>qual</strong>. Irrigação, abastecimento urbano, mudança de cobertura do solo e ` +
+      `assoreamento produzem a mesma assinatura aqui. Separar um do outro exige cruzar as ` +
+      `outorgas de captação com a série de cada bacia, e é o passo seguinte.`;
     c.append(p);
     const nota = el('p', { class: 'nota' });
     nota.innerHTML =
-      `Também fora deste recorte: o período de agosto de 2023 até hoje, que existe no ` +
-      `serviço SOAP da ANA mas com defasagem de alguns anos por estação.`;
+      `Sobre as janelas desta página: a série <strong>mensal</strong> combina o arquivo ` +
+      `histórico (1901 a agosto de 2023) com o serviço SOAP da ANA, e chega a maio de 2026 — ` +
+      `é ela que sustenta as tendências, o calendário da cheia e o tamanho da rede. A série ` +
+      `<strong>diária</strong> existe só no arquivo e para em 2023, porque o serviço devolve ` +
+      `apenas agregado mensal; por isso os painéis de rio seco e de Q7,10 terminam antes. ` +
+      `Nada aqui foi extrapolado para cobrir a diferença.`;
     c.append(nota);
     pag.append(c);
   }

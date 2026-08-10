@@ -45,7 +45,10 @@ from pathlib import Path
 import numpy as np
 
 S = Path(__file__).parent
-SERIES = "~/rodado/br_ana_telemetria/series_vazao_mensal/**/*.parquet"
+# A tabela _completa_ é o zip histórico (1901–2023) fundido com o que o SOAP
+# devolveu (até 2026-05), pelo `ana_series_unifica_gap.py` no rodado. Ela traz
+# 264 estações que o zip não tinha — os CSVs delas no arquivo eram só cabeçalho.
+SERIES = "~/rodado/br_ana_telemetria/series_vazao_mensal_completa/**/*.parquet"
 INVENTARIO = "~/rodado/br_ana_telemetria/estacoes_inventario_2023/*.parquet"
 
 MESES_MIN = 10      # meses medidos para o ano valer
@@ -80,6 +83,23 @@ WHERE media IS NOT NULL AND media >= 0
 GROUP BY 1, 2
 HAVING count(*) >= {MESES_MIN}
 ORDER BY 1, 2;"""
+
+CHUVA = "~/rodado/br_ana_telemetria/series_chuva_mensal/**/*.parquet"
+
+# Só anos com os 12 meses medidos: faltar o mês mais chuvoso derruba o total
+# anual em dezenas de por cento e viraria "seca" que não houve.
+SQL_CHUVA_ANUAL = f"""SET enable_progress_bar=false;
+SELECT codigo, year(data) AS ano, round(sum(total), 1) AS p
+FROM read_parquet('{CHUVA}')
+WHERE total IS NOT NULL AND total >= 0
+GROUP BY 1, 2
+HAVING count(*) = 12
+ORDER BY 1, 2;"""
+
+SQL_PLUVIO = f"""SET enable_progress_bar=false;
+SELECT Codigo AS codigo, Latitude AS lat, Longitude AS lon
+FROM read_parquet('{INVENTARIO}')
+WHERE TipoEstacao = 'PLU' AND Latitude IS NOT NULL AND Longitude IS NOT NULL;"""
 
 SQL_INVENTARIO = f"""SET enable_progress_bar=false;
 SELECT Codigo AS codigo, Nome AS nome, RioNome AS rio, EstadoSigla AS uf,
@@ -142,6 +162,90 @@ def benjamini_hochberg(p: np.ndarray) -> np.ndarray:
     saida = np.empty(n)
     saida[ordem] = np.clip(q, 0, 1)
     return saida
+
+
+K_PLUVIO = 5        # pluviômetros por estação fluviométrica
+RAIO_MAX_KM = 150   # além disso a chuva local não descreve a bacia
+ANOS_CHUVA_MIN = 25 # anos de chuva para a tendência pluviométrica valer
+
+
+def anexa_chuva(resultados: list[dict]) -> int:
+    """Acrescenta a tendência da CHUVA a cada estação fluviométrica.
+
+    É o que separa causa de sintoma. Vazão caindo junto com a chuva é clima;
+    vazão caindo com chuva estável é o que se faz com a água e com o solo —
+    e as duas pedem respostas de política pública opostas.
+
+    A chuva de uma bacia é aproximada pela média dos K pluviômetros mais
+    próximos da estação fluviométrica. É uma aproximação grosseira: o certo
+    seria integrar a precipitação sobre o polígono da bacia, com Thiessen ou
+    krigagem. Fica registrado como limite — para o SINAL (sobe, desce, estável)
+    a média dos vizinhos basta, para o VALOR do coeficiente de escoamento não
+    bastaria, e por isso a página mostra tendência contra tendência, não o
+    coeficiente em si.
+    """
+    print("puxando chuva anual...")
+    chuva = consulta(SQL_CHUVA_ANUAL)
+    pluvio = consulta(SQL_PLUVIO)
+    print(f"  {len(chuva):,} pares estação-ano de chuva, {len(pluvio):,} pluviômetros")
+
+    series: dict[str, dict[int, float]] = {}
+    for r in chuva:
+        if r["p"] is not None:
+            series.setdefault(r["codigo"], {})[r["ano"]] = r["p"]
+
+    uteis = [p for p in pluvio
+             if p["codigo"] in series and len(series[p["codigo"]]) >= ANOS_CHUVA_MIN]
+    if not uteis:
+        return 0
+    coords = np.radians(np.array([[p["lat"], p["lon"]] for p in uteis]))
+    codigos = [p["codigo"] for p in uteis]
+
+    # Distância de grande círculo aproximada por equirretangular, boa o
+    # bastante nas escalas de 150 km desta vizinhança.
+    R = 6371.0
+    casados = 0
+    for r in resultados:
+        if r["lat"] is None or r["lon"] is None:
+            continue
+        p = np.radians([r["lat"], r["lon"]])
+        dx = (coords[:, 1] - p[1]) * np.cos((coords[:, 0] + p[0]) / 2)
+        dy = coords[:, 0] - p[0]
+        dist = R * np.hypot(dx, dy)
+        perto = np.argsort(dist)[:K_PLUVIO]
+        perto = [i for i in perto if dist[i] <= RAIO_MAX_KM]
+        if not perto:
+            continue
+
+        # Média dos vizinhos ano a ano, só nos anos em que ao menos metade
+        # deles mediu — senão a "chuva da bacia" muda de definição no meio da
+        # série e a tendência sai do rodízio de estações, não do clima.
+        por_ano: dict[int, list[float]] = {}
+        for i in perto:
+            for ano, v in series[codigos[i]].items():
+                por_ano.setdefault(ano, []).append(v)
+        minimo = max(1, len(perto) // 2)
+        pares = sorted((a, sum(v) / len(v)) for a, v in por_ano.items() if len(v) >= minimo)
+        # Restringe à janela da própria série de vazão: comparar tendências de
+        # períodos diferentes seria comparar climas diferentes.
+        pares = [(a, v) for a, v in pares if r["ini"] <= a <= r["fim"]]
+        if len(pares) < ANOS_CHUVA_MIN:
+            continue
+
+        anos = np.array([a for a, _ in pares], dtype=float)
+        pp = np.array([v for _, v in pares], dtype=float)
+        media = float(pp.mean())
+        if media <= 0:
+            continue
+        z, pv = mann_kendall(pp)
+        sen = sen_slope(anos, pp)
+        r["chuva_pct"] = round(sen * 10 / media * 100, 2)   # %/década
+        r["chuva_p"] = round(pv, 6)
+        r["chuva_mm"] = round(media, 0)
+        r["chuva_n"] = len(pares)
+        r["chuva_k"] = len(perto)
+        casados += 1
+    return casados
 
 
 def main() -> int:
@@ -207,6 +311,9 @@ def main() -> int:
         print("nenhuma estação elegível — abortando")
         return 1
 
+    com_chuva = anexa_chuva(resultados)
+    print(f"  {com_chuva:,} estações com tendência de chuva pareada")
+
     q_fdr = benjamini_hochberg(np.array([r["p"] for r in resultados]))
     for r, qv in zip(resultados, q_fdr):
         r["q"] = round(float(qv), 6)
@@ -245,7 +352,9 @@ def main() -> int:
             "meses_min": MESES_MIN, "anos_min": ANOS_MIN,
             "anos_ranking": ANOS_RANKING,
             "ano_corte": ANO_CORTE, "alfa": ALFA,
-            "fonte": "ANA, séries históricas convencionais (1901-2023)",
+            "fonte": ("ANA — arquivo de estações convencionais (1901 a 2023-09) fundido "
+                      "com o serviço SOAP HidroSerieHistorica (até 2026-05)"),
+            "grao": "mensal",
         },
         "resumo": {
             "elegiveis": len(resultados),

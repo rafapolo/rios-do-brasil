@@ -28,16 +28,29 @@ ela vem pronta na topologia da base da ANA.
 
 O mapa mostra a vazão **média**. Média não tem direção — uma estação estável e outra em queda
 contínua há quarenta anos aparecem iguais se a média bater. `series.html` responde o que falta,
-sobre a série histórica inteira da ANA: **3.954 estações, 1901 a 2023, 68 mil anos de medição**.
+sobre a série histórica inteira da ANA: **4.218 estações, 1901 a 2026, 78.865 anos de medição**.
 
-- **404 estações** com tendência comprovada — 303 em queda e 101 em alta — por Mann-Kendall
+- **446 estações** com tendência comprovada — 359 em queda e 87 em alta — por Mann-Kendall
   com inclinação de Theil-Sen, em % da própria vazão média por década
 - **530 mil dias de rio seco** registrados em 609 estações, um sinal que só existe na série
   diária: a média mensal de um rio que secou vinte dias e voltou é baixa, não é zero
 - **Q7,10**, a vazão que rege a outorga de água no país, comparada entre 1961–1990 e 1994–2023:
   500 das 785 estações comparáveis entregam hoje menos no seu pior momento
 - O **deslocamento do mês de cheia** entre as mesmas janelas, por média circular
-- E a barra de erro de tudo isso: a ANA consistiu 1.931 estações em 2014 e **uma** em 2022
+- E a barra de erro de tudo isso: a ANA consistiu 2.026 estações em 2014 e **nenhuma** em 2025
+
+**É seca ou é consumo?** Cruzando a tendência de cada rio com a tendência da chuva que cai sobre
+ele — 69,8 milhões de leituras diárias de 5.389 pluviômetros — **196 dos 358 rios em queda
+perdem água sem que a chuva tenha caído**: 167 com chuva estável e 29 com chuva subindo. Só 162
+têm queda de chuva junto. A correlação entre as duas tendências é de apenas +0,32. O Jaguari, do
+sistema Cantareira, perde 29,6% por década com a chuva parada em −0,1%; o Apodí-Mossoró perde
+30,2% com a chuva **subindo** 8,5%.
+
+**Duas janelas, de propósito.** A série mensal funde o arquivo histórico (1901 a agosto de 2023)
+com o serviço SOAP da ANA e chega a maio de 2026 — é ela que sustenta as tendências, o calendário
+da cheia e o tamanho da rede. A série **diária** existe só no arquivo e para em 2023, porque o
+serviço devolve apenas agregado mensal; por isso os painéis de rio seco e de Q7,10 terminam
+antes. Nada foi extrapolado para cobrir a diferença.
 
 Quedas e altas não são o mesmo fenômeno em espelho. As quedas se concentram no semiárido e no
 Sudeste sob estresse hídrico; as altas aparecem no arco de desmatamento do Maranhão, onde menos
@@ -54,7 +67,7 @@ UHE Itá, com +70% por década, que é o enchimento do reservatório.
 |---|---|
 | Rede de drenagem, área de drenagem, topologia | [Base Hidrográfica Ottocodificada 2017 (1:5.000)](https://dadosabertos.ana.gov.br), ANA |
 | Vazões medidas (mapa) | Séries históricas das estações fluviométricas da ANA, 1995–2025 |
-| Séries históricas (`series.html`) | [`anagovbr/hidro-dados-estacoes-convencionais`](https://github.com/anagovbr/hidro-dados-estacoes-convencionais), retrato de 04/08/2023, 1901–2023 |
+| Séries históricas (`series.html`) | [`anagovbr/hidro-dados-estacoes-convencionais`](https://github.com/anagovbr/hidro-dados-estacoes-convencionais) (1901–2023) fundido com o SOAP `HidroSerieHistorica` (até 2026-05) |
 | Reservatórios | Sistema de Acompanhamento de Reservatórios (SAR), ANA |
 | Contorno dos estados | `br_geobr_mapas` / IBGE |
 | Terra e fronteiras | [Natural Earth](https://www.naturalearthdata.com) 1:50m |
