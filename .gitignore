@@ -7,6 +7,7 @@ rede_vazao.json
 reservatorios.json
 etes.json
 tendencia.json
+tendencia_mapa.json
 paineis.json
 *.json.gz
 __pycache__/

@@ -155,6 +155,18 @@
     display: flex; flex-direction: column; gap: 10px;
     pointer-events: none;
   }
+  /* A coluna da direita. Os dois cartões continuam dentro do #hud no DOM — no
+     celular o embrulho vira `display: contents` e eles voltam a ser filhos-flex
+     da gaveta, coisa que nenhum CSS faria se estivessem fora dela.
+     O "Sobre os dados" agora fecha esta coluna em vez de flutuar acima dela, e
+     por isso o topo voltou à margem de 16 px. */
+  .hud-dir {
+    position: fixed; top: 16px; right: 16px; z-index: 3;
+    width: 300px; max-width: calc(100vw - 32px);
+    max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain;
+    display: flex; flex-direction: column; gap: 10px;
+    pointer-events: none;
+  }
   .cartao {
     /* itens de coluna flex encolhem por padrão: sem isto o cartão da ficha era
        espremido e o gráfico de regime vazava por baixo da borda */
@@ -191,8 +203,14 @@
   }
 
   /* ---------- ficha ---------- */
-  .ficha { min-height: 132px; }
-  .ficha.vazia { color: var(--ink-3); font-size: 0.82rem; display: flex; align-items: center; text-align: center; }
+  /* A ficha vazia centra de verdade: `justify-content` faltava, e sem ele o
+     `align-items` sozinho só fazia efeito porque havia um `min-height` para
+     sobrar espaço. Com os dois eixos centrados o cartão passa a abraçar o
+     texto, e a altura mínima deixa de ter função. */
+  .ficha.vazia {
+    color: var(--ink-3); font-size: 0.82rem; text-align: center;
+    display: flex; align-items: center; justify-content: center;
+  }
   .ficha .nome {
     font-size: 0.97rem; font-weight: 620; line-height: 1.25; margin-bottom: 6px;
     text-wrap: balance;
@@ -254,8 +272,17 @@
   .modos { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; }
   .modos .modo {
     justify-content: center; text-align: center; padding: 8px 4px;
-    min-height: 34px; font-size: 0.6rem;
+    min-height: 34px; font-size: 0.6rem; gap: 5px;
   }
+  /* O traço mora no <svg>, não em cada <path>: assim um path que precise de
+     outra espessura (as três ondas da vazão) só declara o atributo dele, que
+     vence a herança. */
+  .modo svg {
+    width: 14px; height: 14px; flex: none;
+    fill: none; stroke: currentColor; stroke-width: 1.4;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+  .modo svg .cheio { fill: currentColor; stroke: none; }
   .modos .modo[aria-pressed="true"] {
     border-color: var(--ink); color: var(--ink); background: var(--rule);
   }
@@ -324,8 +351,10 @@
     .switch, .switch::after { transition: none; }
   }
 
+  /* Rodapé direito, acima do "Tabela e método" (16 + 40 + 12): o topo da direita
+     agora é do "Sobre os dados" e da coluna de cartões. */
   .zoom {
-    position: fixed; right: 16px; top: 16px; z-index: 3;
+    position: fixed; right: 16px; top: auto; bottom: 68px; z-index: 3;
     display: flex; flex-direction: column; gap: 6px;
   }
   .zoom button, .abrir {
@@ -341,10 +370,11 @@
 
   /* ---------- gaveta com tabela e método ---------- */
   /* ---------- painel "Sobre" ---------- */
-  .sobre {
-    position: fixed; top: 16px; right: 68px; z-index: 3;
-    width: 268px; max-width: calc(100vw - 100px);
-  }
+  /* Já não flutua: é o último item da coluna da direita. Sem `pointer-events`
+     próprio ele ficaria morto, porque quem reativa o clique dentro do
+     `.hud-dir` é a regra do `.cartao`, e este bloco não é um cartão. O `flex:
+     none` impede que a coluna o esprema quando o corpo abre. */
+  .sobre { flex: none; pointer-events: auto; }
   .sobre-topo {
     width: 100%; justify-content: space-between;
     background: var(--realce), var(--vidro);
@@ -439,13 +469,27 @@
   @media (max-width: 760px) {
     .hud {
       top: auto; left: 0; right: 0; bottom: 0; width: auto; max-width: none;
-      max-height: 70dvh; padding: 0 10px 10px; gap: 8px;
+      max-height: 78dvh; padding: 0 10px 10px; gap: 8px;
       transition: transform .24s ease;
     }
     @media (prefers-reduced-motion: reduce) { .hud { transition: none; } }
     .hud.recolhido { transform: translateY(calc(100% - 56px)); }
     .cartao { border-radius: 6px; padding: 13px 15px; }
+    /* A coluna da direita se desfaz: os cartões voltam a ser filhos-flex da
+       gaveta, e o `order` recoloca "O que ver" logo antes do título (order 9). */
+    .hud-dir { display: contents; }
+    #cartaoModo { order: 8; }
+    /* No desktop a ficha desceu para o fim do #hud, mas no celular ela é o que
+       responde ao toque no rio: sem estes dois `order` negativos ela cairia no
+       fim da gaveta e o leitor tocaria num rio sem ver resposta. O puxador vem
+       antes de tudo porque é ele que reabre a gaveta. */
+    .puxador { order: -2; }
+    #ficha { order: -1; }
+    /* O puxador é o primeiro filho de um container que rola. Sem `sticky` ele
+       some ao rolar — e a faixa de 56 px do estado recolhido passava a mostrar o
+       meio de um cartão, em vez do botão que reabre a gaveta. */
     .puxador {
+      position: sticky; top: 0; z-index: 2;
       display: flex; align-items: center; justify-content: space-between; gap: 10px;
       width: 100%; pointer-events: auto; text-transform: none; font-size: 0.75rem;
       background: var(--realce), var(--vidro);
@@ -459,13 +503,17 @@
     h1 { font-size: 1.28rem; }
     .zoom { top: auto; bottom: 76px; right: 12px; }
     .abrir { bottom: auto; top: 12px; right: 12px; }
-    .sobre { top: 62px; right: 12px; width: calc(100vw - 24px); max-width: 300px; }
     .gaveta { width: 100vw; padding: 18px 18px 40px; }
     .vazio { top: 32%; }
     /* O `button` sozinho não alcançava nada: `.chave` e `.modos .modo` fixam
        34 px cada um, e por especificidade venciam a regra de celular — os dez
        alvos do painel ficavam abaixo do mínimo que esta linha diz garantir. */
     button, button.chave, .modos .modo, .abrir { min-height: 44px; }
+    /* E o mesmo mínimo no que não é <button>: o link da série dava 13 px de
+       alvo, e o cursor da faixa, 22. A altura maior do range é só área de
+       toque — o traço e o cursor continuam desenhados no meio. */
+    .ir-series a { display: inline-flex; align-items: center; min-height: 44px; }
+    .faixa input[type="range"] { height: 44px; }
   }
 </style>
 
@@ -486,13 +534,6 @@
 
 <button class="abrir" id="btSobre">Tabela e método</button>
 
-<div class="sobre" id="sobre">
-  <button class="sobre-topo" id="btSobreNums" aria-expanded="false">
-    <span>Sobre os dados</span><span class="estado" id="sobreSeta">▾</span>
-  </button>
-  <div class="sobre-corpo" id="sobreCorpo"></div>
-</div>
-
 <div class="hud" id="hud">
   <button class="puxador" id="puxador" aria-expanded="true" aria-controls="hud">
     <span id="puxadorRotulo">Os rios do Brasil, por vazão</span>
@@ -506,17 +547,65 @@
     <p class="ir-series"><a href="series.html">Estes rios estão secando? →</a></p>
   </div>
 
-  <div class="cartao ficha vazia" id="ficha">
-    Toque num rio para ver a vazão.
-  </div>
+  <!-- No desktop estes dois viram a coluna da direita; no celular o embrulho é
+       `display: contents` e eles voltam a ser cartões da gaveta. -->
+  <div class="hud-dir" id="hudDir">
+    <div class="cartao" id="cartaoModo">
+      <h2>O que ver</h2>
+      <div class="modos" role="group" aria-label="O que a cor mostra">
+        <!-- Cada ícone diz o que a cor passa a medir. A vazão são três ondas que
+             engrossam, que é a mesma gramática do mapa: linha mais grossa, rio
+             maior. As outras três nomeiam a origem do número — cano, chaminé,
+             torneira. -->
+        <button class="modo" data-modo="vazao" aria-pressed="true">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M1.5 5.2q1.75-1.7 3.5 0t3.5 0t3.5 0" stroke-width="1"/>
+            <path d="M1.5 8.6q1.75-1.7 3.5 0t3.5 0t3.5 0" stroke-width="1.7"/>
+            <path d="M1.5 12q1.75-1.7 3.5 0t3.5 0t3.5 0" stroke-width="2.4"/>
+          </svg><span>Vazão</span>
+        </button>
+        <button class="modo" data-modo="esgoto" aria-pressed="false">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M2.4 2.4v3a2.4 2.4 0 0 0 2.4 2.4h2.6"/>
+            <circle class="cheio" cx="8.8" cy="10.3" r="1.05"/>
+            <path d="M1.5 13.6q3.2-1.6 6.5 0t6.5 0"/>
+          </svg><span>Esgoto</span>
+        </button>
+        <button class="modo" data-modo="industria" aria-pressed="false">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M1.8 14.2V7.6l4.4 2.9V7.6l4.4 2.9V4h3.6v10.2z"/>
+          </svg><span>Indústria</span>
+        </button>
+        <button class="modo" data-modo="outorga" aria-pressed="false">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M1.6 5.4h8.4v3.4"/>
+            <path d="M6 5.4V3.4M4.6 3.4h2.8"/>
+            <path class="cheio" d="M10 10.4c1 1.2 1.5 1.9 1.5 2.5a1.5 1.5 0 0 1-3 0c0-.6.5-1.3 1.5-2.5z"/>
+          </svg><span>Outorga</span>
+        </button>
+      </div>
+      <p class="nota" id="notaModo"></p>
+    </div>
 
-  <div class="cartao">
-    <h2>Detalhe da rede</h2>
-    <label class="faixa">
-      <input type="range" id="rgOrdem" min="0" max="6" step="1" value="0"
-             aria-label="Vazão mínima dos rios desenhados">
-      <span class="faixa-texto" id="rgTexto"></span>
-    </label>
+    <div class="cartao" id="cartaoRede">
+      <h2>Detalhe da rede</h2>
+      <label class="faixa">
+        <input type="range" id="rgOrdem" min="0" max="6" step="1" value="0"
+               aria-label="Vazão mínima dos rios desenhados">
+        <span class="faixa-texto" id="rgTexto"></span>
+      </label>
+    </div>
+
+    <!-- "Sobre os dados" fecha a coluna da direita em vez de flutuar sozinho no
+         canto: é leitura de apoio, e no topo competia com o cartão de modo pela
+         primeira olhada. No celular a coluna vira `display: contents` e ele
+         entra na gaveta como mais um cartão. -->
+    <div class="sobre" id="sobre">
+      <button class="sobre-topo" id="btSobreNums" aria-expanded="false">
+        <span>Sobre os dados</span><span class="estado" id="sobreSeta">▾</span>
+      </button>
+      <div class="sobre-corpo" id="sobreCorpo"></div>
+    </div>
   </div>
 
   <div class="cartao">
@@ -525,6 +614,11 @@
       <button id="btEst" class="chave" aria-pressed="false">
         <span class="icone est">●</span>
         <span class="rotulo">Estações <b id="nEst"></b></span>
+        <span class="switch"></span>
+      </button>
+      <button id="btSeca" class="chave" aria-pressed="false">
+        <span class="icone est">↓</span>
+        <span class="rotulo">Só as que secam <b id="nSeca"></b></span>
         <span class="switch"></span>
       </button>
       <button id="btRes" class="chave" aria-pressed="false">
@@ -543,6 +637,7 @@
         <span class="switch"></span>
       </button>
     </div>
+    <p class="nota" id="notaSeca"></p>
   </div>
 
   <div class="cartao">
@@ -550,15 +645,8 @@
     <div class="classes" id="classes"></div>
   </div>
 
-  <div class="cartao">
-    <h2>O que ver</h2>
-    <div class="modos" role="group" aria-label="O que a cor mostra">
-      <button class="modo" data-modo="vazao" aria-pressed="true">Vazão</button>
-      <button class="modo" data-modo="esgoto" aria-pressed="false">Esgoto</button>
-      <button class="modo" data-modo="industria" aria-pressed="false">Indústria</button>
-      <button class="modo" data-modo="outorga" aria-pressed="false">Outorga</button>
-    </div>
-    <p class="nota" id="notaModo"></p>
+  <div class="cartao ficha vazia" id="ficha">
+    Toque num rio para ver a vazão.
   </div>
 </div>
 
@@ -633,6 +721,7 @@
 <script id="dados" type="text/plain">/*__DADOS__*/</script>
 <script id="usinas" type="text/plain">/*__RESERV__*/</script>
 <script id="etes" type="text/plain">/*__ETES__*/</script>
+<script id="tendencia" type="text/plain">/*__TENDMAPA__*/</script>
 <script>
 (async function () {
   /* Os dados vão embutidos em gzip+base64 e são descomprimidos aqui. O ganho é
@@ -663,8 +752,14 @@
     if (!t || t.startsWith('/*')) return [];
     try { return await carrega(id); } catch { return []; }
   };
-  const [D, RES, ETES] = await Promise.all([
-    carrega('dados'), carrega('usinas'), opcional('etes')]);
+  const [D, RES, ETES, TENDBRUTA] = await Promise.all([
+    carrega('dados'), carrega('usinas'), opcional('etes'), opcional('tendencia')]);
+  /* A tendência por estação, do mesmo cálculo que alimenta o series.html:
+     Theil-Sen em % da média da própria estação, por década. Camada opcional
+     como as ETEs — quem não rodou o tendencia_mapa.py fica sem a linha na ficha
+     e sem o filtro, em vez de ver a página cair no atob. */
+  const TEND = TENDBRUTA.estacoes || {};
+  const TEND_LIM = TENDBRUTA.limite ?? -25;
   const ESC = D.esc;
   const N = D.n;
 
@@ -713,7 +808,6 @@
   const terra = ((D.terra && D.terra.terra) || []).map(g => paraMundoArr(g, (D.terra || {}).esc || ESC));
   const divisas = ((D.terra && D.terra.divisas) || []).map(g => paraMundoArr(g, (D.terra || {}).esc || ESC));
 
-  const strahler = Uint8Array.from(D.strahler, c => +c);
   const areas = Int32Array.from(varints(D.area, 0, D.area.length));
   const comps = D.comp ? Int32Array.from(varints(D.comp, 0, D.comp.length)) : null;
   // trechos do mesmo rio: o realce acende o curso inteiro, não um pedaço
@@ -919,6 +1013,13 @@
      e as ETEs outros 3,6 mil — quem abre o mapa veio ver o rio. Os pontos
      entram por escolha, e o cartão Camadas já traz a contagem de cada um. */
   let mostrarEst = false, mostrarRes = false;
+  /* O corte do filtro: queda de TEND_LIM% ou mais por década, significativa e
+     fora de barragem — os dois mesmos testes que o ranking do series.html faz
+     antes de chamar uma estação de rio secando. */
+  let soSeca = false;
+  const secaForte = c => { const t = TEND[c]; return !!t && t[0] <= TEND_LIM && t[1] && !t[2]; };
+  const SECANDO = D.estacoes.filter(e => secaForte(e.cod));
+  let EST_VIS = D.estacoes;
   let mostrarEtes = false;
   // O filtro é por vazão, não por ordem de Strahler: a BHO não mapeia as
   // cabeceiras fora do Brasil, então rios grandes de país vizinho ficam com
@@ -1106,6 +1207,7 @@
 
   const contadores = () => {
     document.getElementById('nEst').textContent = '(' + D.estacoes.length + ')';
+    document.getElementById('nSeca').textContent = '(' + SECANDO.length + ')';
     document.getElementById('nRes').textContent = '(' + RES.length + ')';
     document.getElementById('nEtes').textContent = '(' + ETES.length + ')';
     // conta com o mesmo corte da camada de fluxo, sobre o que está de fato à vista
@@ -1306,7 +1408,7 @@
       const r = Math.min(4.2, 1.6 + 0.8 * z);
       octx.fillStyle = COR_ACC; octx.strokeStyle = COR_LEITO; octx.lineWidth = 1;
       octx.globalAlpha = 0.82;
-      for (const e of D.estacoes) {
+      for (const e of EST_VIS) {
         const [sx, sy] = paraTela(projX(e.lon), merc(e.lat));
         if (sx < -8 || sy < -8 || sx > W + 8 || sy > H + 8) continue;
         octx.beginPath(); octx.arc(sx, sy, r, 0, 6.2832); octx.fill(); octx.stroke();
@@ -1407,7 +1509,7 @@
       const r = Math.min(3.6, 1.15 + 0.62 * z);
       ctx.fillStyle = COR_ACC; ctx.strokeStyle = COR_LEITO; ctx.lineWidth = 1;
       ctx.globalAlpha = 0.72;
-      for (const e of D.estacoes) {
+      for (const e of EST_VIS) {
         const [sx, sy] = paraTela(projX(e.lon), merc(e.lat));
         if (sx < -8 || sy < -8 || sx > W + 8 || sy > H + 8) continue;
         ctx.beginPath(); ctx.arc(sx, sy, r, 0, 6.2832); ctx.fill(); ctx.stroke();
@@ -1536,8 +1638,9 @@
       (comps && grupo.length > 1
         ? linha('Extensão do rio', fmt(comp / 10, 1) + ' km em ' + grupo.length + ' trechos')
         : comps ? linha('Comprimento', fmt(comps[i] / 10, 1) + ' km') : '') +
-      linha('Ordem de Strahler', strahler[i]) +
-      linha('Estações no rio', String(postos)) +
+      /* Zero estação não é informação sobre o rio, é ausência de rede — e como
+         linha ela ocupava o mesmo peso visual de uma contagem de verdade. */
+      (postos ? linha('Estações no rio', String(postos)) : '') +
       (fora ? linha('Território', 'fora do Brasil') : '') +
       efluenteHTML(i) +
       outorgaHTML(i) +
@@ -1573,7 +1676,7 @@
     if (!fOut) return '';
     const o = fOut[i];
     if (o < OMIN) return '';
-    return linha('Outorgado rio acima', pct(o) + ' da vazão — ' + vazao(o * q[i])) +
+    return linha('Outorgado', pct(o) + ' da vazão — ' + vazao(o * q[i])) +
       (o >= 1 ? '<div class="selo">licença de retirada igual ou maior que a vazão média</div>' : '');
   }
 
@@ -1591,6 +1694,37 @@
       ' — ' + fmt(reg[cheio] / Math.max(reg[seco], 0.01), 1) + '× entre os extremos</div></div>';
   }
 
+  /* Quantas estações o corte pega e quantas ele deixa de fora, e por quê. Sem
+     isso o filtro parece afirmar que só uma dúzia de rios do país está secando,
+     quando o que ele mostra é onde a queda é grande, medida e não explicada por
+     uma barragem rio acima. */
+  const escreveNotaSeca = () => {
+    const el = document.getElementById('notaSeca');
+    if (!soSeca) { el.textContent = ''; return; }
+    const cai = D.estacoes.filter(e => TEND[e.cod] && TEND[e.cod][0] <= TEND_LIM);
+    const semSig = cai.filter(e => !TEND[e.cod][1]).length;
+    const obra = cai.filter(e => TEND[e.cod][2]).length;
+    el.textContent = SECANDO.length + ' de ' + fmt(Object.keys(TEND).length) +
+      ' estações com série longa caem ' + Math.abs(TEND_LIM) + '% ou mais por década. ' +
+      'Outras ' + (cai.length - SECANDO.length) + ' chegam ao corte e ficam fora: ' +
+      semSig + ' sem significância estatística, ' + obra +
+      ' em estação de barragem, onde o degrau é da obra e não do rio.';
+  };
+
+  /* A tendência de longo prazo da estação, no mesmo número que ranqueia o
+     series.html. A janela não é a da série inteira — a análise exige 10 meses
+     medidos em cada ano e dado até 2015 —, por isso ela vem escrita ao lado. */
+  function tendenciaHTML(cod) {
+    const t = TEND[cod];
+    if (!t) return '';
+    const [pct, sig, obra, anos, ini, fim] = t;
+    return linha('Tendência da vazão',
+                 (pct > 0 ? '+' : '−') + fmt(Math.abs(pct), 1) + '% por década') +
+      linha('Janela da tendência', ini + '–' + fim + ' · ' + anos + ' anos') +
+      (!sig ? '<div class="selo neutro">tendência sem significância estatística</div>' : '') +
+      (obra ? '<div class="selo neutro">estação de barragem: o degrau é da obra, não do rio</div>' : '');
+  }
+
   const OUTRAS_MEDIDAS = { T: 'telemetria', S: 'sedimentos', Q: 'qualidade da água' };
   function fichaEstacao(e) {
     const extras = (e.mede || '').split('').map(c => OUTRAS_MEDIDAS[c]).filter(Boolean);
@@ -1605,6 +1739,7 @@
       linha('Área de drenagem', fmt(e.area) + ' km²') +
       (e.alt != null ? linha('Altitude', fmt(e.alt) + ' m') : '') +
       linha('Série', e.ini + '–' + e.fim + ' · ' + e.n + ' meses') +
+      tendenciaHTML(e.cod) +
       (extras.length ? linha('Mede também', extras.join(', ')) : '') +
       regimeHTML(e.regime, 'Vazão média por mês') +
       '<div class="selo">estação ' + e.cod + (e.ativa ? ' · em operação' : ' · desativada') + '</div>';
@@ -1723,7 +1858,7 @@
   function alvo(sx, sy, tol) {
     if (mostrarRes) { const u = acharPonto(RES, sx, sy, tol); if (u) return { u }; }
     if (mostrarEtes) { const t = acharPonto(ETES, sx, sy, tol); if (t) return { t }; }
-    if (mostrarEst) { const e = acharPonto(D.estacoes, sx, sy, tol); if (e) return { e }; }
+    if (mostrarEst) { const e = acharPonto(EST_VIS, sx, sy, tol); if (e) return { e }; }
     const i = acharTrecho(sx, sy, tol);
     return i >= 0 ? { i } : null;
   }
@@ -1766,7 +1901,7 @@
              diz se o rio já chega aqui comprometido. Aparece em qualquer modo,
              não só no da outorga, porque a pergunta vale enquanto se lê a vazão. */
           (fOut && fOut[a.i] >= OMIN
-            ? '<div class="linha">Outorgado rio acima <em>' + pct(fOut[a.i]) + '</em></div>'
+            ? '<div class="linha">Outorgado <em>' + pct(fOut[a.i]) + '</em></div>'
             : '');
     mostrarTip(html, ev);
   }
@@ -1817,6 +1952,16 @@
     mostrarEst = v;
     if (!v && estRealce) { fixado = false; aplicar(null); }
     if (fichaEl.classList.contains('vazia')) fichaVazia();
+    repintarFundo();
+  });
+  /* O filtro não é camada nova: é a de estações com menos pontos. Ligá-lo com a
+     camada apagada não desenharia nada, então ele acende as estações junto. */
+  alterna('btSeca', () => soSeca, v => {
+    soSeca = v;
+    EST_VIS = v ? SECANDO : D.estacoes;
+    if (v && !mostrarEst) defineCamada('btEst', true);
+    if (estRealce && !EST_VIS.includes(estRealce)) { fixado = false; aplicar(null); }
+    escreveNotaSeca();
     repintarFundo();
   });
   alterna('btRes', () => mostrarRes, v => {
@@ -1910,6 +2055,8 @@
   // idem para as ETEs: interruptor que não acende nada é pior que interruptor
   // nenhum, porque o leitor conclui que não existe ETE no Brasil
   if (!ETES.length) document.getElementById('btEtes').remove();
+  // idem para o filtro: sem o tendencia_mapa.json não há tendência que filtrar
+  if (!SECANDO.length) document.getElementById('btSeca').remove();
 
   const gaveta = document.getElementById('gaveta');
   const veu = document.getElementById('veu');
@@ -1927,13 +2074,31 @@
   const hud = document.getElementById('hud');
   const puxador = document.getElementById('puxador');
   const seta = document.getElementById('puxadorSeta');
+  /* Recolhido, os cartões saem da tela mas seguiam focáveis: dez controles que o
+     teclado alcançava e o leitor de tela anunciava sem que nada estivesse à
+     vista, e sem jeito de rolar até eles — quem rola é a gaveta fechada. `inert`
+     tira os três de uma vez (foco, toque e árvore de acessibilidade), e o
+     puxador, que é irmão dos cartões e não filho, continua alcançável.
+     Só no celular: a classe .recolhido sobrevive a um giro para o desktop, onde
+     a media query já não esconde nada. */
+  const inertarCartoes = () => {
+    const escondido = hud.classList.contains('recolhido') &&
+      window.matchMedia('(max-width: 760px)').matches;
+    for (const c of hud.querySelectorAll('.cartao')) c.inert = escondido;
+  };
   const marcarHud = () => {
     const recolhido = hud.classList.contains('recolhido');
     puxador.setAttribute('aria-expanded', String(!recolhido));
     seta.textContent = recolhido ? '▴' : '▾';
+    inertarCartoes();
+    // a gaveta rola: reabrir no ponto onde o leitor parou esconde a ficha, que é
+    // justamente o que ele foi ver ao tocar num rio
+    hud.scrollTop = 0;
   };
   const abrirHud = () => { hud.classList.remove('recolhido'); marcarHud(); };
   puxador.addEventListener('click', () => { hud.classList.toggle('recolhido'); marcarHud(); });
+  // girar o aparelho troca o lado da media query, e o inert tem que ir junto
+  window.addEventListener('resize', inertarCartoes);
   if (window.matchMedia('(max-width: 760px)').matches) {
     hud.classList.add('recolhido');
     marcarHud();

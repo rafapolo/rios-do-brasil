@@ -54,9 +54,9 @@ describe("legenda em classes", () => {
     const tons = await amostras(pg);
     expect(tons).toHaveLength(7);
     expect(new Set(tons).size).toBe(7);
-    /* Os cortes são os da própria cor(). Uma lista de seis pararia em "acima de
-       500" e deixaria sem entrada os dois azuis mais escuros, que é onde estão
-       Amazonas, Solimões, Madeira e Negro. */
+    /* Os cortes são os da própria cor(). Seis faixas parariam em "acima de
+       500" e deixariam sem entrada os dois azuis mais escuros, que é onde
+       estão Amazonas, Solimões, Madeira e Negro. */
     const rot = await pg.$$eval("#classes .classe", (e) => e.map((c) => c.textContent));
     expect(rot).toEqual(["até 1,4", "1,4 – 11", "11 – 87", "87 – 690",
                          "690 – 5.400", "5.400 – 43.000", "acima de 43.000"]);
@@ -279,8 +279,8 @@ describe("ficha", () => {
       return { alto: ler(alto), medio: ler(medio) };
     }`) as any;
     expect(f.alto.selos.join(" ")).toContain("licença de retirada igual ou maior que a vazão média");
-    expect(f.alto.txt).toContain("Outorgado rio acima");
-    expect(f.medio.txt).toContain("Outorgado rio acima");
+    expect(f.alto.txt).toContain("Outorgado");
+    expect(f.medio.txt).toContain("Outorgado");
     expect(f.medio.selos.join(" ")).not.toContain("igual ou maior");
   });
 });
@@ -303,7 +303,7 @@ describe("tooltip", () => {
     }
     expect(tips.length, "nenhum tooltip em 96 passagens do cursor").toBeGreaterThan(5);
     for (const t of tips) expect(t).toMatch(/m³\/s|L\/s/);
-    expect(tips.some((t) => t.includes("Outorgado rio acima")),
+    expect(tips.some((t) => t.includes("Outorgado")),
       "nenhum tooltip trouxe a outorga").toBe(true);
   }, LENTO);
 });
@@ -413,6 +413,63 @@ describe("controles", () => {
   });
 });
 
+describe("tendência da vazão", () => {
+  test("a ficha da estação traz o %/década e a janela do cálculo", async () => {
+    const r = await roda<any>(sonda, `() => {
+      const t = window.__testes, ficha = document.getElementById('ficha');
+      const txt = e => { t.fichaEstacao(e); return ficha.textContent.replace(/\\s+/g, ' '); };
+      const pior = t.SECANDO.slice().sort((a, b) => t.TEND[a.cod][0] - t.TEND[b.cod][0])[0];
+      return { comTend: Object.keys(t.TEND).length, pior: txt(pior),
+               semSig: txt(t.D.estacoes.find(e => t.TEND[e.cod] && !t.TEND[e.cod][1])),
+               obra: txt(t.D.estacoes.find(e => t.TEND[e.cod] && t.TEND[e.cod][2])),
+               semTend: txt(t.D.estacoes.find(e => !t.TEND[e.cod])) };
+    }`);
+    expect(r.comTend).toBeGreaterThan(1000);
+    // menos tipográfico, uma casa decimal, e a janela do cálculo ao lado — que
+    // não é a da série da estação: a análise exige 10 meses medidos por ano
+    expect(r.pior).toMatch(/Tendência da vazão−\d+,\d% por década/);
+    expect(r.pior).toMatch(/Janela da tendência\d{4}–\d{4} · \d+ anos/);
+    expect(r.semSig).toContain("tendência sem significância estatística");
+    expect(r.obra).toContain("estação de barragem");
+    // sem tendência calculada a ficha não inventa linha nenhuma
+    expect(r.semTend).not.toContain("Tendência da vazão");
+  });
+
+  test("o filtro guarda só as que caem 25% ou mais, medidas e fora de obra", async () => {
+    const r = await roda<any>(sonda, `() => {
+      const t = window.__testes;
+      return { total: t.D.estacoes.length, secando: t.SECANDO.length,
+               abaixoDoCorte: t.SECANDO.every(e => t.TEND[e.cod][0] <= -25),
+               semRessalva: t.SECANDO.every(e => t.TEND[e.cod][1] && !t.TEND[e.cod][2]) };
+    }`);
+    expect(r.secando).toBeGreaterThan(0);
+    expect(r.secando).toBeLessThan(r.total / 10);
+    expect(r.abaixoDoCorte, "entrou estação acima do corte").toBe(true);
+    expect(r.semRessalva, "entrou estação sem significância ou de barragem").toBe(true);
+  });
+
+  test("ligar o filtro acende a camada de estações e explica o corte", async () => {
+    await reinicia(pg);
+    expect(await pg.getAttribute("#btEst", "aria-pressed")).toBe("false");
+    await pg.click("#btSeca");
+    await pg.waitForTimeout(600);
+    expect(await pg.getAttribute("#btSeca", "aria-pressed")).toBe("true");
+    // sem isto o filtro ligaria sobre uma camada apagada e não desenharia nada
+    expect(await pg.getAttribute("#btEst", "aria-pressed"),
+           "o filtro ligou sem acender as estações").toBe("true");
+
+    const nota = (await pg.textContent("#notaSeca")) ?? "";
+    expect(nota).toContain("25% ou mais por década");
+    expect(nota, "a nota não diz quantas ficaram fora, nem por quê")
+      .toMatch(/sem significância estatística/);
+    expect(nota).toMatch(/em estação de barragem/);
+
+    await pg.click("#btSeca");
+    await pg.waitForTimeout(400);
+    expect(await pg.textContent("#notaSeca")).toBe("");
+  });
+});
+
 describe("tema e layout", () => {
   test("o tema escuro troca as cores do traço", async () => {
     const claro = await abrir(urlDe(INDEX), { ctx: { colorScheme: "light" } });
@@ -433,9 +490,50 @@ describe("tema e layout", () => {
 
   test("os painéis do hud saem na ordem esperada", async () => {
     await reinicia(pg);
-    const ordem = await pg.$$eval("#hud > div",
+    // .cartao, não `#hud > div`: dois deles moram dentro do embrulho .hud-dir
+    const ordem = await pg.$$eval("#hud .cartao",
       (e) => e.map((d) => d.querySelector("h1,h2")?.textContent ?? d.id));
-    expect(ordem).toEqual(["Os rios do Brasil, por vazão", "ficha", "Detalhe da rede",
-                           "Camadas", "Vazão média (m³/s)", "O que ver"]);
+    expect(ordem).toEqual(["Os rios do Brasil, por vazão", "O que ver", "Detalhe da rede",
+                           "Camadas", "Vazão média (m³/s)", "ficha"]);
+  });
+
+  test("no desktop 'O que ver' e 'Detalhe da rede' formam a coluna da direita", async () => {
+    await reinicia(pg);
+    const r = await roda<any>(pg, `() => {
+      const d = document.getElementById('hudDir').getBoundingClientRect();
+      const h = document.getElementById('hud').getBoundingClientRect();
+      const sobre = document.getElementById('sobre');
+      const dentro = [...document.querySelectorAll('#hudDir .cartao')]
+        .map(c => c.querySelector('h2').textContent);
+      return {
+        posicao: getComputedStyle(document.getElementById('hudDir')).position,
+        dentro, esquerda: d.left, direita: d.right, larguraJanela: window.innerWidth,
+        hudDireita: h.right,
+        // o "Sobre os dados" mora na própria coluna, não solto sobre o mapa
+        sobreNaColuna: document.getElementById('hudDir').contains(sobre),
+        sobreFixo: getComputedStyle(sobre).position,
+      };
+    }`);
+    expect(r.posicao).toBe("fixed");
+    expect(r.dentro).toEqual(["O que ver", "Detalhe da rede"]);
+    expect(r.esquerda, "a coluna nova encosta na coluna esquerda").toBeGreaterThan(r.hudDireita);
+    expect(r.direita).toBeLessThanOrEqual(r.larguraJanela);
+    expect(r.sobreNaColuna, "o 'Sobre os dados' saiu da coluna").toBe(true);
+    expect(r.sobreFixo, "o 'Sobre os dados' voltou a flutuar e cobre os cartões")
+      .not.toBe("fixed");
+  });
+
+  test("no desktop o zoom desceu para o rodapé direito, sem colidir", async () => {
+    await reinicia(pg);
+    const r = await roda<any>(pg, `() => {
+      const z = document.querySelector('.zoom').getBoundingClientRect();
+      const a = document.querySelector('.abrir').getBoundingClientRect();
+      const d = document.getElementById('hudDir').getBoundingClientRect();
+      return { zTopo: z.top, zBase: z.bottom, aTopo: a.top, dBase: d.bottom,
+               altura: window.innerHeight };
+    }`);
+    expect(r.zTopo, "o zoom ainda está no topo").toBeGreaterThan(r.altura / 2);
+    expect(r.zBase, "o zoom cobre o 'Tabela e método'").toBeLessThanOrEqual(r.aTopo);
+    expect(r.dBase, "a coluna da direita esbarra no zoom").toBeLessThanOrEqual(r.zTopo);
   });
 });

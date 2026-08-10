@@ -26,6 +26,12 @@ if (S / "etes.json").exists():
     pagina = pagina.replace("/*__ETES__*/", embutir("etes.json"))
 else:
     print("  etes.json ausente — mapa sai sem a camada de tratamento")
+# Idem para a tendência: sem ela a ficha da estação perde a linha de %/década e
+# o filtro "só as que secam" some do painel de camadas.
+if (S / "tendencia_mapa.json").exists():
+    pagina = pagina.replace("/*__TENDMAPA__*/", embutir("tendencia_mapa.json"))
+else:
+    print("  tendencia_mapa.json ausente — mapa sai sem tendência por estação")
 pagina = pagina.replace("/*__DADOS__*/", embutir("rede_vazao.json"))
 out = S / "rios_brasil.html"
 out.write_text(pagina)

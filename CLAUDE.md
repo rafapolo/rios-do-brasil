@@ -62,9 +62,11 @@ python3 terra_fronteiras.py
 python3 processa.py               # regionaliza + valida, ~5 min
 python3 baixa_outorgas.py         # lançamento e captação do SNIRH, ~4 min
 python3 outorga.py                # camada de licença de retirada, ~12 min
+python3 tendencia_mapa.py         # %/década por estação, do tendencia.json (opcional)
 python3 monta_pagina.py
 
 # séries históricas (series.html) — só depende do lake
+# analisa_tendencia.py roda antes do tendencia_mapa.py: é ele que faz o tendencia.json
 python3 pipeline/analisa_tendencia.py
 python3 pipeline/prepara_paineis.py
 python3 pipeline/monta_series.py
@@ -156,6 +158,15 @@ Todos os JSON intermediários são gitignored. Os HTML gerados são versionados 
   isso precisa estar escrito na página.
 - **`NivelConsistencia`**: 2 (consistido) sempre vence 1 (bruto) no dedup por
   `(codigo, mês)`. Inverter isso muda ~28 mil meses em 273 estações.
+- **A janela da tendência não é a da série da estação.** `analisa_tendencia.py` só conta anos
+  com 10 meses medidos e exige 20 anos e dado até 2015, então a ficha do mapa mostra as duas
+  coisas: "Série 1995–2025 · 365 meses" ao lado de "Janela da tendência 1982–2023 · 42 anos".
+  Confundir as duas faz o número parecer mais recente do que é. Das 1.534 estações com
+  tendência, 1.273 estão no mapa — o resto não é desenhado —, e o filtro "só as que secam" fica
+  em 17: são as que caem 25% ou mais por década **e** passam nos dois testes que o ranking do
+  `series.html` aplica (significância a 5% com FDR, e nome que não denuncia barragem). Sem eles
+  seriam 35. Qualquer mudança nesse corte tem que mexer no `LIMITE` do `tendencia_mapa.py`, não
+  no template — a página lê o limite do próprio blob.
 - **A ordem de Strahler não vale fora do Brasil** na BHO, e o nome do trecho às vezes é de um
   afluente pequeno — por isso o filtro do mapa é por vazão, não por ordem.
 - **`MunicipioCodigo` da ANA não é IBGE**, e o inventário de 2023 marca descarga líquida como
