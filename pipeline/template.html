@@ -49,6 +49,15 @@
        sujo". Aqui quer dizer "rio já prometido", que é outra coisa. */
     --out-0: #f7dcec; --out-1: #f0b6d8; --out-2: #e88ac0; --out-3: #d95fa4;
     --out-4: #bf3a85; --out-5: #991f64; --out-6: #660d43;
+    /* Escala DIVERGENTE, a mesma do series.html (pipeline/template_series.html),
+       para as duas páginas dizerem a mesma coisa com a mesma cor. As rampas
+       acima são sequenciais porque vazão e efluente são magnitude; tendência
+       tem sinal e zero real, e sequencial mentiria sobre onde fica o zero. Os
+       polos reusam o vocabulário que já existe: laranja (--accent, as estações)
+       para o rio que seca, azul (a rampa d'água) para o que enche. */
+    --seca-3: #8c2d04; --seca-2: #d2560f; --seca-1: #f2a072;
+    --neutro: #d9dee0;
+    --enche-1: #9ec5f4; --enche-2: #256abf; --enche-3: #0d366b;
     --rede-fria: #ccd6da;
     --sem-dado: #9aa9af;
     /* Fundo dos painéis flutuantes. Precisa ser uma COR, não só o realce
@@ -86,6 +95,9 @@
       --pol-ind: #a894ee;
       --out-0: #4a1030; --out-1: #6d1a46; --out-2: #92255c; --out-3: #b83373;
       --out-4: #d94a91; --out-5: #f269ae; --out-6: #ff8cc6;
+      --seca-3: #ffb995; --seca-2: #f0824a; --seca-1: #b8501c;
+      --neutro: #3a464c;
+      --enche-1: #2c5f9e; --enche-2: #5f9ee8; --enche-3: #a9cdf7;
       --rede-fria: #2b363c;
       --sem-dado: #64757c;
       --vidro:  rgba(16, 22, 26, .90);
@@ -117,6 +129,9 @@
     --pol-ind: #a894ee;
     --out-0: #4a1030; --out-1: #6d1a46; --out-2: #92255c; --out-3: #b83373;
     --out-4: #d94a91; --out-5: #f269ae; --out-6: #ff8cc6;
+    --seca-3: #ffb995; --seca-2: #f0824a; --seca-1: #b8501c;
+    --neutro: #3a464c;
+    --enche-1: #2c5f9e; --enche-2: #5f9ee8; --enche-3: #a9cdf7;
     --rede-fria: #2b363c;
     --sem-dado: #64757c;
     --vidro:  rgba(16, 22, 26, .90);
@@ -266,6 +281,9 @@
     color: var(--ink-2); font-variant-numeric: tabular-nums;
   }
   .amostra { width: 26px; border-radius: 99px; flex: none; }
+  /* A tendência pinta ponto de estação, não traço de rio: a amostra é redonda
+     para a legenda ter a forma do que ela nomeia. */
+  .amostra.ponto { width: 11px; height: 11px; }
   .nota { font-size: 0.72rem; color: var(--ink-3); margin: 8px 0 0; line-height: 1.5; }
 
   /* ---------- seletor do que a cor mostra ---------- */
@@ -274,6 +292,9 @@
     justify-content: center; text-align: center; padding: 8px 4px;
     min-height: 34px; font-size: 0.6rem; gap: 5px;
   }
+  /* Quinto de um grid de duas colunas: sozinho na última linha ele ficaria
+     meia-largura e pareceria um botão pela metade. */
+  .modos .modo.largo { grid-column: 1 / -1; }
   /* O traço mora no <svg>, não em cada <path>: assim um path que precise de
      outra espessura (as três ondas da vazão) só declara o atributo dele, que
      vence a herança. */
@@ -289,6 +310,10 @@
 
   /* ---------- controle de detalhe ---------- */
   .faixa { display: flex; flex-direction: column; gap: 7px; }
+  /* `display` de autor vence o `[hidden] { display: none }` da folha do
+     navegador: sem esta linha a faixa da tendência aparecia em todos os modos,
+     com o atributo hidden posto e sem efeito nenhum. */
+  .faixa[hidden] { display: none; }
   .faixa input[type="range"] {
     width: 100%; accent-color: var(--accent); height: 22px; margin: 0; cursor: pointer;
   }
@@ -583,7 +608,24 @@
             <path class="cheio" d="M10 10.4c1 1.2 1.5 1.9 1.5 2.5a1.5 1.5 0 0 1-3 0c0-.6.5-1.3 1.5-2.5z"/>
           </svg><span>Outorga</span>
         </button>
+        <!-- As mesmas três ondas da vazão, afinando em vez de engrossar: o
+             ícone é o irmão invertido daquele, que é o que o modo faz com o
+             número. Atravessa as duas colunas por ser o quinto de um grid par. -->
+        <button class="modo largo" data-modo="tendencia" aria-pressed="false">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M1.5 4.2q1.6-1.6 3.2 0t3.2 0t3.2 0" stroke-width="2.4"/>
+            <path d="M1.5 8.4q1.6-1.6 3.2 0t3.2 0t3.2 0" stroke-width="1.4"/>
+            <path d="M1.5 12.6q1.6-1.6 3.2 0t3.2 0t3.2 0" stroke-width="0.7"/>
+          </svg><span>Tendência</span>
+        </button>
       </div>
+      <!-- A faixa mora aqui, e não no cartão da rede: aquele conta trechos
+           desenhados, este conta estações medidas. Só aparece no modo dela. -->
+      <label class="faixa" id="faixaTend" hidden>
+        <input type="range" id="rgTend" min="0" max="7" step="1" value="0"
+               aria-label="Queda mínima da vazão, em % por década">
+        <span class="faixa-texto" id="rgTendTexto"></span>
+      </label>
       <p class="nota" id="notaModo"></p>
     </div>
 
@@ -616,11 +658,6 @@
         <span class="rotulo">Estações <b id="nEst"></b></span>
         <span class="switch"></span>
       </button>
-      <button id="btSeca" class="chave" aria-pressed="false">
-        <span class="icone est">↓</span>
-        <span class="rotulo">Só as que secam <b id="nSeca"></b></span>
-        <span class="switch"></span>
-      </button>
       <button id="btRes" class="chave" aria-pressed="false">
         <span class="icone res">■</span>
         <span class="rotulo">Reservatórios <b id="nRes"></b></span>
@@ -637,7 +674,6 @@
         <span class="switch"></span>
       </button>
     </div>
-    <p class="nota" id="notaSeca"></p>
   </div>
 
   <div class="cartao">
@@ -976,12 +1012,18 @@
   const o01 = v => (Math.log10(Math.max(OMIN, Math.min(OMAX, v))) - O0) / (O1 - O0);
 
   const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-  let RAMPA = [], POL = [], OUT = [], COR_FLUXO = '', COR_UF = '', COR_ACC = '', COR_USINA = '', COR_ETE = '', COR_LEITO = '', COR_TERRA = '', COR_DIVISA = '';
+  let RAMPA = [], POL = [], OUT = [], TND = [], COR_FLUXO = '', COR_UF = '', COR_ACC = '', COR_USINA = '', COR_ETE = '', COR_LEITO = '', COR_TERRA = '', COR_DIVISA = '';
   let COR_FRIA = '', COR_IND = '', COR_SEM = '';
+  // A divergente não é uma família de sete tokens numerados como as outras: os
+  // dois lados têm nome próprio de propósito, para ninguém escrever --tend-5 e
+  // achar que está pedindo "mais intenso" quando está pedindo "outro sinal".
+  const TOKENS_TEND = ['--seca-3', '--seca-2', '--seca-1', '--neutro',
+                       '--enche-1', '--enche-2', '--enche-3'];
   const lerCores = () => {
     RAMPA = [0, 1, 2, 3, 4, 5, 6].map(i => css('--ramp-' + i));
     POL = [0, 1, 2, 3, 4, 5, 6].map(i => css('--pol-' + i));
     OUT = [0, 1, 2, 3, 4, 5, 6].map(i => css('--out-' + i));
+    TND = TOKENS_TEND.map(css);
     COR_FLUXO = css('--fluxo'); COR_UF = css('--uf-line'); COR_ACC = css('--accent');
     COR_USINA = css('--usina'); COR_LEITO = css('--leito'); COR_ETE = css('--ete');
     COR_TERRA = css('--terra'); COR_DIVISA = css('--divisa');
@@ -990,6 +1032,19 @@
   const cor = v => RAMPA[Math.max(0, Math.min(6, Math.round(t01(v) * 6)))];
   const corPol = v => POL[Math.max(0, Math.min(6, Math.round(p01(v) * 6)))];
   const corOut = v => OUT[Math.max(0, Math.min(6, Math.round(o01(v) * 6)))];
+  /* A tendência não passa por t01(): as outras três cores saem de uma
+     normalização contínua, esta cai em classes de corte fixo, porque o leitor
+     precisa poder dizer em que faixa um ponto está sem consultar a fórmula.
+
+     Todos os cortes são frações do TEND_LIM que veio no blob — mexer no LIMITE
+     do tendencia_mapa.py move a cor, a legenda e as paradas da faixa juntas, e
+     nada disso é reescrito aqui. Com o −25 de hoje dá ±5, ±15 e ±25 %/década, e
+     o ±25 fica sendo fronteira de classe, que é o mínimo para o número com que
+     o series.html e o README chamam um rio de secando não sumir do mapa. */
+  const escTend = f => Math.round(TEND_LIM * f * 10) / 10;
+  const CORTES_TEND = [escTend(1), escTend(0.6), escTend(0.2),
+                       -escTend(0.2), -escTend(0.6), -escTend(1)];
+  const corTend = p => { let i = 0; while (i < 6 && p >= CORTES_TEND[i]) i++; return TND[i]; };
   const largura = (v, z) => (0.35 + 3.4 * Math.pow(t01(v), 2.1)) * (1 + 0.5 * Math.log2(z));
 
   /* ---------- estado ---------- */
@@ -1013,12 +1068,23 @@
      e as ETEs outros 3,6 mil — quem abre o mapa veio ver o rio. Os pontos
      entram por escolha, e o cartão Camadas já traz a contagem de cada um. */
   let mostrarEst = false, mostrarRes = false;
-  /* O corte do filtro: queda de TEND_LIM% ou mais por década, significativa e
-     fora de barragem — os dois mesmos testes que o ranking do series.html faz
-     antes de chamar uma estação de rio secando. */
-  let soSeca = false;
-  const secaForte = c => { const t = TEND[c]; return !!t && t[0] <= TEND_LIM && t[1] && !t[2]; };
-  const SECANDO = D.estacoes.filter(e => secaForte(e.cod));
+  /* Modo tendência. Os dois testes que o ranking do series.html faz antes de
+     chamar uma estação de rio secando — significância a 5% com FDR, e fora de
+     barragem, onde o degrau é da obra e não do rio — são fixos e valem sempre
+     aqui: a faixa move só o corte em %/década. O preço é visível e está escrito
+     na nota do modo: das estações com tendência medida, só as aprovadas nos
+     dois testes chegam a ser desenhadas. */
+  const TEND_OK = D.estacoes.filter(e => { const t = TEND[e.cod]; return !!t && t[1] && !t[2]; });
+  const filtraTend = c => TEND_OK.filter(e => TEND[e.cod][0] <= c);
+  const TENDS = Object.values(TEND);
+  const N_TEND = TENDS.length;
+  const N_SEM_SIG = TENDS.filter(t => !t[1]).length;
+  const N_SIG_OBRA = TENDS.filter(t => t[1] && t[2]).length;
+  // Infinity é "sem corte", e não 0: com 0 as estações que estão ENCHENDO
+  // sumiriam logo na primeira parada, que é metade do que a divergente mostra.
+  const LIMIARES_TEND = [Infinity, escTend(0.2), escTend(0.4), escTend(0.6),
+                         escTend(0.8), escTend(1), escTend(1.2), escTend(1.6)];
+  let corteTend = LIMIARES_TEND[0];
   let EST_VIS = D.estacoes;
   let mostrarEtes = false;
   // O filtro é por vazão, não por ordem de Strahler: a BHO não mapeia as
@@ -1084,6 +1150,10 @@
      parava em "acima de 500" e deixava os dois azuis mais escuros sem entrada,
      que é onde estão Amazonas, Solimões, Madeira e Negro. A unidade mora no
      título do cartão, então os rótulos são só número. */
+  /* Morava na seção das fichas, mas não é coisa de ficha: a nota do modo e o
+     texto das faixas contam milhares, e `const` em TDZ não perdoa quem usa
+     antes. Fica aqui, acima de todo mundo que formata número. */
+  const fmt = (v, d = 0) => v.toLocaleString('pt-BR', { maximumFractionDigits: d });
   const CLASSES = ['até 1,4', '1,4 – 11', '11 – 87', '87 – 690',
                    '690 – 5.400', '5.400 – 43.000', 'acima de 43.000'];
   const vDeT = t => Math.pow(10, L0 + t * (L1 - L0));   // o inverso de t01()
@@ -1099,6 +1169,20 @@
     [0.015, '1 – 3%'], [0.035, '3 – 8%'], [0.08, '8 – 18%'],
     [0.18, '18 – 40%'], [0.45, '40 – 100%'], [1.0, 'licença ≥ o rio inteiro'],
   ];
+  /* A da tendência é a única com sinal, e por isso a única em que o rótulo diz
+     a direção antes do número. As duas últimas classes ficam quase vazias — 3 e
+     1 estações — e é assim mesmo: quase nenhum rio brasileiro com série longa
+     está enchendo. Apagá-las por estarem magras esconderia justamente isso. */
+  const pctTend = v => fmt(Math.abs(v), 1) + '%';
+  const CLASSES_TEND = (c => [
+    'cai mais de ' + pctTend(c[0]),
+    'cai ' + pctTend(c[1]) + ' – ' + pctTend(c[0]),
+    'cai ' + pctTend(c[2]) + ' – ' + pctTend(c[1]),
+    'estável (±' + pctTend(c[2]) + ')',
+    'sobe ' + pctTend(c[3]) + ' – ' + pctTend(c[4]),
+    'sobe ' + pctTend(c[4]) + ' – ' + pctTend(c[5]),
+    'sobe mais de ' + pctTend(c[5]),
+  ])(CORTES_TEND);
   function montaLegenda() {
     const el = document.getElementById('classes');
     tituloLegenda.textContent = TITULO_LEGENDA[modo] || TITULO_LEGENDA.vazao;
@@ -1112,6 +1196,15 @@
         return '<div class="classe"><span class="amostra" style="height:' + esp.toFixed(1) +
           'px;background:' + cor(ref) + '"></span>' + rot + '</div>';
       }).join('');
+      return;
+    }
+    if (modo === 'tendencia') {
+      // sai do mesmo corTend() que o canvas usa, pela mesma razão de sempre:
+      // legenda e mapa não têm como divergir se a cor vem de uma função só
+      el.innerHTML = CLASSES_TEND.map((rot, i) =>
+        '<div class="classe"><span class="amostra ponto" style="background:' +
+        corTend(i === 0 ? -99 : i === 6 ? 99 : (CORTES_TEND[i - 1] + CORTES_TEND[i]) / 2) +
+        '"></span>' + rot + '</div>').join('');
       return;
     }
     if (modo === 'outorga') {
@@ -1142,6 +1235,7 @@
     esgoto: 'Quanto do rio é esgoto',
     industria: 'Quanto do rio é efluente industrial',
     outorga: 'Vazão já licenciada',
+    tendencia: 'Tendência da vazão (%/década)',
   };
 
   const NOTA_MODO = {
@@ -1164,12 +1258,25 @@
       'consumo: a irrigação consome quase tudo o que tira, a indústria devolve boa parte, e a ' +
       'base não informa a devolução. E é só água de superfície — a captação em poço ficou de ' +
       'fora, o que no oeste da Bahia esconde justamente o bombeamento do Urucuia.',
+    /* Contado do próprio blob, e não escrito à mão: um analisa_tendencia.py novo
+       muda esses três números, e uma nota decorada passaria a mentir calada. Sem
+       dizer quantas ficaram de fora, o mapa afirmaria que só algumas centenas de
+       estações do país têm tendência medida — o que ele mostra é onde ela passa
+       nos dois testes. */
+    tendencia: 'Inclinação de Theil-Sen em % da média da própria estação, por década — o mesmo ' +
+      'número que ranqueia o series.html. A janela não é a da série: a análise só conta anos ' +
+      'com 10 meses medidos e exige 20 anos e dado até 2015, e por isso ela vem escrita na ficha ' +
+      'de cada estação, ao lado do período medido. Aparecem as ' + fmt(TEND_OK.length) +
+      ' que passam nos dois testes. As outras ' + fmt(N_TEND - TEND_OK.length) + ' de ' +
+      fmt(N_TEND) + ' ficam fora: ' + fmt(N_SEM_SIG) + ' sem significância estatística e ' +
+      fmt(N_SIG_OBRA) + ' em estação de barragem, onde o degrau é da obra e não do rio.',
   };
   const TITULO_MODO = {
     vazao: 'Os rios do Brasil, por vazão',
     esgoto: 'Os rios do Brasil, por esgoto',
     industria: 'Os rios do Brasil, por efluente industrial',
     outorga: 'Os rios do Brasil, por licença de retirada',
+    tendencia: 'Os rios do Brasil, por tendência da vazão',
   };
 
   /* Triângulo, não círculo nem quadrado: com estação (círculo laranja) e
@@ -1207,7 +1314,6 @@
 
   const contadores = () => {
     document.getElementById('nEst').textContent = '(' + D.estacoes.length + ')';
-    document.getElementById('nSeca').textContent = '(' + SECANDO.length + ')';
     document.getElementById('nRes').textContent = '(' + RES.length + ')';
     document.getElementById('nEtes').textContent = '(' + ETES.length + ')';
     // conta com o mesmo corte da camada de fluxo, sobre o que está de fato à vista
@@ -1350,9 +1456,11 @@
       octx.stroke();
       octx.globalAlpha = 1;
 
-      // Onde a cidade coleta esgoto e não há outorga nenhuma: não é rio limpo,
-      // é rio sem registro. Vai antes da rampa para nunca cobrir um dado real.
-      if (semDado.size && modo !== 'outorga') {
+      /* Onde a cidade coleta esgoto e não há outorga nenhuma: não é rio limpo,
+         é rio sem registro. Vai antes da rampa para nunca cobrir um dado real.
+         Os modos vêm nomeados, não negados: o tracejado fala de efluente, e um
+         `modo !== 'outorga'` o deixaria entrar em qualquer modo novo. */
+      if (semDado.size && (modo === 'esgoto' || modo === 'industria')) {
         octx.save();
         octx.setLineDash([3, 4]);
         octx.strokeStyle = COR_SEM;
@@ -1405,12 +1513,19 @@
     // Marcadores no fundo, não a cada quadro: eram 2 mil arcos por frame, ~15 ms
     // que a animação pagava sem necessidade — eles só mudam quando a vista muda.
     if (mostrarEst) {
-      const r = Math.min(4.2, 1.6 + 0.8 * z);
+      /* No modo tendência o ponto deixa de ser marcador e passa a ser o dado: a
+         cor sai da divergente e o raio cresce, porque um disco de 4 px não tem
+         área onde um matiz seja lido. Trocar fillStyle a cada ponto não custa —
+         são algumas centenas, e o desenho em lote existe por causa dos 462 mil
+         trechos, não dos marcadores. */
+      const tend = modo === 'tendencia';
+      const r = tend ? Math.min(6, 2.6 + 0.9 * z) : Math.min(4.2, 1.6 + 0.8 * z);
       octx.fillStyle = COR_ACC; octx.strokeStyle = COR_LEITO; octx.lineWidth = 1;
       octx.globalAlpha = 0.82;
       for (const e of EST_VIS) {
         const [sx, sy] = paraTela(projX(e.lon), merc(e.lat));
         if (sx < -8 || sy < -8 || sx > W + 8 || sy > H + 8) continue;
+        if (tend) octx.fillStyle = corTend(TEND[e.cod][0]);
         octx.beginPath(); octx.arc(sx, sy, r, 0, 6.2832); octx.fill(); octx.stroke();
       }
       octx.globalAlpha = 1;
@@ -1506,12 +1621,14 @@
     }
 
     if (mostrarEst) {
-      const r = Math.min(3.6, 1.15 + 0.62 * z);
+      const tend = modo === 'tendencia';
+      const r = tend ? Math.min(5.2, 2 + 0.7 * z) : Math.min(3.6, 1.15 + 0.62 * z);
       ctx.fillStyle = COR_ACC; ctx.strokeStyle = COR_LEITO; ctx.lineWidth = 1;
       ctx.globalAlpha = 0.72;
       for (const e of EST_VIS) {
         const [sx, sy] = paraTela(projX(e.lon), merc(e.lat));
         if (sx < -8 || sy < -8 || sx > W + 8 || sy > H + 8) continue;
+        if (tend) ctx.fillStyle = corTend(TEND[e.cod][0]);
         ctx.beginPath(); ctx.arc(sx, sy, r, 0, 6.2832); ctx.fill(); ctx.stroke();
       }
       ctx.globalAlpha = 1;
@@ -1598,7 +1715,6 @@
   }
 
   /* ---------- fichas ---------- */
-  const fmt = (v, d = 0) => v.toLocaleString('pt-BR', { maximumFractionDigits: d });
   const linha = (r, v) => '<div class="linha"><span>' + r + '</span><em>' + v + '</em></div>';
   // Fio d'água fica ilegível em m³/s: 0,004 diz menos que 4 L/s. A vazão é
   // guardada em milésimos, então o número existe mesmo nos menores trechos.
@@ -1693,23 +1809,6 @@
       '</div><div class="regime-nota">cheia em ' + MESES[cheio] + ', seca em ' + MESES[seco] +
       ' — ' + fmt(reg[cheio] / Math.max(reg[seco], 0.01), 1) + '× entre os extremos</div></div>';
   }
-
-  /* Quantas estações o corte pega e quantas ele deixa de fora, e por quê. Sem
-     isso o filtro parece afirmar que só uma dúzia de rios do país está secando,
-     quando o que ele mostra é onde a queda é grande, medida e não explicada por
-     uma barragem rio acima. */
-  const escreveNotaSeca = () => {
-    const el = document.getElementById('notaSeca');
-    if (!soSeca) { el.textContent = ''; return; }
-    const cai = D.estacoes.filter(e => TEND[e.cod] && TEND[e.cod][0] <= TEND_LIM);
-    const semSig = cai.filter(e => !TEND[e.cod][1]).length;
-    const obra = cai.filter(e => TEND[e.cod][2]).length;
-    el.textContent = SECANDO.length + ' de ' + fmt(Object.keys(TEND).length) +
-      ' estações com série longa caem ' + Math.abs(TEND_LIM) + '% ou mais por década. ' +
-      'Outras ' + (cai.length - SECANDO.length) + ' chegam ao corte e ficam fora: ' +
-      semSig + ' sem significância estatística, ' + obra +
-      ' em estação de barragem, onde o degrau é da obra e não do rio.';
-  };
 
   /* A tendência de longo prazo da estação, no mesmo número que ranqueia o
      series.html. A janela não é a da série inteira — a análise exige 10 meses
@@ -1954,16 +2053,6 @@
     if (fichaEl.classList.contains('vazia')) fichaVazia();
     repintarFundo();
   });
-  /* O filtro não é camada nova: é a de estações com menos pontos. Ligá-lo com a
-     camada apagada não desenharia nada, então ele acende as estações junto. */
-  alterna('btSeca', () => soSeca, v => {
-    soSeca = v;
-    EST_VIS = v ? SECANDO : D.estacoes;
-    if (v && !mostrarEst) defineCamada('btEst', true);
-    if (estRealce && !EST_VIS.includes(estRealce)) { fixado = false; aplicar(null); }
-    escreveNotaSeca();
-    repintarFundo();
-  });
   alterna('btRes', () => mostrarRes, v => {
     mostrarRes = v;
     if (!v && resRealce) { fixado = false; aplicar(null); }
@@ -1999,6 +2088,27 @@
     agendar(false);
   });
 
+  /* A faixa da tendência, no mesmo molde da de cima: o input muta o corte,
+     reescreve o próprio texto e manda repintar. A diferença é que ela filtra
+     ESTAÇÃO e não trecho, e por isso mexe no EST_VIS em vez do desenho da rede. */
+  const rgTend = document.getElementById('rgTend');
+  const rgTendTexto = document.getElementById('rgTendTexto');
+  const faixaTend = document.getElementById('faixaTend');
+  function textoTend() {
+    const n = EST_VIS.length;
+    rgTendTexto.innerHTML = corteTend === Infinity
+      ? '<b>' + fmt(n) + '</b> estações com tendência medida — as que caem e as que enchem'
+      : 'Caem <b>' + pctTend(corteTend) + '</b> ou mais por década: <b>' + fmt(n) +
+        '</b> ' + (n === 1 ? 'estação' : 'estações');
+  }
+  rgTend.addEventListener('input', () => {
+    corteTend = LIMIARES_TEND[+rgTend.value];
+    EST_VIS = filtraTend(corteTend);
+    if (estRealce && !EST_VIS.includes(estRealce)) { fixado = false; aplicar(null); }
+    textoTend();
+    repintarFundo();
+  });
+
   const notaModo = document.getElementById('notaModo');
   const botoesModo = [...document.querySelectorAll('.modo')];
   /* Estações e reservatórios são quase dois mil marcadores; sobre a camada de
@@ -2007,17 +2117,30 @@
      podendo religá-los à mão, e nesse caso a escolha dele é que prevalece. */
   let camadasAntes = null;
   function aplicaModo(novo) {
-    const eraVazao = modo === 'vazao';
+    const anterior = modo;
     modo = novo;
-    if (novo !== 'vazao' && eraVazao) {
-      camadasAntes = [mostrarEst, mostrarRes];
+    if (anterior === 'vazao' && novo !== 'vazao') camadasAntes = [mostrarEst, mostrarRes];
+    /* Tendência é o único modo em que a estação É o dado, então ele acende a
+       camada em vez de apagá-la — sem isso o modo abriria numa tela vazia. */
+    if (novo === 'tendencia') {
+      defineCamada('btEst', true);
+      defineCamada('btRes', false);
+    } else if (novo !== 'vazao') {
       defineCamada('btEst', false);
       defineCamada('btRes', false);
-    } else if (novo === 'vazao' && !eraVazao && camadasAntes) {
+    } else if (camadasAntes) {
       defineCamada('btEst', camadasAntes[0]);
       defineCamada('btRes', camadasAntes[1]);
       camadasAntes = null;
     }
+    /* Sair do modo devolve o corte ao começo. Carregá-lo para dentro do modo
+       vazão esconderia estações com o controle que explica o sumiço fora da
+       tela — um filtro invisível é pior que nenhum. */
+    if (novo !== 'tendencia') { corteTend = LIMIARES_TEND[0]; rgTend.value = 0; }
+    EST_VIS = novo === 'tendencia' ? filtraTend(corteTend) : D.estacoes;
+    if (estRealce && !EST_VIS.includes(estRealce)) { fixado = false; aplicar(null); }
+    faixaTend.hidden = novo !== 'tendencia';
+    textoTend();
     for (const b of botoesModo) b.setAttribute('aria-pressed', String(b.dataset.modo === novo));
     const titulo = TITULO_MODO[novo] || TITULO_MODO.vazao;
     document.getElementById('titulo').textContent = titulo;
@@ -2051,12 +2174,11 @@
     const m = b.dataset.modo;
     if ((m === 'esgoto' || m === 'industria') && !fEsg) b.remove();
     else if (m === 'outorga' && !fOut) b.remove();
+    else if (m === 'tendencia' && !TEND_OK.length) { b.remove(); faixaTend.remove(); }
   }
   // idem para as ETEs: interruptor que não acende nada é pior que interruptor
   // nenhum, porque o leitor conclui que não existe ETE no Brasil
   if (!ETES.length) document.getElementById('btEtes').remove();
-  // idem para o filtro: sem o tendencia_mapa.json não há tendência que filtrar
-  if (!SECANDO.length) document.getElementById('btSeca').remove();
 
   const gaveta = document.getElementById('gaveta');
   const veu = document.getElementById('veu');
@@ -2209,6 +2331,7 @@
     montaLegenda();
   }
   textoOrdem();
+  textoTend();
   window.__contadores = () => contadores();
   // `desenhar()` direto não passa por quadroUnico(), que é quem chama os
   // contadores — sem esta linha os números ao lado de cada camada só apareciam

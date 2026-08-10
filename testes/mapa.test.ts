@@ -92,7 +92,7 @@ describe("legenda em classes", () => {
   test("o título da legenda muda em cada modo", async () => {
     await reinicia(pg);
     const visto: Record<string, string> = {};
-    for (const m of ["vazao", "esgoto", "industria", "outorga"]) {
+    for (const m of ["vazao", "esgoto", "industria", "outorga", "tendencia"]) {
       await pg.click(`.modo[data-modo="${m}"]`);
       await pg.waitForTimeout(300);
       visto[m] = (await pg.textContent("#tituloLegenda")) ?? "";
@@ -102,8 +102,9 @@ describe("legenda em classes", () => {
       esgoto: "Quanto do rio é esgoto",
       industria: "Quanto do rio é efluente industrial",
       outorga: "Vazão já licenciada",
+      tendencia: "Tendência da vazão (%/década)",
     });
-    expect(new Set(Object.values(visto)).size).toBe(4);
+    expect(new Set(Object.values(visto)).size).toBe(5);
   });
 
   test("cada modo traz a sua própria lista de faixas", async () => {
@@ -314,11 +315,13 @@ describe("modo pela URL", () => {
     esgoto: "Os rios do Brasil, por esgoto",
     industria: "Os rios do Brasil, por efluente industrial",
     outorga: "Os rios do Brasil, por licença de retirada",
+    tendencia: "Os rios do Brasil, por tendência da vazão",
   };
 
   test("?mapa= abre em cada modo, e valor inválido cai em vazão", async () => {
     for (const [param, esperado] of [["esgoto", "esgoto"], ["industria", "industria"],
                                      ["outorga", "outorga"], ["vazao", "vazao"],
+                                     ["tendencia", "tendencia"],
                                      ["bobagem", "vazao"], ["", "vazao"]] as const) {
       const { pg: p, erros: e } = await abrir(`${urlDe(INDEX)}?mapa=${param}`, { fresco: true });
       expect(await modoAtivo(p), `?mapa=${param}`).toBe(esperado);
@@ -326,10 +329,11 @@ describe("modo pela URL", () => {
       expect(await p.textContent("#tituloLegenda"), `?mapa=${param}`).toBe(
         { vazao: "Vazão média (m³/s)", esgoto: "Quanto do rio é esgoto",
           industria: "Quanto do rio é efluente industrial",
-          outorga: "Vazão já licenciada" }[esperado]);
+          outorga: "Vazão já licenciada",
+          tendencia: "Tendência da vazão (%/década)" }[esperado]);
       expect(e, `?mapa=${param}`).toEqual([]);
     }
-  }, LENTO * 6);
+  }, LENTO * 7);
 
   test("a URL acompanha a troca de modo, e vazão sai dela", async () => {
     const { pg: p } = await abrir(`${base}/index.html?mapa=outorga`, { fresco: true });
@@ -418,7 +422,7 @@ describe("tendência da vazão", () => {
     const r = await roda<any>(sonda, `() => {
       const t = window.__testes, ficha = document.getElementById('ficha');
       const txt = e => { t.fichaEstacao(e); return ficha.textContent.replace(/\\s+/g, ' '); };
-      const pior = t.SECANDO.slice().sort((a, b) => t.TEND[a.cod][0] - t.TEND[b.cod][0])[0];
+      const pior = t.TEND_OK.slice().sort((a, b) => t.TEND[a.cod][0] - t.TEND[b.cod][0])[0];
       return { comTend: Object.keys(t.TEND).length, pior: txt(pior),
                semSig: txt(t.D.estacoes.find(e => t.TEND[e.cod] && !t.TEND[e.cod][1])),
                obra: txt(t.D.estacoes.find(e => t.TEND[e.cod] && t.TEND[e.cod][2])),
@@ -435,38 +439,76 @@ describe("tendência da vazão", () => {
     expect(r.semTend).not.toContain("Tendência da vazão");
   });
 
-  test("o filtro guarda só as que caem 25% ou mais, medidas e fora de obra", async () => {
+  test("o modo desenha só as medidas e fora de obra, e a faixa corta por %", async () => {
     const r = await roda<any>(sonda, `() => {
       const t = window.__testes;
-      return { total: t.D.estacoes.length, secando: t.SECANDO.length,
-               abaixoDoCorte: t.SECANDO.every(e => t.TEND[e.cod][0] <= -25),
-               semRessalva: t.SECANDO.every(e => t.TEND[e.cod][1] && !t.TEND[e.cod][2]) };
+      const corte = t.CORTES_TEND[0];   // o mesmo −25 que veio no blob
+      return { total: t.D.estacoes.length, comTend: Object.keys(t.TEND).length,
+               passam: t.TEND_OK.length, corte,
+               semRessalva: t.TEND_OK.every(e => t.TEND[e.cod][1] && !t.TEND[e.cod][2]),
+               semCorte: t.filtraTend(Infinity).length,
+               noCorte: t.filtraTend(corte).length,
+               abaixoDoCorte: t.filtraTend(corte).every(e => t.TEND[e.cod][0] <= corte),
+               sobem: t.TEND_OK.filter(e => t.TEND[e.cod][0] > 0).length };
     }`);
-    expect(r.secando).toBeGreaterThan(0);
-    expect(r.secando).toBeLessThan(r.total / 10);
-    expect(r.abaixoDoCorte, "entrou estação acima do corte").toBe(true);
+    // os dois testes de honestidade valem sempre, em qualquer parada da faixa
     expect(r.semRessalva, "entrou estação sem significância ou de barragem").toBe(true);
+    expect(r.passam).toBeGreaterThan(0);
+    expect(r.passam).toBeLessThan(r.comTend);
+    // sem corte a faixa mostra o conjunto inteiro, inclusive quem está enchendo
+    expect(r.semCorte).toBe(r.passam);
+    expect(r.sobem, "a divergente perdeu o lado azul").toBeGreaterThan(0);
+    // e apertar até o corte histórico deixa um punhado
+    expect(r.noCorte).toBeGreaterThan(0);
+    expect(r.noCorte).toBeLessThan(r.passam / 10);
+    expect(r.abaixoDoCorte, "entrou estação acima do corte").toBe(true);
   });
 
-  test("ligar o filtro acende a camada de estações e explica o corte", async () => {
+  test("a cor do ponto sai da divergente, com cinza no zero e lados opostos", async () => {
+    const cores = await roda<string[]>(sonda, `() => {
+      const t = window.__testes;
+      return [-99, -20, 0, 20, 99].map(p => t.corTend(p));
+    }`);
+    const [caiMuito, cai, zero, sobe, sobeMuito] = cores;
+    // um tom por classe: os extremos não podem colidir com o meio nem entre si
+    expect(new Set(cores).size).toBe(5);
+    expect(caiMuito).not.toBe(sobeMuito);
+    expect(cai).not.toBe(zero);
+    expect(sobe).not.toBe(zero);
+  });
+
+  test("o modo acende as estações, mostra a faixa e explica quem ficou fora", async () => {
     await reinicia(pg);
     expect(await pg.getAttribute("#btEst", "aria-pressed")).toBe("false");
-    await pg.click("#btSeca");
-    await pg.waitForTimeout(600);
-    expect(await pg.getAttribute("#btSeca", "aria-pressed")).toBe("true");
-    // sem isto o filtro ligaria sobre uma camada apagada e não desenharia nada
-    expect(await pg.getAttribute("#btEst", "aria-pressed"),
-           "o filtro ligou sem acender as estações").toBe("true");
+    expect(await pg.isVisible("#faixaTend")).toBe(false);
 
-    const nota = (await pg.textContent("#notaSeca")) ?? "";
-    expect(nota).toContain("25% ou mais por década");
+    await pg.click('.modo[data-modo="tendencia"]');
+    await pg.waitForTimeout(600);
+    // sem isto o modo abriria sobre a camada apagada e não desenharia nada
+    expect(await pg.getAttribute("#btEst", "aria-pressed"),
+           "o modo entrou sem acender as estações").toBe("true");
+    expect(await pg.isVisible("#faixaTend")).toBe(true);
+
+    const nota = (await pg.textContent("#notaModo")) ?? "";
     expect(nota, "a nota não diz quantas ficaram fora, nem por quê")
       .toMatch(/sem significância estatística/);
     expect(nota).toMatch(/em estação de barragem/);
+    expect(nota).toMatch(/por década/);
 
-    await pg.click("#btSeca");
-    await pg.waitForTimeout(400);
-    expect(await pg.textContent("#notaSeca")).toBe("");
+    // a faixa: sem corte fala do conjunto, apertada fala do corte
+    expect(await pg.textContent("#rgTendTexto")).toContain("tendência medida");
+    await pg.locator("#rgTend").fill("5");
+    await pg.locator("#rgTend").dispatchEvent("input");
+    await pg.waitForTimeout(500);
+    const apertada = (await pg.textContent("#rgTendTexto")) ?? "";
+    expect(apertada).toContain("25%");
+    expect(apertada).toMatch(/ou mais por década/);
+
+    // sair do modo devolve a camada e recolhe a faixa junto com o corte
+    await pg.click('.modo[data-modo="vazao"]');
+    await pg.waitForTimeout(600);
+    expect(await pg.isVisible("#faixaTend")).toBe(false);
+    expect(await pg.inputValue("#rgTend"), "o corte ficou preso ao sair").toBe("0");
   });
 });
 

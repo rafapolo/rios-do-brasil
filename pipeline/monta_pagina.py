@@ -27,7 +27,7 @@ if (S / "etes.json").exists():
 else:
     print("  etes.json ausente — mapa sai sem a camada de tratamento")
 # Idem para a tendência: sem ela a ficha da estação perde a linha de %/década e
-# o filtro "só as que secam" some do painel de camadas.
+# o modo "Tendência" some do cartão "O que ver", junto com a faixa dele.
 if (S / "tendencia_mapa.json").exists():
     pagina = pagina.replace("/*__TENDMAPA__*/", embutir("tendencia_mapa.json"))
 else:

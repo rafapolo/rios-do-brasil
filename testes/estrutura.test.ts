@@ -90,21 +90,48 @@ describe("template contra produto", () => {
 });
 
 describe("tokens de cor", () => {
-  /* O mapa usa rampa sequencial azul (vazão é magnitude) e o series.html usa
-     escala divergente (tendência tem sinal). Trocar uma pela outra faz o leitor
-     ler perda onde não há. */
-  /* O mapa usa rampa sequencial azul (vazão é magnitude) e o series.html usa
-     escala divergente (tendência tem sinal). Reusar o par laranja↔azul para
-     magnitude faz o leitor ler perda onde não há. */
-  test("cada página define a sua escala, e só a sua", () => {
+  /* O que importa não é qual página conhece qual escala, é qual EIXO recebe
+     qual. Magnitude (vazão, efluente, outorga) pede rampa sequencial; mudança
+     com sinal (tendência) pede divergente com cinza no zero. Trocar uma pela
+     outra faz o leitor ler perda onde não há.
+
+     O mapa passou a definir as duas porque ganhou o modo Tendência, e ali o
+     laranja↔azul significa exatamente o que significa no series.html — é o
+     mesmo número, e as duas páginas têm que concordar. O que continua proibido
+     é cruzar: divergente medindo magnitude, ou sequencial medindo sinal. */
+  test("cada escala fica no seu eixo", () => {
+    const DIVERGENTE = ["--seca-1", "--seca-3", "--enche-1", "--enche-3", "--neutro"];
+
     const mapa = blocoCss(estilo(texto(INDEX)), ":root");
     for (let i = 0; i < 7; i++) expect(mapa, `--ramp-${i}`).toContain(`--ramp-${i}`);
-    expect(mapa, "o mapa não deve conhecer a escala divergente").not.toContain("--seca-1");
+    for (const v of DIVERGENTE) expect(mapa, `mapa/${v}`).toContain(v);
+
+    /* E no script: cada função de cor puxa da lista certa. A comparação é
+       sempre sobre a LINHA extraída, nunca sobre o arquivo — um expect que
+       falha contra os 14 MB do index.html despeja a página inteira no relatório
+       e o erro de verdade some no meio do base64. */
+    const js = texto(INDEX);
+    const linhaDe = (marca: string) => {
+      const i = js.indexOf(marca);
+      expect(i, `sumiu do index.html: ${marca}`).toBeGreaterThan(-1);
+      return js.slice(i).split("\n")[0];
+    };
+    expect(linhaDe("const cor = "), "cor() de magnitude saiu da rampa sequencial")
+      .toContain("RAMPA[");
+    expect(linhaDe("const corTend = "), "corTend() de sinal precisa ler TND, não RAMPA")
+      .toContain("TND[");
+    // a divergente entra no mapa por um nome só, e é o da tendência
+    expect(linhaDe("const TOKENS_TEND = "), "a divergente vazou para fora do modo Tendência")
+      .toContain("--seca-3");
+    for (const f of ["const cor = ", "const corPol = ", "const corOut = "]) {
+      const linha = linhaDe(f);
+      for (const v of DIVERGENTE) {
+        expect(linha, `${f.trim()} usa ${v}, que é escala de sinal`).not.toContain(v);
+      }
+    }
 
     const serie = blocoCss(estilo(texto(SERIES)), ":root");
-    for (const v of ["--seca-1", "--seca-3", "--enche-1", "--enche-3", "--neutro"]) {
-      expect(serie, v).toContain(v);
-    }
+    for (const v of DIVERGENTE) expect(serie, `series/${v}`).toContain(v);
     expect(serie, "o series.html não deve usar a rampa de magnitude").not.toContain("--ramp-0");
   });
 

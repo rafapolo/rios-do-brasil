@@ -161,7 +161,8 @@ export function copiaSondada(): string {
   if (s.split(ancora).length !== 2) throw new Error("âncora de injeção sumiu do index.html");
   const sonda =
     "  window.__testes = { N, q, areas, fEsg, fInd, fOut, semDado, medidos, foraBr,\n" +
-    "    RES, ETES, D, nomeIdx, bbox, TEND, SECANDO,\n" +
+    "    RES, ETES, D, nomeIdx, bbox, TEND, TEND_OK, CORTES_TEND, LIMIARES_TEND,\n" +
+    "    filtraTend: (c) => filtraTend(c), corTend: (p) => corTend(p),\n" +
     "    fichaTrecho: (i) => fichaTrecho(i), fichaEstacao: (e) => fichaEstacao(e),\n" +
     "    aplicaModo: (m) => aplicaModo(m),\n" +
     "    cor: (v) => cor(v), largura: (v, z) => largura(v, z), t01: (v) => t01(v) };\n";

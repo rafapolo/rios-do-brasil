@@ -162,11 +162,16 @@ Todos os JSON intermediários são gitignored. Os HTML gerados são versionados 
   com 10 meses medidos e exige 20 anos e dado até 2015, então a ficha do mapa mostra as duas
   coisas: "Série 1995–2025 · 365 meses" ao lado de "Janela da tendência 1982–2023 · 42 anos".
   Confundir as duas faz o número parecer mais recente do que é. Das 1.534 estações com
-  tendência, 1.273 estão no mapa — o resto não é desenhado —, e o filtro "só as que secam" fica
-  em 17: são as que caem 25% ou mais por década **e** passam nos dois testes que o ranking do
-  `series.html` aplica (significância a 5% com FDR, e nome que não denuncia barragem). Sem eles
-  seriam 35. Qualquer mudança nesse corte tem que mexer no `LIMITE` do `tendencia_mapa.py`, não
-  no template — a página lê o limite do próprio blob.
+  tendência, 1.273 estão no mapa — o resto não é desenhado. Dessas, o modo **Tendência**
+  desenha **394**: as que passam nos dois testes que o ranking do `series.html` aplica
+  (significância a 5% com FDR, e nome que não denuncia barragem). As outras 879 ficam fora —
+  843 sem significância e 36 significativas mas em barragem —, e a nota do modo diz isso na
+  página, senão o mapa parece afirmar que só algumas centenas de estações do país têm tendência
+  medida. Os dois testes são fixos; a faixa do modo move só o corte em %/década, e na parada de
+  25% sobram as 17 de sempre. **Toda a escala pendura no `LIMITE` do `tendencia_mapa.py`**: as
+  classes da legenda são frações dele (±0,2, ±0,6, ±1) e as paradas da faixa também
+  (0,2 a 1,6 ×), então mudar aquele número move cor, legenda e faixa juntas — a página lê o
+  limite do próprio blob e não há corte escrito à mão no template.
 - **A ordem de Strahler não vale fora do Brasil** na BHO, e o nome do trecho às vezes é de um
   afluente pequeno — por isso o filtro do mapa é por vazão, não por ordem.
 - **`MunicipioCodigo` da ANA não é IBGE**, e o inventário de 2023 marca descarga líquida como
