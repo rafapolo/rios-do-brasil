@@ -27,8 +27,7 @@ BASE = "https://www.snirh.gov.br/arcgis/rest/services/DADOSABERTOS"
 PAG = 2000
 
 # O lançamento precisa da ficha inteira: é dele que sai o ponto no mapa, a
-# classificação e a vazão. Da captação basta o suficiente para somar por
-# município e comparar com o que sai.
+# classificação e a vazão.
 CAMPOS_LANC = ",".join([
     "emp_nm_empreendimento", "emp_nm_responsavel", "emp_nu_cpfcnpj",
     "int_qt_vazaomedia", "int_qt_vazaomaxima", "int_qt_volumeanual",
@@ -38,9 +37,20 @@ CAMPOS_LANC = ",".join([
     "tfn_ds", "tsf_ds", "tch_ds",
     "out_dt_outorgainicial", "out_dt_outorgafinal", "org_nm",
 ])
+# A captação também vem com coordenada e ottobacia — a camada é de ponto, os 80
+# campos são os mesmos do lançamento. Por muito tempo só se pediu município
+# daqui, e isso limitava o cruzamento com a vazão ao grão municipal: um
+# município grande mistura licenças de rios diferentes, e no Ribeirão do Gama o
+# total do DF inteiro dava dez vezes a vazão do córrego. Com lat/lon e
+# `ing_cd_ottobacia_trecho` a licença passa a ser atribuída ao trecho.
 CAMPOS_CAPT = ",".join([
-    "emp_nm_responsavel", "emp_nu_cpfcnpj", "int_qt_vazaomedia",
-    "ing_nm_municipio", "ing_sg_ufmunicipio",
+    "emp_nm_empreendimento", "emp_nm_responsavel", "emp_nu_cpfcnpj",
+    "int_qt_vazaomedia", "int_qt_vazaomaxima", "int_qt_volumeanual",
+    "int_nm_corpohidrico", "ing_nm_municipio", "ing_sg_ufmunicipio",
+    "ing_nm_regiao_hidro", "ing_cd_ottobacia_trecho",
+    "int_nu_latitude", "int_nu_longitude",
+    "tfn_ds", "tsf_ds", "tch_ds",
+    "out_dt_outorgainicial", "out_dt_outorgafinal", "org_nm",
 ])
 
 CAMADAS = [("federal", "outorgas_federais_superficial", 4),
