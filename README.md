@@ -21,6 +21,10 @@ ela vem pronta na topologia da base da ANA.
   quando enche, quando seca e a razão entre os extremos
 - **168 reservatórios** do Sistema Interligado Nacional, com 22 anos de operação diária:
   quanto passou pelas turbinas, quanto foi vertido, quanto chegou de montante
+- **Quatro modos de cor**: vazão, esgoto, efluente industrial e **licença de retirada** — quanto
+  de cada rio já está prometido em outorga de captação, somando tudo que foi licenciado rio
+  acima. São 95 mil tomadas d'água casadas à rede, 4.451 m³/s; em **2.558 trechos** a licença
+  iguala ou passa a vazão média do próprio rio
 - **Controle de detalhe** para filtrar a rede por vazão mínima
 - Passar o cursor acende o **rio inteiro**, não o trecho de poucos quilômetros
 
@@ -48,10 +52,21 @@ sistema Cantareira, perde 29,6% por década com a chuva parada em −0,1%; o Apo
 
 Cruzar isso com as **outorgas de captação vigentes** do SNIRH não confirma a hipótese no
 agregado — a licença mediana nos rios que perdem sem seca é de 1,6% da vazão média, *menor* que
-os 3,3% dos que perdem com seca. O motivo é o dado: a captação vem sem coordenada, só com
-município, e município grande mistura licenças de rios diferentes. Onde serve é caso a caso: o
-São Desidério (BA) perde 25,6%/década com licença municipal de 314% da própria vazão, e o
-Ribeirão do Feijão (SP), 5,4% com 71%. Não é prova de causa; é onde olhar primeiro.
+os 3,3% dos que perdem com seca. O motivo é o grão: aqui a outorga é somada por **município**,
+porque `tendencia.json` só guarda a coordenada da estação e não o polígono da bacia dela, e
+município grande mistura licenças de rios diferentes. (A camada do mapa não tem esse problema —
+lá cada tomada d'água entra pelo seu próprio ponto.) Onde serve é caso a caso: o São Desidério
+(BA) perde 25,6%/década com licença municipal de 314% da própria vazão, e o Ribeirão do Feijão
+(SP), 5,4% com 71%. Não é prova de causa; é onde olhar primeiro.
+
+**O Oeste da Bahia.** Um painel fecha a página no lugar onde os três sinais coincidem. Na margem
+esquerda do São Francisco entre 10°S e 16°S — a área de recarga do Urucuia — as **26 estações do
+ranking estão todas em queda, e nenhuma em alta**, o recorte mais unânime da página. A vazão cai
+11,7% por década contra 2,7% da chuva: quatro vezes mais rápido. E a outorga mediana ali é 14,5%
+da vazão média, contra 1,0% na mediana do país. Os rios que a Comissão Pastoral da Terra nomeia
+no levantamento *A morte das águas no Oeste da Bahia* (2024), feito a pé com as comunidades das
+sub-bacias do Corrente e do Carinhanha — 3.050 trechos secos, 7.120 km — têm estação da ANA e
+série medida: o Itaguari caiu de 63 para 37 m³/s desde os anos 1960, o Formoso de 96 para 46.
 
 **Duas janelas, de propósito.** A série mensal funde o arquivo histórico (1901 a agosto de 2023)
 com o serviço SOAP da ANA e chega a maio de 2026 — é ela que sustenta as tendências, o calendário
@@ -125,19 +140,22 @@ python3 baixa_rede.py 1          # rede BHO inteira (~460 mil trechos, ~20 min, 
 python3 baixa_vazao.py           # inventário fluviométrico + séries mensais (~35 min)
 python3 baixa_reservatorios.py   # reservatórios do SAR + histórico de operação
 python3 terra_fronteiras.py      # silhueta e divisas do Natural Earth
-python3 baixa_outorgas.py        # outorgas de lançamento e captação do SNIRH (~2 min)
+python3 baixa_outorgas.py        # outorgas de lançamento e captação do SNIRH (~4 min)
 python3 baixa_atlas_esgotos.py   # Atlas Esgotos + sedes municipais, do espelho no beelink
 python3 processa.py              # regionaliza a vazão, acumula o efluente e valida (~5 min)
+python3 outorga.py               # licença de retirada acumulada por trecho (~12 min)
 python3 monta_pagina.py          # gera o index.html
 ```
 
-Para mexer só na camada de poluição, sem refazer a regionalização inteira, `poluicao.py`
-roda avulso sobre um `rede_vazao.json` pronto — ele reaproveita a geometria embutida no
-próprio mapa e só precisa da topologia, que são 7 MB em vez de 888:
+Para mexer só nas camadas que descem pela rede, sem refazer a regionalização inteira,
+`poluicao.py` e `outorga.py` rodam avulsos sobre um `rede_vazao.json` pronto — os dois
+reaproveitam a geometria embutida no próprio mapa e só precisam da topologia, que são 7 MB
+em vez de 888:
 
 ```bash
 python3 baixa_topologia.py 1     # COTRECHO/NUTRJUS/COBACIA da BHO, sem geometria (~2 min)
 python3 poluicao.py              # recalcula esg/ind/semDado no rede_vazao.json (~5 s)
+python3 outorga.py               # recalcula out no rede_vazao.json (~12 min)
 python3 monta_pagina.py
 ```
 
