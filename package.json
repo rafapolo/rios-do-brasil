@@ -1,0 +1,13 @@
+{
+  "name": "rios-do-brasil",
+  "private": true,
+  "description": "só a suíte de testes — as páginas publicadas não têm dependência de runtime",
+  "scripts": {
+    "test": "bun test",
+    "test:navegadores": "bun test testes/navegadores.test.ts",
+    "preparar": "bunx playwright install chromium firefox webkit"
+  },
+  "devDependencies": {
+    "playwright": "1.62.0"
+  }
+}

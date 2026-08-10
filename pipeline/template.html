@@ -472,7 +472,10 @@
     .sobre { top: 62px; right: 12px; width: calc(100vw - 24px); max-width: 300px; }
     .gaveta { width: 100vw; padding: 18px 18px 40px; }
     .vazio { top: 32%; }
-    button { min-height: 42px; }
+    /* O `button` sozinho não alcançava nada: `.chave` e `.modos .modo` fixam
+       34 px cada um, e por especificidade venciam a regra de celular — os dez
+       alvos do painel ficavam abaixo do mínimo que esta linha diz garantir. */
+    button, button.chave, .modos .modo, .abrir { min-height: 44px; }
   }
 </style>
 

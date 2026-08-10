@@ -74,11 +74,34 @@ Dependências: `requests`, `polars`, `numpy`, `scipy`, `shapely`, `pyarrow`.
 `analisa_tendencia.py` usa só `numpy` de propósito — Mann-Kendall e Theil-Sen estão escritos à
 mão porque o beelink não tem scipy, e o código precisa poder migrar para lá.
 
-**Não há suíte de testes.** A verificação é empírica e cada script imprime o que serve de
+**O pipeline não tem testes.** A verificação é empírica e cada script imprime o que serve de
 conferência: `processa.py` roda validação cruzada 5-fold contra estações removidas;
 `analisa_tendencia.py` imprime os extremos do ranking, que devem bater com a geografia
 (semiárido caindo, arco de desmatamento subindo). Ao mexer nos números, compare contra o que o
 README afirma — os valores lá são resultado medido, não arredondamento.
+
+**As páginas geradas, sim.** 65 testes em `testes/`, com Bun e Playwright:
+
+```bash
+bun install && bun run preparar   # baixa chromium, firefox e webkit (uma vez)
+bun test                          # ~4 min, 65 testes nos três motores
+```
+
+Isso continua não sendo build system: o `package.json` e o `node_modules/` são só de
+desenvolvimento, nada deles entra no HTML publicado, e o `.gitignore` segura o `node_modules/`.
+
+Três coisas ao mexer na suíte:
+
+- **`page.evaluate` do Playwright em JS avalia string como expressão, não como função a
+  chamar** — ao contrário do binding em Python, que detecta a arrow function e a invoca. Passar
+  `"() => …"` direto devolve `undefined` calado, e o teste passa a comparar nada com nada. Use o
+  `roda()` do `testes/comum.ts`, que envolve em IIFE.
+- Os internos da página (`N`, `q`, `fOut`, `fichaTrecho`…) vivem dentro da IIFE do `<script>` e
+  não dá para alcançá-los de fora. `copiaSondada()` gera uma cópia temporária do `index.html`
+  com `window.__testes` injetado antes do marcador `/* ---------- início ---------- */` — o
+  produto não ganha porta de depuração por causa do teste.
+- Abrir o `index.html` custa ~9 s (14 MB, gzip, 462 mil trechos). Cada par (motor, URL) é aberto
+  uma vez e reaproveitado; quem mexe no estado da página chama `reinicia()` antes.
 
 ## Como uma página é montada
 
