@@ -158,7 +158,7 @@
        espremido e o gráfico de regime vazava por baixo da borda */
     flex: none;
     background: var(--realce), var(--vidro);
-    backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(5px); -webkit-backdrop-filter: blur(5px);
     border: 1px solid var(--rule); border-radius: 4px;
     padding: 14px 16px; box-shadow: var(--sombra);
     pointer-events: auto;
@@ -512,18 +512,7 @@
   </div>
 
   <div class="cartao ficha vazia" id="ficha">
-    Toque num rio, numa estação ou num reservatório para ver a vazão.
-  </div>
-
-  <div class="cartao">
-    <h2>O que pintar</h2>
-    <div class="modos" role="group" aria-label="O que a cor mostra">
-      <button class="modo" data-modo="vazao" aria-pressed="true">Vazão</button>
-      <button class="modo" data-modo="esgoto" aria-pressed="false">Esgoto</button>
-      <button class="modo" data-modo="industria" aria-pressed="false">Indústria</button>
-      <button class="modo" data-modo="outorga" aria-pressed="false">Outorga</button>
-    </div>
-    <p class="nota" id="notaModo"></p>
+    Toque num rio para ver a vazão.
   </div>
 
   <div class="cartao">
@@ -538,12 +527,12 @@
   <div class="cartao">
     <h2>Camadas</h2>
     <div class="controles">
-      <button id="btEst" class="chave" aria-pressed="true">
+      <button id="btEst" class="chave" aria-pressed="false">
         <span class="icone est">●</span>
         <span class="rotulo">Estações <b id="nEst"></b></span>
         <span class="switch"></span>
       </button>
-      <button id="btRes" class="chave" aria-pressed="true">
+      <button id="btRes" class="chave" aria-pressed="false">
         <span class="icone res">■</span>
         <span class="rotulo">Reservatórios <b id="nRes"></b></span>
         <span class="switch"></span>
@@ -564,6 +553,17 @@
   <div class="cartao">
     <h2 id="tituloLegenda">Vazão média (m³/s)</h2>
     <div class="classes cunha" id="classes"></div>
+  </div>
+
+  <div class="cartao">
+    <h2>O que pintar</h2>
+    <div class="modos" role="group" aria-label="O que a cor mostra">
+      <button class="modo" data-modo="vazao" aria-pressed="true">Vazão</button>
+      <button class="modo" data-modo="esgoto" aria-pressed="false">Esgoto</button>
+      <button class="modo" data-modo="industria" aria-pressed="false">Indústria</button>
+      <button class="modo" data-modo="outorga" aria-pressed="false">Outorga</button>
+    </div>
+    <p class="nota" id="notaModo"></p>
   </div>
 </div>
 
@@ -919,9 +919,11 @@
   let W = 0, H = 0, dpr = 1;
   const vista = { x: 0, y: 0, k: 1 };
   const semMovimento = window.matchMedia('(prefers-reduced-motion: reduce)');
-  let mostrarEst = true, mostrarRes = true;
-  // Começa desligada: são 3,6 mil marcadores e a pergunta de entrada do mapa
-  // é a vazão, não o saneamento. Quem quer, liga.
+  /* Todas as camadas nascem desligadas. A primeira tela é a rede e mais nada:
+     estações e reservatórios somam quase dois mil marcadores por cima do traço,
+     e as ETEs outros 3,6 mil — quem abre o mapa veio ver o rio. Os pontos
+     entram por escolha, e o cartão Camadas já traz a contagem de cada um. */
+  let mostrarEst = false, mostrarRes = false;
   let mostrarEtes = false;
   // O filtro é por vazão, não por ordem de Strahler: a BHO não mapeia as
   // cabeceiras fora do Brasil, então rios grandes de país vizinho ficam com
@@ -1579,7 +1581,11 @@
     if (!fEsg) return '';
     const e = fEsg[i], n = fInd ? fInd[i] : 0;
     if (e < 0.001 && n < 0.001) {
-      return semDado.has(i)
+      /* O aviso de "sem registro" existe para o branco do mapa de esgoto não
+         virar atestado de limpeza. Fora desses dois modos ele aparecia sozinho,
+         sem nenhuma linha de vazão ao lado a que se referir, como se fosse o
+         veredito do trecho. Sem efluente para mostrar, não há selo. */
+      return semDado.has(i) && (modo === 'esgoto' || modo === 'industria')
         ? '<div class="selo neutro">a cidade daqui coleta esgoto e não tem outorga de lançamento</div>'
         : '';
     }
@@ -1663,11 +1669,18 @@
                                                        : 'ETE ' + t.status) + '</div>';
   }
 
+  /* O convite só pode citar o que está na tela. Com as camadas desligadas — que
+     é como o mapa abre — só há rio para tocar, e mandar procurar reservatório
+     seria mandar procurar o que não foi desenhado. */
   function fichaVazia() {
+    const alvos = ['num rio'];
+    if (mostrarEst) alvos.push('numa estação');
+    if (mostrarRes) alvos.push('num reservatório');
+    if (mostrarEtes) alvos.push('numa estação de tratamento');
+    const ult = alvos.pop();
     fichaEl.className = 'cartao ficha vazia';
-    fichaEl.textContent = mostrarEtes
-      ? 'Toque num rio, numa estação, num reservatório ou numa estação de tratamento.'
-      : 'Toque num rio, numa estação ou num reservatório para ver a vazão.';
+    fichaEl.textContent = 'Toque ' + (alvos.length ? alvos.join(', ') + ' ou ' : '') +
+      ult + ' para ver a vazão.';
   }
 
   function mostrarTip(html, ev) {
@@ -1830,16 +1843,19 @@
   alterna('btEst', () => mostrarEst, v => {
     mostrarEst = v;
     if (!v && estRealce) { fixado = false; aplicar(null); }
+    if (fichaEl.classList.contains('vazia')) fichaVazia();
     repintarFundo();
   });
   alterna('btRes', () => mostrarRes, v => {
     mostrarRes = v;
     if (!v && resRealce) { fixado = false; aplicar(null); }
+    if (fichaEl.classList.contains('vazia')) fichaVazia();
     repintarFundo();
   });
   alterna('btEtes', () => mostrarEtes, v => {
     mostrarEtes = v;
     if (!v && eteRealce) { fixado = false; aplicar(null); }
+    if (fichaEl.classList.contains('vazia')) fichaVazia();
     repintarFundo();
   });
   alterna('btFluxo', () => animando, v => {
