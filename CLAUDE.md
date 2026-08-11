@@ -63,10 +63,12 @@ python3 processa.py               # regionaliza + valida, ~5 min
 python3 baixa_outorgas.py         # lançamento e captação do SNIRH, ~4 min
 python3 outorga.py                # camada de licença de retirada, ~12 min
 python3 tendencia_mapa.py         # %/década por estação, do tendencia.json (opcional)
+python3 tendencia_rede.py         # leva o %/década da estação para os trechos, ~10 s
 python3 monta_pagina.py
 
 # séries históricas (series.html) — só depende do lake
-# analisa_tendencia.py roda antes do tendencia_mapa.py: é ele que faz o tendencia.json
+# analisa_tendencia.py roda antes do par tendencia_mapa.py/tendencia_rede.py: é ele que faz
+# o tendencia.json de que os dois vivem
 python3 pipeline/analisa_tendencia.py
 python3 pipeline/prepara_paineis.py
 python3 pipeline/monta_series.py
@@ -82,11 +84,11 @@ conferência: `processa.py` roda validação cruzada 5-fold contra estações re
 (semiárido caindo, arco de desmatamento subindo). Ao mexer nos números, compare contra o que o
 README afirma — os valores lá são resultado medido, não arredondamento.
 
-**As páginas geradas, sim.** 65 testes em `testes/`, com Bun e Playwright:
+**As páginas geradas, sim.** 76 testes em `testes/`, com Bun e Playwright:
 
 ```bash
 bun install && bun run preparar   # baixa chromium, firefox e webkit (uma vez)
-bun test                          # ~4 min, 65 testes nos três motores
+bun test                          # ~4 min, 76 testes nos três motores
 ```
 
 Isso continua não sendo build system: o `package.json` e o `node_modules/` são só de
@@ -108,7 +110,7 @@ Três coisas ao mexer na suíte:
 ## Como uma página é montada
 
 `pipeline/template*.html` são HTML completos com marcadores de comentário
-(`/*__DADOS__*/`, `/*__FONTE__*/`, `/*__TENDENCIA__*/`, `/*__PAINEIS__*/`). Os `monta_*.py`
+(`/*__DADOS__*/`, `/*__FONTE__*/`, `/*__TENDMAPA__*/`, `/*__PAINEIS__*/`). Os `monta_*.py`
 fazem `str.replace` desses marcadores por gzip+base64 e escrevem o HTML final na raiz do repo.
 
 Consequência prática: **edite `pipeline/template*.html`, nunca o `index.html`/`series.html`
@@ -172,6 +174,21 @@ Todos os JSON intermediários são gitignored. Os HTML gerados são versionados 
   classes da legenda são frações dele (±0,2, ±0,6, ±1) e as paradas da faixa também
   (0,2 a 1,6 ×), então mudar aquele número move cor, legenda e faixa juntas — a página lê o
   limite do próprio blob e não há corte escrito à mão no template.
+- **A cor do trecho no modo Tendência é da estação, não do trecho.** `tendencia_rede.py`
+  reparte a rede: cada trecho leva a tendência da **primeira estação a jusante dele**, e a
+  próxima régua rio acima corta a herança. É a bacia incremental de cada posto, sem
+  sobreposição. Por cima vem o `PISO` de 2% da vazão da estação — sem ele o mesmo cálculo
+  pinta 332 mil trechos e dois milhões de km, levando o número de uma régua no tronco até a
+  última nascente; com ele são **42.302 trechos e 204,5 mil km**, e o blob passa de 346 kB gz
+  para 78. O trecho ancorado entra sempre, mesmo abaixo do piso. Três coisas daí:
+  **(a)** a extensão pintada é proporcional à bacia incremental, não à confiança — o
+  Solimões-Amazonas inteiro sai de uma régua em Jatuarana, e a nota do modo precisa continuar
+  dizendo que a tendência não foi medida no trecho; **(b)** 3 das 394 estações não casam a
+  trecho nenhum (critério do `processa.py:287`: 0,05° e razão de área ≤ 1,4×) e ficam só como
+  ponto — inclusive o Jaguaribe/Quixeré, que é a 4ª que mais seca; **(c)** o script roda
+  avulso sobre o `rede_vazao.json` pronto, no molde do `outorga.py`, e **reescreve o
+  `tendencia_mapa.json`** acrescentando `lista`, `trecho` e `piso` — rodar o
+  `tendencia_mapa.py` de novo apaga as três, então a ordem entre os dois importa.
 - **A ordem de Strahler não vale fora do Brasil** na BHO, e o nome do trecho às vezes é de um
   afluente pequeno — por isso o filtro do mapa é por vazão, não por ordem.
 - **`MunicipioCodigo` da ANA não é IBGE**, e o inventário de 2023 marca descarga líquida como

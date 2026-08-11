@@ -202,10 +202,15 @@
   .ir-series a { color: var(--accent); text-decoration: none; }
   .ir-series a:hover { text-decoration: underline; }
 
+  /* O cartão de título é o único centrado da HUD: ele nomeia a página, e os
+     outros são controles, que se leem a partir da margem esquerda. O centro
+     estava só no eyebrow, e o h1 abaixo dele saía desalinhado. */
+  .titulo-cartao { text-align: center; }
+
   .eyebrow {
     font-family: var(--mono); font-size: 0.53rem; font-weight: 500;
     letter-spacing: 0.07em; text-transform: uppercase; color: var(--ink-3);
-    margin: 0 0 7px; white-space: nowrap; text-align: center;
+    margin: 0 0 7px; white-space: nowrap;
   }
   h1 {
     font-size: 1.44rem; line-height: 1.08; letter-spacing: -0.03em;
@@ -281,9 +286,6 @@
     color: var(--ink-2); font-variant-numeric: tabular-nums;
   }
   .amostra { width: 26px; border-radius: 99px; flex: none; }
-  /* A tendência pinta ponto de estação, não traço de rio: a amostra é redonda
-     para a legenda ter a forma do que ela nomeia. */
-  .amostra.ponto { width: 11px; height: 11px; }
   .nota { font-size: 0.72rem; color: var(--ink-3); margin: 8px 0 0; line-height: 1.5; }
 
   /* ---------- seletor do que a cor mostra ---------- */
@@ -1080,6 +1082,25 @@
   const N_TEND = TENDS.length;
   const N_SEM_SIG = TENDS.filter(t => !t[1]).length;
   const N_SIG_OBRA = TENDS.filter(t => t[1] && t[2]).length;
+  /* A tendência no RIO, e não só no ponto. O tendencia_rede.py reparte a rede
+     entre as estações: cada trecho leva a da primeira que existe abaixo dele,
+     parando na próxima régua rio acima. `TEND_TR[i]` é o índice dessa estação
+     mais um, e 0 é o trecho que fica cinza — sem estação abaixo, ou fino demais
+     para o piso.
+
+     Opcional como o resto da camada: o modo continua desenhando os pontos se o
+     tendencia_rede.py não tiver rodado. E as tabelas saem de TENDBRUTA.lista,
+     não da ordem de TEND_OK — as duas coincidem hoje, e é justamente por isso
+     que amarrá-las daria um erro calado no dia em que deixassem de coincidir. */
+  const TEND_LISTA = (TENDBRUTA.lista || []).filter(c => TEND[c]);
+  const TEND_TR = TENDBRUTA.trecho && TEND_LISTA.length
+    ? Int16Array.from(varints(TENDBRUTA.trecho, 0, TENDBRUTA.trecho.length)) : null;
+  const TEND_PCT = Float32Array.from(TEND_LISTA, c => TEND[c][0]);
+  const TEND_PISO = TENDBRUTA.piso ?? 0.02;
+  // o trecho pintado sabe dizer de que estação veio a cor — sem isso a ficha
+  // afirmaria um número sem apontar quem o mediu
+  const estDe = new Map(D.estacoes.map(e => [e.cod, e]));
+  const tendDoTrecho = i => (TEND_TR && TEND_TR[i] ? TEND_PCT[TEND_TR[i] - 1] : null);
   // Infinity é "sem corte", e não 0: com 0 as estações que estão ENCHENDO
   // sumiriam logo na primeira parada, que é metade do que a divergente mostra.
   const LIMIARES_TEND = [Infinity, escTend(0.2), escTend(0.4), escTend(0.6),
@@ -1110,6 +1131,25 @@
     for (let i = 0; i < N; i++) if (arr[i] >= piso) lista.push(i);
     lista.sort((a, b) => arr[b] - arr[a]);
     ordemPol[m] = lista;
+  }
+  /* A tendência tem lista própria, e não uma entrada no ordemPol: aquele dict é
+     a ordem da poluição, e o laço da rampa quente varre `ordemPol[modo]` — uma
+     chave `tendencia` ali o faria percorrer 42 mil trechos por quadro só para
+     cada um cair no piso.
+
+     A ordem é por VAZÃO, e não pelo valor pintado como na poluição. Lá o
+     exagero mora no córrego urbano, que o teto por quadro comeria; aqui a
+     notícia é o rio grande secando, e ordenar pelo %/década poria a cabeceira
+     mais extrema na frente do São Francisco. */
+  let ordemTend = null, KM_TEND = 0;
+  if (TEND_TR) {
+    ordemTend = [];
+    for (let i = 0; i < N; i++) {
+      if (!TEND_TR[i]) continue;
+      ordemTend.push(i);
+      if (comps) KM_TEND += comps[i] / 10;   // comps vem em décimos de km
+    }
+    ordemTend.sort((a, b) => q[b] - q[a]);
   }
   let animando = false;
   let estaticoSujo = true;
@@ -1199,10 +1239,14 @@
       return;
     }
     if (modo === 'tendencia') {
-      // sai do mesmo corTend() que o canvas usa, pela mesma razão de sempre:
-      // legenda e mapa não têm como divergir se a cor vem de uma função só
+      /* Sai do mesmo corTend() que o canvas usa, pela mesma razão de sempre:
+         legenda e mapa não têm como divergir se a cor vem de uma função só.
+
+         A amostra é barra e não mais disco: a mesma cor pinta o rio e a régua,
+         mas é o rio que ocupa a tela, e a legenda tem que ter a forma do que
+         ela nomeia. Onde não há trecho pintado ela vale para o ponto igual. */
       el.innerHTML = CLASSES_TEND.map((rot, i) =>
-        '<div class="classe"><span class="amostra ponto" style="background:' +
+        '<div class="classe"><span class="amostra" style="height:4px;background:' +
         corTend(i === 0 ? -99 : i === 6 ? 99 : (CORTES_TEND[i - 1] + CORTES_TEND[i]) / 2) +
         '"></span>' + rot + '</div>').join('');
       return;
@@ -1269,7 +1313,14 @@
       'de cada estação, ao lado do período medido. Aparecem as ' + fmt(TEND_OK.length) +
       ' que passam nos dois testes. As outras ' + fmt(N_TEND - TEND_OK.length) + ' de ' +
       fmt(N_TEND) + ' ficam fora: ' + fmt(N_SEM_SIG) + ' sem significância estatística e ' +
-      fmt(N_SIG_OBRA) + ' em estação de barragem, onde o degrau é da obra e não do rio.',
+      fmt(N_SIG_OBRA) + ' em estação de barragem, onde o degrau é da obra e não do rio.' +
+      (ordemTend ? ' A cor não fica no ponto: ela desce da estação para os rios que drenam ' +
+        'até ela e para na próxima régua acima, pintando ' + fmt(Math.round(KM_TEND / 100) / 10, 1) +
+        ' mil km em ' + fmt(ordemTend.length) + ' trechos. Não é tendência medida no trecho — ' +
+        'é a da estação, estendida à área que ela mede. Só entra o trecho que carrega ao menos ' +
+        fmt(TEND_PISO * 100) + '% da vazão dela, senão uma régua no tronco levaria seu número ' +
+        'até a última nascente. O resto da rede fica cinza: ou não há estação rio abaixo, ou o ' +
+        'trecho é fino demais para carregar a medição de uma régua distante.' : ''),
   };
   const TITULO_MODO = {
     vazao: 'Os rios do Brasil, por vazão',
@@ -1435,12 +1486,13 @@
         octx.stroke();
       }
     } else {
-      /* Modo poluição. A rede inteira vai primeiro em cinza — a geografia do
-         rio não muda com o modo, e sem ela os trechos sujos ficariam soltos no
-         vazio. Por cima entra só quem passa do piso, na rampa quente.
+      /* Poluição e tendência. A rede inteira vai primeiro em cinza — a
+         geografia do rio não muda com o modo, e sem ela os trechos coloridos
+         ficariam soltos no vazio. Por cima entra só quem tem número.
 
-         A largura continua saindo da vazão, nunca da poluição: engrossar o
-         traço pelo efluente faria um córrego imundo parecer um rio grande. */
+         A largura continua saindo da vazão, nunca do que a cor mede: engrossar
+         o traço pelo efluente faria um córrego imundo parecer um rio grande, e
+         pela tendência faria um riacho secando parecer o São Francisco. */
       octx.globalAlpha = 0.5;
       octx.strokeStyle = COR_FRIA;
       let larFria = -1;
@@ -1455,6 +1507,36 @@
       }
       octx.stroke();
       octx.globalAlpha = 1;
+
+      /* A tendência pinta RIO, não ponto. Cada trecho leva a da estação que o
+         mede — a primeira abaixo dele, pela repartição que o tendencia_rede.py
+         faz da rede. É o que dá forma geográfica ao número: o Gorutuba secando
+         aparece como um rio laranja no norte de Minas, e não como um disco.
+
+         O que fica cinza fica cinza por dois motivos diferentes, e a nota do
+         modo diz os dois: ou não há estação rio abaixo, ou o trecho é fino
+         demais para carregar o número de uma régua distante. */
+      if (modo === 'tendencia') {
+        let corTend_ = '', larTend = -1;
+        octx.beginPath();
+        for (const i of (ordemTend || [])) {
+          if (q[i] < corteQ) continue;
+          if (bbox[i * 4 + 2] < w0x || bbox[i * 4] > w1x ||
+              bbox[i * 4 + 3] < w0y || bbox[i * 4 + 1] > w1y) continue;
+          // o mesmo corte da faixa, que filtra estação: escrito como `<=` para
+          // que corteTend === Infinity deixe passar as que estão enchendo
+          const p = TEND_PCT[TEND_TR[i] - 1];
+          if (!(p <= corteTend)) continue;
+          const c = corTend(p), lw = Math.round(largura(q[i], z) * 3) / 3;
+          if (c !== corTend_ || lw !== larTend) {
+            octx.stroke(); octx.beginPath();
+            octx.strokeStyle = c; octx.lineWidth = lw;
+            corTend_ = c; larTend = lw;
+          }
+          traca(octx, i);
+        }
+        octx.stroke();
+      }
 
       /* Onde a cidade coleta esgoto e não há outorga nenhuma: não é rio limpo,
          é rio sem registro. Vai antes da rampa para nunca cobrir um dado real.
@@ -1513,13 +1595,15 @@
     // Marcadores no fundo, não a cada quadro: eram 2 mil arcos por frame, ~15 ms
     // que a animação pagava sem necessidade — eles só mudam quando a vista muda.
     if (mostrarEst) {
-      /* No modo tendência o ponto deixa de ser marcador e passa a ser o dado: a
-         cor sai da divergente e o raio cresce, porque um disco de 4 px não tem
-         área onde um matiz seja lido. Trocar fillStyle a cada ponto não custa —
-         são algumas centenas, e o desenho em lote existe por causa dos 462 mil
-         trechos, não dos marcadores. */
+      /* No modo tendência o ponto sai da divergente, igual ao rio que ele pinta:
+         é onde a medição é literal, e sem ele a cor do trecho não teria origem
+         na tela. O raio cresce um pouco — mas menos do que crescia quando o
+         ponto era o dado inteiro, porque agora o rio embaixo carrega o matiz e
+         um disco grande demais tapa justamente o trecho que explica. Trocar
+         fillStyle a cada ponto não custa: são algumas centenas, e o desenho em
+         lote existe por causa dos 462 mil trechos, não dos marcadores. */
       const tend = modo === 'tendencia';
-      const r = tend ? Math.min(6, 2.6 + 0.9 * z) : Math.min(4.2, 1.6 + 0.8 * z);
+      const r = tend ? Math.min(5, 2.4 + 0.8 * z) : Math.min(4.2, 1.6 + 0.8 * z);
       octx.fillStyle = COR_ACC; octx.strokeStyle = COR_LEITO; octx.lineWidth = 1;
       octx.globalAlpha = 0.82;
       for (const e of EST_VIS) {
@@ -1760,6 +1844,7 @@
       (fora ? linha('Território', 'fora do Brasil') : '') +
       efluenteHTML(i) +
       outorgaHTML(i) +
+      tendenciaDoTrechoHTML(i) +
       '<div class="selo' + (medido ? '' : ' neutro') + '">' +
       (medido ? 'vazão medida em estação' : 'vazão estimada') + '</div>';
   }
@@ -1794,6 +1879,27 @@
     if (o < OMIN) return '';
     return linha('Outorgado', pct(o) + ' da vazão — ' + vazao(o * q[i])) +
       (o >= 1 ? '<div class="selo">licença de retirada igual ou maior que a vazão média</div>' : '');
+  }
+
+  /* De onde veio a cor deste trecho, no modo tendência. O número é da ESTAÇÃO e
+     não do trecho: aqui ninguém mediu nada, o que há é a régua rio abaixo e a
+     água daqui passando por ela. Nomear a estação é o que impede a cor de virar
+     afirmação anônima sobre um rio que nunca teve posto.
+
+     Só no modo tendência, como o selo de "sem outorga" no modo esgoto: fora
+     dele a linha apareceria sem cor nenhuma na tela a que se referir. */
+  function tendenciaDoTrechoHTML(i) {
+    if (modo !== 'tendencia' || !TEND_TR || !TEND_TR[i]) return '';
+    const cod = TEND_LISTA[TEND_TR[i] - 1];
+    const t = TEND[cod], e = estDe.get(cod);
+    const onde = e ? e.nome + (e.uf ? ' · ' + e.uf : '') : 'estação ' + cod;
+    return linha('Tendência da vazão',
+                 (t[0] > 0 ? '+' : '−') + fmt(Math.abs(t[0]), 1) + '% por década') +
+      linha('Medida em', onde) +
+      linha('Janela da tendência', t[4] + '–' + t[5] + ' · ' + t[3] + ' anos') +
+      '<div class="selo neutro">' + (medidos.has(i)
+        ? 'a régua fica neste trecho'
+        : 'a régua fica rio abaixo: o número é da bacia, não deste trecho') + '</div>';
   }
 
   const MESES = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
@@ -2089,17 +2195,28 @@
   });
 
   /* A faixa da tendência, no mesmo molde da de cima: o input muta o corte,
-     reescreve o próprio texto e manda repintar. A diferença é que ela filtra
-     ESTAÇÃO e não trecho, e por isso mexe no EST_VIS em vez do desenho da rede. */
+     reescreve o próprio texto e manda repintar. Ela filtra ESTAÇÃO, e o rio vem
+     junto de graça — o trecho conhece a régua que o pinta, e o desenho aplica o
+     mesmo corte ao %/década dela. Por isso o texto conta as duas coisas: some o
+     ponto e some o rio que saía dele. */
   const rgTend = document.getElementById('rgTend');
   const rgTendTexto = document.getElementById('rgTendTexto');
   const faixaTend = document.getElementById('faixaTend');
+  const kmDoCorte = c => {
+    if (!ordemTend || !comps) return null;
+    let km = 0;
+    for (const i of ordemTend) if (TEND_PCT[TEND_TR[i] - 1] <= c) km += comps[i] / 10;
+    return km;
+  };
   function textoTend() {
     const n = EST_VIS.length;
+    const km = kmDoCorte(corteTend);
+    const rio = km === null ? '' : ', <b>' + fmt(Math.round(km / 100) / 10, 1) + '</b> mil km de rio';
     rgTendTexto.innerHTML = corteTend === Infinity
-      ? '<b>' + fmt(n) + '</b> estações com tendência medida — as que caem e as que enchem'
+      ? '<b>' + fmt(n) + '</b> estações com tendência medida' + rio +
+        ' — as que caem e as que enchem'
       : 'Caem <b>' + pctTend(corteTend) + '</b> ou mais por década: <b>' + fmt(n) +
-        '</b> ' + (n === 1 ? 'estação' : 'estações');
+        '</b> ' + (n === 1 ? 'estação' : 'estações') + rio;
   }
   rgTend.addEventListener('input', () => {
     corteTend = LIMIARES_TEND[+rgTend.value];

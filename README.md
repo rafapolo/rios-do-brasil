@@ -21,10 +21,16 @@ ela vem pronta na topologia da base da ANA.
   quando enche, quando seca e a razão entre os extremos
 - **168 reservatórios** do Sistema Interligado Nacional, com 22 anos de operação diária:
   quanto passou pelas turbinas, quanto foi vertido, quanto chegou de montante
-- **Quatro modos de cor**: vazão, esgoto, efluente industrial e **licença de retirada** — quanto
-  de cada rio já está prometido em outorga de captação, somando tudo que foi licenciado rio
-  acima. São 95 mil tomadas d'água casadas à rede, 4.451 m³/s; em **2.558 trechos** a licença
-  iguala ou passa a vazão média do próprio rio
+- **Cinco modos de cor**: vazão, esgoto, efluente industrial, **licença de retirada** e
+  **tendência**. A licença é quanto de cada rio já está prometido em outorga de captação,
+  somando tudo que foi licenciado rio acima: 95 mil tomadas d'água casadas à rede, 4.451 m³/s,
+  e em **2.558 trechos** a licença iguala ou passa a vazão média do próprio rio
+- **A tendência pinta o rio, não o posto.** As 394 estações que passam nos dois testes do
+  ranking — significância a 5% com FDR, e fora de barragem — repartem a rede entre si: cada
+  trecho leva a tendência da primeira estação abaixo dele, parando na próxima régua rio acima.
+  São **204,5 mil km de rio** coloridos em 42.302 trechos, dos quais **5,8 mil km caem mais de
+  25% por década**. Não é tendência medida no trecho — é a da estação, estendida à área que
+  ela mede, e a ficha de cada trecho nomeia a régua de onde a cor veio
 - **Controle de detalhe** para filtrar a rede por vazão mínima
 - Passar o cursor acende o **rio inteiro**, não o trecho de poucos quilômetros
 
@@ -156,6 +162,7 @@ em vez de 888:
 python3 baixa_topologia.py 1     # COTRECHO/NUTRJUS/COBACIA da BHO, sem geometria (~2 min)
 python3 poluicao.py              # recalcula esg/ind/semDado no rede_vazao.json (~5 s)
 python3 outorga.py               # recalcula out no rede_vazao.json (~12 min)
+python3 tendencia_rede.py        # reparte a rede entre as estações com tendência (~10 s)
 python3 monta_pagina.py
 ```
 
@@ -167,6 +174,10 @@ python3 analisa_tendencia.py     # Mann-Kendall + Theil-Sen + FDR -> tendencia.j
 python3 prepara_paineis.py       # rio seco, cheia, Q7,10, tamanho da rede -> paineis.json
 python3 monta_series.py          # gera o series.html (770 KB)
 ```
+
+O `tendencia.json` também alimenta o mapa, por dois passos que rodam depois dele:
+`tendencia_mapa.py` poda a série anual inteira ao que a ficha precisa, e `tendencia_rede.py`
+leva a tendência da estação para os trechos que ela mede.
 
 Uma armadilha da fonte, para quem for refazer: a ANA **esvaziou** o repositório
 `hidro-dados-estacoes-convencionais` em dezembro de 2025 — um zip de `refs/heads/main` sai com

@@ -464,6 +464,70 @@ describe("tendência da vazão", () => {
     expect(r.abaixoDoCorte, "entrou estação acima do corte").toBe(true);
   });
 
+  test("a tendência pinta trecho, e cada um deles tem estação a jusante", async () => {
+    const r = await roda<any>(sonda, `() => {
+      const t = window.__testes;
+      const tr = t.TEND_TR, n = t.N;
+      let pintados = 0, foraDaLista = 0, km = 0;
+      for (let i = 0; i < n; i++) {
+        if (!tr[i]) continue;
+        pintados++;
+        km += t.comps[i] / 10;
+        if (tr[i] > t.TEND_LISTA.length) foraDaLista++;
+      }
+      /* O piso: todo trecho pintado carrega uma fração apreciável da vazão da
+         régua que o pinta, ou é o próprio trecho onde ela está.
+
+         A margem de 1% não é folga do critério, é a diferença entre as duas
+         contas: o pipeline decide em float64 sobre a vazão cheia da estação, e
+         aqui o q do trecho chega em Float32 e o da estação arredondado a duas
+         casas. Sem ela, meia dúzia de trechos exatamente no limiar cai de um
+         lado no Python e do outro no navegador. */
+      let abaixoDoPiso = 0;
+      const qDe = new Map(t.D.estacoes.map(e => [e.cod, e.q]));
+      for (const i of t.ordemTend) {
+        const qEst = qDe.get(t.TEND_LISTA[tr[i] - 1]);
+        if (t.q[i] < t.TEND_PISO * qEst * 0.99 && !t.medidos.has(i)) abaixoDoPiso++;
+      }
+      return { pintados, foraDaLista, km, abaixoDoPiso, n,
+               naOrdem: t.ordemTend.length,
+               kmDaPagina: t.KM_TEND,
+               // as estações que pintam são as mesmas que o modo desenha
+               listaSoAprovadas: t.TEND_LISTA.every(c => t.TEND[c][1] && !t.TEND[c][2]),
+               // a ordem é por vazão decrescente: o teto por quadro come os menores
+               decrescente: t.ordemTend.every((i, k) => k === 0 || t.q[t.ordemTend[k - 1]] >= t.q[i]) };
+    }`);
+    expect(r.foraDaLista, "índice de estação fora da lista do blob").toBe(0);
+    expect(r.listaSoAprovadas, "pintou trecho de estação reprovada nos dois testes").toBe(true);
+    expect(r.decrescente, "a ordem do desenho não é por vazão").toBe(true);
+    expect(r.naOrdem).toBe(r.pintados);
+    expect(Math.round(r.kmDaPagina)).toBe(Math.round(r.km));
+    // o piso existe para o número de uma régua no tronco não chegar à nascente:
+    // sem ele são 332 mil trechos, com ele algumas dezenas de milhares
+    expect(r.abaixoDoPiso, "trecho fino demais escapou do piso").toBe(0);
+    expect(r.pintados).toBeGreaterThan(1000);
+    expect(r.pintados).toBeLessThan(r.n / 4);
+  });
+
+  test("a faixa corta o rio junto com o ponto", async () => {
+    await reinicia(pg);
+    await pg.click('.modo[data-modo="tendencia"]');
+    await pg.waitForTimeout(600);
+    const kmDe = async () => {
+      const t = (await pg.textContent("#rgTendTexto")) ?? "";
+      const m = t.match(/([\d,]+) mil km/);
+      return m ? Number(m[1].replace(",", ".")) : null;
+    };
+    const largo = await kmDe();
+    expect(largo, "a faixa não diz quanto rio está pintado").toBeGreaterThan(0);
+    await pg.locator("#rgTend").fill("5");
+    await pg.locator("#rgTend").dispatchEvent("input");
+    await pg.waitForTimeout(500);
+    const apertado = await kmDe();
+    expect(apertado, "o corte tirou estação e deixou o rio").toBeLessThan(largo!);
+    expect(apertado).toBeGreaterThan(0);
+  });
+
   test("a cor do ponto sai da divergente, com cinza no zero e lados opostos", async () => {
     const cores = await roda<string[]>(sonda, `() => {
       const t = window.__testes;
