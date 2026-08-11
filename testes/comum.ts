@@ -120,11 +120,20 @@ export async function abrir(url: string, o: Opcoes = {}): Promise<Pagina> {
   return p;
 }
 
-/** As cores das amostras da legenda, na ordem em que aparecem. Estilo
- *  computado e não `style.background`: o inline traz o hex do token e cada
- *  motor serializa de um jeito. */
-export const amostras = (pg: Page) =>
-  pg.$$eval("#classes .amostra", (e) => e.map((a) => getComputedStyle(a).backgroundColor));
+/** As cores da legenda, na ordem em que aparecem. Nos quatro modos de escala
+ *  log ela é uma barra de <rect> e a cor vem do atributo `fill`, que já é o hex
+ *  do token — igual em todo motor. No modo tendência, que segue em classes, é o
+ *  estilo computado da amostra: ali a cor é inline e cada motor serializa de um
+ *  jeito. */
+export const amostras = async (pg: Page) => {
+  const barra = await pg.$$eval("#classes svg rect", (e) => e.map((r) => r.getAttribute("fill") ?? ""));
+  if (barra.length) return barra;
+  return pg.$$eval("#classes .amostra", (e) => e.map((a) => getComputedStyle(a).backgroundColor));
+};
+
+/** Os rótulos do eixo da barra, da esquerda para a direita. */
+export const eixoLegenda = (pg: Page) =>
+  pg.$$eval("#classes svg text", (e) => e.map((t) => t.textContent ?? ""));
 
 export async function fecharTudo() {
   cache.clear();

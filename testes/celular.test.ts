@@ -149,23 +149,27 @@ describe("celular", () => {
     expect(await pg.$eval("#hud", (e) => e.scrollTop)).toBeGreaterThan(50);
   });
 
-  test("as sete faixas da legenda cabem na largura do cartão", async () => {
-    /* "5.400 – 43.000" e "acima de 43.000" são os rótulos mais largos da
-       página, e a grade de duas colunas dá pouco mais de 130 px a cada um. */
+  test("a barra da legenda encolhe em vez de cortar, e o eixo não colide", async () => {
+    /* A barra tem viewBox — ao contrário dos gráficos do series.html —, então
+       `width: 100%` a reduz junto com os rótulos. O que ainda pode dar errado é
+       "10 mil" encostar em "100 mil" na largura de celular. */
     const r = await roda<any>(pg, `() => {
       const el = document.getElementById('classes');
       const c = el.closest('.cartao').getBoundingClientRect();
-      const linhas = [...el.querySelectorAll('.classe')];
-      return { n: linhas.length,
-               vazam: linhas.filter(l => l.getBoundingClientRect().right > c.right + 1)
-                            .map(l => l.textContent),
-               transbordam: linhas.filter(l => l.scrollWidth > l.clientWidth + 1)
-                                  .map(l => l.textContent),
+      const svg = el.querySelector('svg').getBoundingClientRect();
+      const rot = [...el.querySelectorAll('svg text')]
+        .map(t => ({ txt: t.textContent, cx: t.getBoundingClientRect() }))
+        .sort((a, b) => a.cx.left - b.cx.left);
+      const colidem = rot.filter((r, i) => i && r.cx.left < rot[i - 1].cx.right - 0.5)
+                         .map(r => r.txt);
+      return { n: el.querySelectorAll('svg rect').length,
+               vaza: svg.right > c.right + 1 || svg.left < c.left - 1,
+               colidem,
                corpoRola: document.documentElement.scrollWidth > window.innerWidth + 1 };
     }`);
     expect(r.n).toBe(7);
-    expect(r.vazam, "faixa passou da borda do cartão").toEqual([]);
-    expect(r.transbordam, "rótulo maior que a célula da grade").toEqual([]);
+    expect(r.vaza, "a barra passou da borda do cartão").toBe(false);
+    expect(r.colidem, "rótulos do eixo se sobrepondo").toEqual([]);
     expect(r.corpoRola, "a página rola na horizontal no celular").toBe(false);
   });
 

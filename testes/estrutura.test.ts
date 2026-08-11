@@ -171,16 +171,20 @@ describe("tokens de cor", () => {
 describe("mudanças recentes, nos dois arquivos", () => {
   const DOIS: [string, string][] = [["template.html", TEMPLATE], ["index.html", INDEX]];
 
-  test("a legenda de vazão são sete faixas, e a cunha sumiu", () => {
+  test("a legenda dos quatro modos log é uma barra só, com eixo de décadas", () => {
     for (const [nome, p] of DOIS) {
       const s = texto(p);
-      // sete rótulos, um por tom da rampa — a lista de seis deixava de fora os
-      // dois azuis mais escuros, que são os rios acima de 5.400 m³/s
-      const m = s.match(/const CLASSES = \[([^\]]*)\]/);
-      expect(m, `${nome}: sumiu a tabela de classes`).not.toBeNull();
-      expect(m![1].match(/'/g)!.length / 2, nome).toBe(7);
-      expect(s, `${nome}: sobrou a cunha`).not.toContain("cunhaVazao");
-      expect(s, `${nome}: sobrou o CSS da cunha`).not.toContain(".classes.cunha");
+      expect(s, `${nome}: sumiu a barra`).toContain("function barraLog");
+      expect(s, `${nome}: sumiu o CSS da barra`).toContain(".classes.cunha");
+      // um eixo por escala: vazão em m³/s, poluição e outorga em %
+      for (const m of ["MARCAS_Q", "MARCAS_POL", "MARCAS_OUT"]) {
+        expect(s, `${nome}: sumiu ${m}`).toContain(`const ${m} = [`);
+      }
+      // as listas de faixa saíram junto — nenhuma cobria as décadas sem repetir tom
+      expect(s, `${nome}: sobrou a lista de classes da vazão`).not.toContain("const CLASSES = [");
+      expect(s, `${nome}: sobrou a lista de classes da poluição`).not.toContain("const CLASSES_POL = [");
+      // a tendência é a única que segue em classes, e tem que continuar assim
+      expect(s, `${nome}: a tendência perdeu as classes`).toContain("const CLASSES_TEND = ");
     }
   });
 

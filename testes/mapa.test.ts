@@ -2,7 +2,7 @@
  * Tudo no chromium — a checagem entre motores fica em navegadores.test.ts. */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import type { Page } from "playwright";
-import { LENTO, INDEX, abrir, amostras, copiaSondada, fecharTudo, reinicia, roda, servidor, urlDe } from "./comum";
+import { LENTO, INDEX, abrir, amostras, copiaSondada, eixoLegenda, fecharTudo, reinicia, roda, servidor, urlDe } from "./comum";
 
 let pg: Page;
 let erros: string[];
@@ -48,45 +48,76 @@ describe("carregamento", () => {
   });
 });
 
-describe("legenda em classes", () => {
-  test("tem sete faixas com tons distintos, e a última é a do Amazonas", async () => {
+describe("legenda em barra log", () => {
+  test("tem sete tons distintos e o eixo vai do córrego ao Amazonas", async () => {
     await reinicia(pg);
     const tons = await amostras(pg);
     expect(tons).toHaveLength(7);
     expect(new Set(tons).size).toBe(7);
-    /* Os cortes são os da própria cor(). Seis faixas parariam em "acima de
-       500" e deixariam sem entrada os dois azuis mais escuros, que é onde
-       estão Amazonas, Solimões, Madeira e Negro. */
-    const rot = await pg.$$eval("#classes .classe", (e) => e.map((c) => c.textContent));
-    expect(rot).toEqual(["até 1,4", "1,4 – 11", "11 – 87", "87 – 690",
-                         "690 – 5.400", "5.400 – 43.000", "acima de 43.000"]);
+    /* Os cortes são os da própria cor(), e a barra mostra os sete tons inteiros.
+       Nenhuma lista de seis faixas cobria as 5,4 décadas: parava em "acima de
+       500" e deixava sem entrada os dois azuis mais escuros, que é onde estão
+       Amazonas, Solimões, Madeira e Negro. */
+    expect(await eixoLegenda(pg)).toEqual(["1", "10", "100", "1.000", "10 mil", "100 mil"]);
   });
 
-  test("a amostra engrossa da primeira faixa para a última", async () => {
-    const esp = await pg.$$eval("#classes .amostra", (e) =>
-      e.map((a) => parseFloat(getComputedStyle(a).height)));
-    expect(esp).toHaveLength(7);
-    expect(esp[6]).toBeGreaterThan(esp[4]);
-    expect(esp[4]).toBeGreaterThan(esp[3]);
-    // o piso de 2 px existe para as três primeiras não sumirem
-    expect(Math.min(...esp)).toBeGreaterThanOrEqual(2);
+  test("a cunha engrossa da esquerda para a direita, pela mesma largura()", async () => {
+    /* A silhueta tem 61 pontos no topo e volta pela base. Se o y do primeiro
+       ponto não estiver abaixo do y do último, a cunha virou retângulo — e a
+       espessura, que no mapa é vazão, teria deixado de dizer isso. */
+    const d = await pg.$eval("#classes svg clipPath path", (p) => p.getAttribute("d") ?? "");
+    const ys = d.replace("M", "").split("L").map((p) => parseFloat(p.split(",")[1]));
+    expect(ys.length).toBe(122);
+    expect(ys[0]).toBeGreaterThan(ys[60]);        // topo sobe
+    expect(ys[60]).toBeLessThan(12);              // e passa da linha de meio
+  });
+
+  test("a cunha só existe onde a espessura é dado", async () => {
+    // nos três modos de porcentagem o traço do mapa engrossa pela vazão do rio,
+    // não pela métrica pintada: uma cunha ali diria que rio gordo é rio sujo
+    for (const m of ["esgoto", "industria", "outorga"]) {
+      await pg.click(`.modo[data-modo="${m}"]`);
+      await pg.waitForTimeout(300);
+      expect(await pg.$$eval("#classes svg rect", (e) => e.length), m).toBe(7);
+      expect(await pg.$$eval("#classes svg clipPath", (e) => e.length),
+             `${m}: a barra saiu em cunha`).toBe(0);
+    }
+    await reinicia(pg);
   });
 
   test("as cores saem da mesma cor() que pinta o mapa", async () => {
-    /* cor() devolve o hex do token e o estilo computado devolve rgb(); os dois
-       passam pelo mesmo serializador do navegador antes da comparação. */
+    // o fill do rect e o retorno de cor() são a mesma string: os dois saem do
+    // token CSS lido por lerCores(), sem passar por serializador nenhum
     const ok = await roda(sonda, `() => {
       const t = window.__testes;
-      const prova = document.createElement('span');
-      document.body.appendChild(prova);
-      const norm = c => { prova.style.background = c; return getComputedStyle(prova).backgroundColor; };
       const L0 = Math.log10(0.5), L1 = Math.log10(120000);
-      const ok = [...document.querySelectorAll('#classes .amostra')].every((a, i) =>
-        getComputedStyle(a).backgroundColor === norm(t.cor(Math.pow(10, L0 + (i / 6) * (L1 - L0)))));
-      prova.remove();
-      return ok;
+      return [...document.querySelectorAll('#classes svg rect')].every((r, i) =>
+        r.getAttribute('fill') === t.cor(Math.pow(10, L0 + (i / 6) * (L1 - L0))));
     }`);
     expect(ok).toBe(true);
+  });
+
+  test("a indústria varia opacidade, não matiz", async () => {
+    await pg.click('.modo[data-modo="industria"]');
+    await pg.waitForTimeout(300);
+    const tons = await amostras(pg);
+    expect(new Set(tons).size, "a indústria é cor única").toBe(1);
+    const alfa = await pg.$$eval("#classes svg rect", (e) =>
+      e.map((r) => parseFloat(r.getAttribute("fill-opacity") ?? "1")));
+    expect(alfa).toEqual([...alfa].sort((a, b) => a - b));
+    expect(alfa[6]).toBeGreaterThan(alfa[0]);
+    await reinicia(pg);
+  });
+
+  test("o que não cabe no eixo contínuo vai para o rodapé", async () => {
+    // saturação e sem-dado são categóricos: no meio da barra virariam faixa
+    await pg.click('.modo[data-modo="outorga"]');
+    await pg.waitForTimeout(300);
+    expect(await pg.textContent("#classes .rodape")).toContain("licença ≥ o rio inteiro");
+    await pg.click('.modo[data-modo="esgoto"]');
+    await pg.waitForTimeout(300);
+    expect(await pg.textContent("#classes .rodape")).toContain("sem outorga");
+    await reinicia(pg);
   });
 
   test("o título da legenda muda em cada modo", async () => {
@@ -107,17 +138,30 @@ describe("legenda em classes", () => {
     expect(new Set(Object.values(visto)).size).toBe(5);
   });
 
-  test("cada modo traz a sua própria lista de faixas", async () => {
+  test("cada modo traz o seu próprio eixo, e a tendência segue em classes", async () => {
     await reinicia(pg);
-    const faixas = () => pg.$$eval("#classes .classe", (e) => e.map((c) => c.textContent));
-    const vaz = await faixas();
-    await pg.click('.modo[data-modo="esgoto"]');
-    await pg.waitForTimeout(300);
-    const esg = await faixas();
-    expect(esg).not.toEqual(vaz);
-    // a poluição mede % do rio que é efluente; a vazão, m³/s
-    expect(esg.join(" ")).toContain("%");
-    expect(vaz.join(" ")).not.toContain("%");
+    const eixo: Record<string, string[]> = {};
+    for (const m of ["esgoto", "outorga"]) {
+      await pg.click(`.modo[data-modo="${m}"]`);
+      await pg.waitForTimeout(300);
+      eixo[m] = await eixoLegenda(pg);
+    }
+    // a poluição mede % do rio que é efluente e vai de 0,1% a 100%; a outorga
+    // começa em 1%, porque licença de um milésimo da vazão não é notícia
+    expect(eixo.esgoto).toEqual(["0,1%", "1%", "10%", "100%"]);
+    expect(eixo.outorga).toEqual(["1%", "10%", "100%"]);
+
+    /* A tendência não vira barra: a escala dela tem sinal, cai em corte fixo e
+       o rótulo diz a direção antes do número. Barra ali prometeria um contínuo
+       que o canvas não desenha. */
+    await pg.click('.modo[data-modo="tendencia"]');
+    await pg.waitForTimeout(600);
+    expect(await pg.$$eval("#classes svg", (e) => e.length),
+           "a tendência virou barra contínua").toBe(0);
+    const cls = await pg.$$eval("#classes .classe", (e) => e.map((c) => c.textContent ?? ""));
+    expect(cls).toHaveLength(7);
+    expect(cls.join(" ")).toMatch(/cai .* estável .* sobe/);
+    await reinicia(pg);
   });
 });
 

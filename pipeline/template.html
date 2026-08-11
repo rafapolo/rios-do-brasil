@@ -288,6 +288,28 @@
     color: var(--ink-2); font-variant-numeric: tabular-nums;
   }
   .amostra { width: 26px; border-radius: 99px; flex: none; }
+  /* Os quatro modos de escala log trocam a grade de classes por uma barra só.
+     Nenhuma lista de faixas cobre 5,4 décadas — da nascente ao Amazonas — sem
+     deixar tom de fora, e o eixo de décadas é o jeito honesto de mostrar log.
+     A barra tem viewBox — ao contrário dos gráficos do series.html — então
+     encolhe em vez de cortar. A tendência não entra: a escala dela tem sinal e
+     cai em classes de corte fixo, e o leitor precisa poder dizer em que faixa
+     um rio está sem consultar a fórmula. */
+  .classes.cunha { display: block; }
+  .cunha svg { display: block; width: 100%; height: auto; }
+  .cunha line { stroke: var(--rule); stroke-width: 1; }
+  .cunha text {
+    /* 7,5 px é o que deixa "10 mil" e "100 mil" separados: as décadas ficam a
+       52,7 unidades uma da outra e o último rótulo tem 7 caracteres. */
+    fill: var(--ink-3); font-family: var(--mono); font-size: 7.5px;
+    font-variant-numeric: tabular-nums;
+  }
+  /* A ressalva da outorga e o tracejado do sem-dado são categóricos: não têm
+     lugar no eixo contínuo e ficam em linha própria embaixo da barra. */
+  .cunha .rodape {
+    display: flex; align-items: center; gap: 8px; margin-top: 2px;
+    font-size: 0.7rem; color: var(--ink-3);
+  }
   .nota { font-size: 0.72rem; color: var(--ink-3); margin: 8px 0 0; line-height: 1.5; }
 
   /* ---------- seletor do que a cor mostra ---------- */
@@ -747,7 +769,7 @@
 
   <div class="cartao">
     <h2 id="tituloLegenda">Vazão média (m³/s)</h2>
-    <div class="classes" id="classes"></div>
+    <div class="classes cunha" id="classes"></div>
   </div>
 
   <div class="cartao ficha vazia" id="ficha">
@@ -1275,21 +1297,62 @@
      texto das faixas contam milhares, e `const` em TDZ não perdoa quem usa
      antes. Fica aqui, acima de todo mundo que formata número. */
   const fmt = (v, d = 0) => v.toLocaleString('pt-BR', { maximumFractionDigits: d });
-  const CLASSES = ['até 1,4', '1,4 – 11', '11 – 87', '87 – 690',
-                   '690 – 5.400', '5.400 – 43.000', 'acima de 43.000'];
+  /* Os quatro modos de escala log têm uma barra por legenda, e não uma lista de
+     faixas. O motivo é o mesmo nos quatro: qualquer corte em seis linhas acaba
+     repetindo tom e deixando os extremos sem entrada — na vazão são 5,4 décadas
+     e os dois azuis mais escuros (Amazonas, Solimões, Madeira, Negro) ficavam
+     de fora. Na barra os sete tons aparecem inteiros, em corte duro na fronteira
+     exata em que a função de cor troca de valor, e o eixo são as décadas, que é
+     o jeito honesto de mostrar uma escala log. */
   const vDeT = t => Math.pow(10, L0 + t * (L1 - L0));   // o inverso de t01()
-  // a legenda da poluição fala em % do rio que é efluente, que é a própria métrica
-  const CLASSES_POL = [
-    [0.0015, '0,1 – 0,3%'], [0.005, '0,3 – 1%'], [0.017, '1 – 3%'],
-    [0.055, '3 – 10%'], [0.18, '10 – 30%'], [0.55, 'acima de 30%'],
-  ];
-  // A da outorga fala em % da vazão média já licenciada. A última classe é a
-  // que a camada existe para mostrar, e por isso tem rótulo próprio em vez de
-  // "acima de X".
-  const CLASSES_OUT = [
-    [0.015, '1 – 3%'], [0.035, '3 – 8%'], [0.08, '8 – 18%'],
-    [0.18, '18 – 40%'], [0.45, '40 – 100%'], [1.0, 'licença ≥ o rio inteiro'],
-  ];
+  const pDeT = t => Math.pow(10, P0 + t * (P1 - P0));   // o inverso de p01()
+  const oDeT = t => Math.pow(10, O0 + t * (O1 - O0));   // o inverso de o01()
+  const MARCAS_Q = [[1, '1'], [10, '10'], [100, '100'], [1e3, '1.000'],
+                    [1e4, '10 mil'], [1e5, '100 mil']].map(([v, r]) => [t01(v), r]);
+  const MARCAS_POL = [[0.001, '0,1%'], [0.01, '1%'], [0.1, '10%'], [1, '100%']]
+                       .map(([v, r]) => [p01(v), r]);
+  // a da outorga tem só duas décadas: a escala começa em 1%, não em 0,1%
+  const MARCAS_OUT = [[0.01, '1%'], [0.1, '10%'], [1, '100%']].map(([v, r]) => [o01(v), r]);
+
+  const BARRA = { X0: 2, X1: 286, MEIO: 12, K: 3.6, AMOSTRAS: 60 };
+  function barraLog(cfg) {
+    const { X0, X1, MEIO, K, AMOSTRAS } = BARRA;
+    const x = t => X0 + t * (X1 - X0);
+    /* A silhueta em cunha só existe onde a espessura carrega dado — no modo
+       vazão, em que a mesma largura() desenha o canvas e a legenda. Nos três de
+       porcentagem o traço do mapa engrossa pela vazão do rio e não pela métrica
+       pintada; uma cunha ali prometeria que rio gordo é rio sujo. */
+    let clip = '', abre = '<g>';
+    if (cfg.cunha) {
+      const topo = [], base = [];
+      for (let i = 0; i <= AMOSTRAS; i++) {
+        const t = i / AMOSTRAS, px = x(t).toFixed(1);
+        const h = largura(vDeT(t), 1) * K / 2;
+        topo.push(px + ',' + (MEIO - h).toFixed(2));
+        base.push(px + ',' + (MEIO + h).toFixed(2));
+      }
+      const silhueta = 'M' + topo.join('L') + 'L' + base.reverse().join('L') + 'Z';
+      clip = '<defs><clipPath id="cunhaClip"><path d="' + silhueta + '"/></clipPath></defs>';
+      abre = '<g clip-path="url(#cunhaClip)">';
+    }
+    // o tom i cobre t de (i−0,5)/6 a (i+0,5)/6, que é onde a função de cor
+    // troca de valor: são os sete tons do canvas, não uma interpolação nova
+    const faixas = [0, 1, 2, 3, 4, 5, 6].map(i => {
+      const a = x(Math.max(0, (i - 0.5) / 6)), b = x(Math.min(1, (i + 0.5) / 6));
+      const alfa = cfg.alfaDeT ? ' fill-opacity="' + cfg.alfaDeT(i / 6).toFixed(2) + '"' : '';
+      return '<rect x="' + a.toFixed(1) + '" y="0" width="' + (b - a).toFixed(1) +
+        '" height="' + (MEIO * 2) + '" fill="' + cfg.corDeT(i / 6) + '"' + alfa + '/>';
+    }).join('');
+    const marcas = cfg.marcas.map(([t, rot]) => {
+      const px = x(t).toFixed(1);
+      // rótulo de ponta encostaria na borda se fosse centrado
+      const anc = t <= 0.02 ? 'start' : t >= 0.98 ? 'end' : 'middle';
+      return '<line x1="' + px + '" y1="22" x2="' + px + '" y2="25.5"/>' +
+        '<text x="' + px + '" y="34" text-anchor="' + anc + '">' + rot + '</text>';
+    }).join('');
+    return '<svg viewBox="0 0 288 36" role="img" aria-label="' + cfg.aria + '">' +
+      clip + abre + faixas + '</g>' + marcas + '</svg>' + (cfg.rodape || '');
+  }
   /* A da tendência é a única com sinal, e por isso a única em que o rótulo diz
      a direção antes do número. As duas últimas classes ficam quase vazias — 3 e
      1 estações — e é assim mesmo: quase nenhum rio brasileiro com série longa
@@ -1306,17 +1369,16 @@
   ])(CORTES_TEND);
   function montaLegenda() {
     const el = document.getElementById('classes');
+    // a tendência é a única em classes: a escala dela tem sinal e cai em corte
+    // fixo, e o rótulo precisa dizer a direção antes do número
+    el.classList.toggle('cunha', modo !== 'tendencia');
     tituloLegenda.textContent = TITULO_LEGENDA[modo] || TITULO_LEGENDA.vazao;
     if (modo === 'vazao') {
-      /* A amostra sai do centro do tom — vDeT(i/6) é o valor em que cor()
-         devolve exatamente RAMPA[i] —, então a cor e a espessura da legenda são
-         as mesmas que o canvas desenha para aquela faixa. */
-      el.innerHTML = CLASSES.map((rot, i) => {
-        const ref = vDeT(i / 6);
-        const esp = Math.max(2, Math.min(9, largura(ref, 1) * 1.9));
-        return '<div class="classe"><span class="amostra" style="height:' + esp.toFixed(1) +
-          'px;background:' + cor(ref) + '"></span>' + rot + '</div>';
-      }).join('');
+      el.innerHTML = barraLog({
+        cunha: true, corDeT: t => cor(vDeT(t)), marcas: MARCAS_Q,
+        aria: 'A cor e a espessura crescem com a vazão média, de menos de 1 m³/s nas ' +
+          'cabeceiras a mais de 100 mil no Amazonas.',
+      });
       return;
     }
     if (modo === 'tendencia') {
@@ -1333,23 +1395,30 @@
       return;
     }
     if (modo === 'outorga') {
-      el.innerHTML = CLASSES_OUT.map(([ref, rot]) =>
-        '<div class="classe"><span class="amostra" style="height:4px;background:' +
-        corOut(ref) + '"></span>' + rot + '</div>').join('');
+      /* O tom mais escuro é o que a camada existe para mostrar, e satura: 400% e
+         900% caem no mesmo lugar. Isso não cabe no eixo contínuo, então vai em
+         linha própria embaixo da barra. */
+      el.innerHTML = barraLog({
+        corDeT: t => corOut(oDeT(t)), marcas: MARCAS_OUT,
+        aria: 'Quanto da vazão média já está licenciada, de 1% ao rio inteiro.',
+        rodape: '<div class="rodape"><span class="amostra" style="height:4px;background:' +
+          OUT[6] + '"></span>licença ≥ o rio inteiro</div>',
+      });
       return;
     }
-    const linhas = CLASSES_POL.map(([ref, rot]) => {
-      const est = modo === 'industria'
-        ? 'background:' + COR_IND + ';opacity:' + ((2 + Math.round(p01(ref) * 6)) / 8).toFixed(2)
-        : 'background:' + corPol(ref);
-      return '<div class="classe"><span class="amostra" style="height:4px;' + est +
-        '"></span>' + rot + '</div>';
+    const ind = modo === 'industria';
+    el.innerHTML = barraLog({
+      // a indústria é cor única com opacidade, pelos mesmos degraus do canvas
+      corDeT: ind ? () => COR_IND : t => corPol(pDeT(t)),
+      alfaDeT: ind ? t => (2 + Math.round(t * 6)) / 8 : null,
+      marcas: MARCAS_POL,
+      aria: 'Quanto do rio é ' + (ind ? 'efluente industrial' : 'esgoto') + ', de 0,1% a 100%.',
+      // o tracejado do sem-dado vale nos dois modos, como no canvas
+      rodape: semDado.size
+        ? '<div class="rodape"><span class="amostra" style="height:0;border-top:2px dashed ' +
+          COR_SEM + '"></span>sem outorga</div>'
+        : '',
     });
-    if (semDado.size) {
-      linhas.push('<div class="classe"><span class="amostra" style="height:0;border-top:2px dashed ' +
-        COR_SEM + '"></span>sem outorga</div>');
-    }
-    el.innerHTML = linhas.join('');
   }
 
   /* O cartão da legenda dizia "Vazão média" nos quatro modos, inclusive naqueles
