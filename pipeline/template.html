@@ -1458,7 +1458,7 @@
        estações do país têm tendência medida — o que ele mostra é onde ela passa
        nos dois testes. */
     tendencia: 'Inclinação de Theil-Sen em % da média da estação, por década — o número que ' +
-      'ranqueia o series.html, medido numa janela própria que a ficha de cada estação mostra. ' +
+      'ranqueia o <a href="/series">series</a>, medido numa janela própria que a ficha de cada estação mostra. ' +
       'Aparecem as ' + fmt(TEND_OK.length) + ' que passam nos dois testes; as outras ' +
       fmt(N_TEND - TEND_OK.length) + ' de ' + fmt(N_TEND) + ' ficam fora, ' + fmt(N_SEM_SIG) +
       ' sem significância estatística e ' + fmt(N_SIG_OBRA) +
@@ -2448,7 +2448,7 @@
     document.getElementById('titulo').textContent = titulo;
     document.getElementById('puxadorRotulo').textContent = titulo;
     document.title = titulo;
-    notaModo.textContent = NOTA_MODO[novo] || '';
+    notaModo.innerHTML = NOTA_MODO[novo] || '';
     montaLegenda();
     if (selecao) aplicar(selecao);   // a ficha aberta reescreve com a leitura do modo
     agendar(false);
@@ -2894,7 +2894,7 @@
       botoesModo.some(b => b.isConnected && b.dataset.modo === modoDaURL)) {
     aplicaModo(modoDaURL);
   } else {
-    notaModo.textContent = NOTA_MODO[modo] || '';
+    notaModo.innerHTML = NOTA_MODO[modo] || '';
     montaLegenda();
   }
   textoOrdem();
