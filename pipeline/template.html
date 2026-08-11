@@ -1457,20 +1457,18 @@
        dizer quantas ficaram de fora, o mapa afirmaria que só algumas centenas de
        estações do país têm tendência medida — o que ele mostra é onde ela passa
        nos dois testes. */
-    tendencia: 'Inclinação de Theil-Sen em % da média da própria estação, por década — o mesmo ' +
-      'número que ranqueia o series.html. A janela não é a da série: a análise só conta anos ' +
-      'com 10 meses medidos e exige 20 anos e dado até 2015, e por isso ela vem escrita na ficha ' +
-      'de cada estação, ao lado do período medido. Aparecem as ' + fmt(TEND_OK.length) +
-      ' que passam nos dois testes. As outras ' + fmt(N_TEND - TEND_OK.length) + ' de ' +
-      fmt(N_TEND) + ' ficam fora: ' + fmt(N_SEM_SIG) + ' sem significância estatística e ' +
-      fmt(N_SIG_OBRA) + ' em estação de barragem, onde o degrau é da obra e não do rio.' +
-      (ordemTend ? ' A cor não fica no ponto: ela desce da estação para os rios que drenam ' +
-        'até ela e para na próxima régua acima, pintando ' + fmt(Math.round(KM_TEND / 100) / 10, 1) +
-        ' mil km em ' + fmt(ordemTend.length) + ' trechos. Não é tendência medida no trecho — ' +
-        'é a da estação, estendida à área que ela mede. Só entra o trecho que carrega ao menos ' +
-        fmt(TEND_PISO * 100) + '% da vazão dela, senão uma régua no tronco levaria seu número ' +
-        'até a última nascente. O resto da rede fica cinza: ou não há estação rio abaixo, ou o ' +
-        'trecho é fino demais para carregar a medição de uma régua distante.' : ''),
+    tendencia: 'Inclinação de Theil-Sen em % da média da estação, por década — o número que ' +
+      'ranqueia o series.html, medido numa janela própria que a ficha de cada estação mostra. ' +
+      'Aparecem as ' + fmt(TEND_OK.length) + ' que passam nos dois testes; as outras ' +
+      fmt(N_TEND - TEND_OK.length) + ' de ' + fmt(N_TEND) + ' ficam fora, ' + fmt(N_SEM_SIG) +
+      ' sem significância estatística e ' + fmt(N_SIG_OBRA) +
+      ' em estação de barragem, onde o degrau é da obra.' +
+      (ordemTend ? ' A cor não fica no ponto: desce da estação para os rios que drenam até ela ' +
+        'e para na próxima régua acima — ' + fmt(Math.round(KM_TEND / 100) / 10, 1) + ' mil km em ' +
+        fmt(ordemTend.length) + ' trechos. Não é tendência medida no trecho: é a da estação, ' +
+        'estendida à área que ela mede, e só entra o trecho que carrega ao menos ' +
+        fmt(TEND_PISO * 100) + '% da vazão dela. O que fica cinza não tem estação abaixo, ou é ' +
+        'fino demais para carregar a medição.' : ''),
   };
   const TITULO_MODO = {
     vazao: 'Os rios do Brasil, por vazão',
