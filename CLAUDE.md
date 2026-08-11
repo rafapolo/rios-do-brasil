@@ -62,8 +62,10 @@ python3 terra_fronteiras.py
 python3 processa.py               # regionaliza + valida, ~5 min
 python3 baixa_outorgas.py         # lançamento e captação do SNIRH, ~4 min
 python3 outorga.py                # camada de licença de retirada, ~12 min
+python3 baixa_topologia.py 1      # só atributos da BHO — usado por tendencia_rede.py e bacia_rede.py
 python3 tendencia_mapa.py         # %/década por estação, do tendencia.json (opcional)
 python3 tendencia_rede.py         # leva o %/década da estação para os trechos, ~10 s
+python3 bacia_rede.py             # nome da bacia (22 maiores por km) na ficha do trecho, ~10 s
 python3 monta_pagina.py
 
 # séries históricas (series.html) — só depende do lake
@@ -188,7 +190,25 @@ Todos os JSON intermediários são gitignored. Os HTML gerados são versionados 
   ponto — inclusive o Jaguaribe/Quixeré, que é a 4ª que mais seca; **(c)** o script roda
   avulso sobre o `rede_vazao.json` pronto, no molde do `outorga.py`, e **reescreve o
   `tendencia_mapa.json`** acrescentando `lista`, `trecho` e `piso` — rodar o
-  `tendencia_mapa.py` de novo apaga as três, então a ordem entre os dois importa.
+  `tendencia_mapa.py` de novo apaga as três, então a ordem entre os dois importa. **Isso já
+  quebrou a página publicada uma vez**: um `monta_pagina.py` rodado sobre um
+  `tendencia_mapa.json` velho (de antes do `tendencia_rede.py` ter rodado nesse checkout)
+  reempacotou o modo Tendência sem `trecho`, e ele voltou a mostrar só os pontos das estações,
+  sem pintar rio nenhum — no ar por algumas horas até alguém notar. Os três JSON intermediários
+  (`tendencia_mapa.json`, `rede_vazao.json`, `bacia_rede.py` mais abaixo) não têm data de
+  validade visível; antes de montar a página a partir de um checkout que não acabou de rodar o
+  pipeline inteiro, vale conferir `list(json.load(open(...)).keys())` contra o que o script que
+  os produz promete escrever.
+- **A bacia de cada trecho** (`bacia_rede.py`, roda depois do `tendencia_rede.py`) desce a rede
+  até a foz e nomeia pelo trecho terminal — mas só as 22 maiores por km viram nome na ficha; o
+  resto (~21% da rede) cai em "Outras bacias". Duas correções fazem parte do cálculo, não são
+  acabamento: **(a)** Paraná, Paraguai e Uruguai só terminam de verdade no Rio da Prata, fora do
+  Brasil — sem cortar a topologia na fronteira os três apareceriam com um nome só, que ninguém
+  usa aqui; o corte só entra nos grupos cujo terminal original já estava fora do país, então
+  Amazonas e São Francisco (que desaguam dentro) não são tocados. **(b)** O Tocantins se perde
+  no estuário do Amazonas antes de qualquer trecho voltar a se chamar rio, e o terminal do grupo
+  vem rotulado "Baía de Marajó" pela ANA — sem o `RENOMEIA` do script, o quinto maior rio do
+  país apareceria com nome de acidente geográfico.
 - **A ordem de Strahler não vale fora do Brasil** na BHO, e o nome do trecho às vezes é de um
   afluente pequeno — por isso o filtro do mapa é por vazão, não por ordem.
 - **`MunicipioCodigo` da ANA não é IBGE**, e o inventário de 2023 marca descarga líquida como

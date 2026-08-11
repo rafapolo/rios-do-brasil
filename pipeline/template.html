@@ -162,6 +162,30 @@
   #cvFluxo { position: absolute; inset: 0; pointer-events: none; }
   canvas.arrastando { cursor: grabbing; }
 
+  /* Os 11 MB de dados vêm embutidos no próprio HTML — não tem requisição de
+     rede separada para mostrar progresso, só o download do arquivo inteiro.
+     Este véu é o primeiro nó depois do <body>, antes do bloco de dados lá
+     embaixo: o navegador pinta o que já leu, então ele aparece cedo mesmo
+     numa conexão lenta, em vez de deixar a tela em branco até o arquivo
+     inteiro (e só depois o mapa) chegar. */
+  .carregando {
+    position: fixed; inset: 0; z-index: 999;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 14px; background: var(--leito); color: var(--ink-2);
+    font-family: var(--sans); font-size: 0.85rem;
+    transition: opacity .25s ease;
+  }
+  .carregando.sumindo { opacity: 0; pointer-events: none; }
+  .carregando .aro {
+    width: 34px; height: 34px; border-radius: 50%;
+    border: 3px solid var(--rule); border-top-color: var(--accent);
+    animation: aro-gira 0.8s linear infinite;
+  }
+  @keyframes aro-gira { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) {
+    .carregando .aro { animation-duration: 2.4s; }
+  }
+
   /* ---------- painéis flutuantes ---------- */
   .hud {
     position: fixed; top: 16px; left: 16px; z-index: 3;
@@ -633,6 +657,11 @@
   }
 </style>
 
+<div class="carregando" id="carregando" role="status" aria-live="polite">
+  <div class="aro" aria-hidden="true"></div>
+  <span>carregando o mapa…</span>
+</div>
+
 <main class="mapa" id="mapa">
   <canvas id="cv"></canvas>
   <canvas id="cvFluxo"></canvas>
@@ -841,6 +870,14 @@
       vertido e quanto chegou de montante.
     </p>
     <p>
+      A <strong>bacia</strong> na ficha de cada trecho vem de descer a rede pelo trecho de jusante
+      até a foz (ou até a fronteira, para os rios que saem do país) e nomear o resultado pelo nome
+      oficial da ANA naquele ponto. Só as <strong>22 maiores por quilômetro de rio</strong> ganham
+      nome na ficha — o resto, cerca de um quinto da rede, fica sem essa linha. A régua não é a
+      área de drenagem: o Tocantins deságua no complexo estuarino do Amazonas antes de ganhar nome
+      de rio outra vez, então sem esse ajuste ele apareceria como "Baía de Marajó".
+    </p>
+    <p>
       <strong>Quanto isso erra:</strong> retirando um quinto das estações, reestimando a rede sem
       elas e comparando nos trechos que elas mediam, <span data-2x></span>% das estimativas ficam
       dentro de 2× do valor observado e <span data-15x></span>% dentro de 1,5×, sem viés
@@ -1015,6 +1052,10 @@
   // atributos: também varint, exceto a ordem de Strahler (um dígito por trecho)
   const q = Float32Array.from(varints(D.q, 0, D.q.length), v => v / 1000);
   const nomeIdx = Int32Array.from(varints(D.nome, 0, D.nome.length));
+  // bacia: mesmo esquema do nome, mas o dicionário é curto (22 bacias grandes
+  // por km de rio + "Outras bacias") — o trecho que não caiu em nenhuma das
+  // 22 maiores aponta pro índice 0, não fica sem valor.
+  const baciaIdx = D.bacia ? Int32Array.from(varints(D.bacia, 0, D.bacia.length)) : null;
   const acumula = s => {
     const v = varints(s, 0, s.length), r = new Set();
     let a = 0;
@@ -1977,9 +2018,14 @@
     const medido = medidos.has(i);
     const fora = foraBr.has(i);
     const nome = D.nomes[nomeIdx[i]];
+    /* Só as 22 maiores bacias por km têm nome próprio aqui — o resto aponta
+       pro índice 0 ("Outras bacias"), e uma linha dizendo isso a cada trecho
+       comum seria ruído, não informação. Fica muda fora das 22. */
+    const bacia = baciaIdx && baciaIdx[i] > 0 ? D.bacias[baciaIdx[i]] : null;
     fichaEl.className = 'cartao ficha';
     fichaEl.innerHTML =
       '<div class="nome">' + (nome || 'Curso d’água sem nome na base') + '</div>' +
+      (bacia ? linha('Bacia', bacia) : '') +
       linha('Vazão aqui', vazao(q[i])) +
       (foz !== i ? linha('Na foz', vazao(q[foz])) : '') +
       linha('Área de drenagem', fmt(areas[i]) + ' km²') +
@@ -2905,6 +2951,17 @@
   // depois do primeiro arrasto, e o painel abria com "Estações ( )".
   redimensionar(); enquadrar(); desenhar(); contadores();
   if (animando) tocar();
+  // Dois rAF: o primeiro garante que o quadro que `desenhar()` acabou de
+  // preparar já foi ao compositor; sem o segundo, o véu some no mesmo quadro
+  // em que o canvas troca de conteúdo e um flash de fundo vazio escapa entre
+  // os dois em conexões mais lentas para pintar.
+  const carregando = document.getElementById('carregando');
+  if (carregando) {
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      carregando.classList.add('sumindo');
+      setTimeout(() => carregando.remove(), 260);
+    }));
+  }
   // o índice da busca sai do caminho da carga: já desenhado, num tempo ocioso.
   // O `focus` no campo também o monta, para quem digitar antes disso.
   (window.requestIdleCallback || (f => setTimeout(f, 900)))(montaBusca);
