@@ -142,6 +142,12 @@ const REINICIA = `() => {
   document.getElementById('gaveta').classList.remove('on');
   document.getElementById('veu').classList.remove('on');
   document.getElementById('sobreCorpo').classList.remove('on');
+  // as páginas são reaproveitadas: sem limpar, o teste seguinte herda a lista
+  // de sugestões aberta por cima do mapa
+  document.getElementById('buscaCampo').value = '';
+  document.getElementById('buscaLimpa').hidden = true;
+  document.getElementById('buscaLista').hidden = true;
+  document.getElementById('buscaLista').innerHTML = '';
   window.scrollTo(0, 0);
 }`;
 
@@ -165,7 +171,11 @@ export function copiaSondada(): string {
     "    TEND_TR, TEND_PCT, TEND_LISTA, TEND_PISO, ordemTend, KM_TEND,\n" +
     "    filtraTend: (c) => filtraTend(c), corTend: (p) => corTend(p),\n" +
     "    fichaTrecho: (i) => fichaTrecho(i), fichaEstacao: (e) => fichaEstacao(e),\n" +
-    "    aplicaModo: (m) => aplicaModo(m),\n" +
+    "    aplicaModo: (m) => aplicaModo(m), vista,\n" +
+    "    montaBusca: () => { montaBusca(); return BUSCA.repr.length; },\n" +
+    "    buscaRios: (s) => buscaRios(s).map(r => ({ nome: D.nomes[nomeIdx[r.i]],\n" +
+    "      uf: ufDoRio(r.i), q: r.q, peso: r.peso, i: r.i })),\n" +
+    "    vaiAoRio: (i) => vaiAoRio(i), trechosDoRio: (i) => [...trechosDoRio(i)],\n" +
     "    cor: (v) => cor(v), largura: (v, z) => largura(v, z), t01: (v) => t01(v) };\n";
   const destino = join(mkdtempSync(join(tmpdir(), "rios-")), "index.html");
   writeFileSync(destino, s.replace(ancora, sonda + ancora), "utf8");

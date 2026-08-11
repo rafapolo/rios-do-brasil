@@ -173,12 +173,14 @@
   /* A coluna da direita. Os dois cartões continuam dentro do #hud no DOM — no
      celular o embrulho vira `display: contents` e eles voltam a ser filhos-flex
      da gaveta, coisa que nenhum CSS faria se estivessem fora dela.
-     O "Sobre os dados" agora fecha esta coluna em vez de flutuar acima dela, e
-     por isso o topo voltou à margem de 16 px. */
+     O "Sobre os dados" agora fecha esta coluna em vez de flutuar acima dela.
+     O topo desceu para 70 px (16 + 38 do campo de busca + 16) para não ficar
+     debaixo dele, e o `max-height` desce junto: o teste do rodapé exige que a
+     base da coluna não alcance o topo da pilha de zoom. */
   .hud-dir {
-    position: fixed; top: 16px; right: 16px; z-index: 3;
+    position: fixed; top: 70px; right: 16px; z-index: 3;
     width: 300px; max-width: calc(100vw - 32px);
-    max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior: contain;
+    max-height: calc(100dvh - 264px); overflow-y: auto; overscroll-behavior: contain;
     display: flex; flex-direction: column; gap: 10px;
     pointer-events: none;
   }
@@ -395,6 +397,63 @@
     font-size: 0.64rem; letter-spacing: 0.06em; padding: 10px 14px; min-height: 40px;
   }
 
+  /* ---------- busca de rio ---------- */
+  /* Mora FORA do #hud de propósito. No celular a gaveta ganha
+     `transform: translateY()` ao recolher, e ancestral com transform vira bloco
+     contentor de descendente `position: fixed` — dentro dela o campo desceria
+     junto e sumiria da tela, justamente no estado em que mais se quer buscar. */
+  .busca {
+    position: fixed; top: 16px; right: 16px; z-index: 4;
+    width: 300px; max-width: calc(100vw - 32px);
+  }
+  .busca input {
+    appearance: none; -webkit-appearance: none;
+    width: 100%; box-sizing: border-box; min-height: 38px;
+    padding: 9px 34px 9px 13px;
+    background: var(--realce), var(--vidro);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    border: 1px solid var(--rule); border-radius: 2px; box-shadow: var(--sombra);
+    color: var(--ink); font-family: var(--sans); font-size: 0.8rem; font-weight: 550;
+  }
+  .busca input::placeholder { color: var(--ink-3); font-weight: 400; }
+  /* o × é nosso, com área de toque decente; o nativo do webkit é minúsculo */
+  .busca input::-webkit-search-cancel-button { display: none; }
+  .busca-limpa {
+    position: absolute; top: 0; right: 0; height: 100%;
+    display: flex; align-items: center; justify-content: center;
+    min-width: 32px; min-height: 0; padding: 0;
+    background: none; border: 0; box-shadow: none;
+    color: var(--ink-3); font-size: 1.05rem; line-height: 1;
+  }
+  .busca-limpa:hover { color: var(--ink); }
+  .busca-lista {
+    position: absolute; top: calc(100% + 6px); left: 0; right: 0;
+    margin: 0; padding: 4px; list-style: none;
+    max-height: min(46dvh, 340px); overflow-y: auto; overscroll-behavior: contain;
+    background: var(--realce), var(--vidro);
+    backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    border: 1px solid var(--rule); border-radius: 3px; box-shadow: var(--sombra);
+    transform-origin: top center;
+    animation: pulo .26s cubic-bezier(.34, 1.56, .64, 1);
+  }
+  .busca-lista[hidden] { display: none; }
+  @keyframes pulo { from { opacity: 0; transform: translateY(-6px) scale(.96); } }
+  @media (prefers-reduced-motion: reduce) { .busca-lista { animation: none; } }
+  .busca-lista li {
+    padding: 7px 9px; border-radius: 2px; cursor: pointer;
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .busca-lista li[aria-selected="true"], .busca-lista li:hover {
+    background: var(--rule); color: var(--accent);
+  }
+  .busca-lista li.vazio { cursor: default; color: var(--ink-3); font-size: 0.78rem; }
+  .busca-lista li.vazio:hover { background: none; color: var(--ink-3); }
+  .busca-nome { font-size: 0.8rem; font-weight: 550; }
+  .busca-meta {
+    font-family: var(--mono); font-size: 0.62rem; letter-spacing: 0.03em;
+    color: var(--ink-3); font-variant-numeric: tabular-nums;
+  }
+
   /* ---------- gaveta com tabela e método ---------- */
   /* ---------- painel "Sobre" ---------- */
   /* Já não flutua: é o último item da coluna da direita. Sem `pointer-events`
@@ -530,6 +589,14 @@
     h1 { font-size: 1.28rem; }
     .zoom { top: auto; bottom: 76px; right: 12px; }
     .abrir { bottom: auto; top: 12px; right: 12px; }
+    /* O "Tabela e método" ficou com o canto direito, então a busca vai para o
+       esquerdo. Fica visível com a gaveta recolhida — é onde ela mais serve. */
+    .busca { top: 12px; left: 12px; right: auto; width: min(52vw, 240px); }
+    .busca input { min-height: 44px; }
+    /* A lista não cabe na largura do campo: "PA/MT · 9.010 m³/s · 1.893,3 km"
+       quebra em duas linhas e a sugestão passa a ocupar o dobro da altura. Ela
+       sobra sobre o mapa, que é espaço livre. */
+    .busca-lista { right: auto; width: min(86vw, 360px); }
     .gaveta { width: 100vw; padding: 18px 18px 40px; }
     .vazio { top: 32%; }
     /* O `button` sozinho não alcançava nada: `.chave` e `.modos .modo` fixam
@@ -686,6 +753,20 @@
   <div class="cartao ficha vazia" id="ficha">
     Toque num rio para ver a vazão.
   </div>
+</div>
+
+<!-- Irmã do #hud, não filha: ver o comentário do `.busca` no <style>. Fica logo
+     antes do véu de propósito: o teste que compara o hud do template com o do
+     artefato fatia da abertura do hud até a do véu, e assim alcança este bloco
+     também. (Sem citar as duas etiquetas aqui — a fatia casa por texto, e
+     escrevê-las num comentário cortaria a região no lugar errado.) -->
+<div class="busca" id="busca">
+  <input type="search" id="buscaCampo" autocomplete="off" spellcheck="false"
+         placeholder="Buscar um rio" aria-label="Buscar um rio pelo nome"
+         role="combobox" aria-expanded="false" aria-controls="buscaLista"
+         aria-autocomplete="list">
+  <button class="busca-limpa" id="buscaLimpa" hidden aria-label="Limpar a busca">×</button>
+  <ul class="busca-lista" id="buscaLista" role="listbox" aria-label="Rios encontrados" hidden></ul>
 </div>
 
 <div class="veu" id="veu"></div>
@@ -2012,6 +2093,7 @@
   let pinca = null, movimento = 0, tInicio = 0;
 
   cv.addEventListener('pointerdown', e => {
+    cancelaVoo();          // a mão do leitor vence a animação
     cv.setPointerCapture(e.pointerId);
     ativos.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
     if (ativos.size === 1) { movimento = 0; tInicio = performance.now(); cv.classList.add('arrastando'); }
@@ -2131,17 +2213,53 @@
     vista.k = k2;
   }
 
+  /* Voo até um enquadramento. O que se interpola é o CENTRO em coordenadas de
+     mundo e o LOGARITMO da escala, não `vista.x/y/k` direto: zoom é
+     multiplicativo, e mover o deslocamento em linha reta enquanto a escala anda
+     em log faz o mapa descrever uma curva torta, com o alvo escapando para o
+     lado no meio do caminho. */
+  let voo = null;
+  const cancelaVoo = () => { if (voo) { cancelAnimationFrame(voo); voo = null; } };
+  function voar(cx1, cy1, k1) {
+    cancelaVoo();
+    const meioY = () => (H - rodapeHud()) / 2;
+    const pousa = () => {
+      vista.k = k1; vista.x = W / 2 - cx1 * k1; vista.y = meioY() - cy1 * k1;
+      agendar(false);
+    };
+    if (semMovimento.matches) return pousa();
+    const k0 = vista.k, cx0 = (W / 2 - vista.x) / k0, cy0 = (meioY() - vista.y) / k0;
+    const lk0 = Math.log(k0), dlk = Math.log(k1) - lk0;
+    const t0 = performance.now(), DUR = 500;
+    const passo = t => {
+      const u = Math.min(1, (t - t0) / DUR);
+      if (u >= 1) { voo = null; return pousa(); }
+      // easeInOutCubic
+      const e = u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
+      vista.k = Math.exp(lk0 + dlk * e);
+      const cx = cx0 + (cx1 - cx0) * e, cy = cy0 + (cy1 - cy0) * e;
+      vista.x = W / 2 - cx * vista.k; vista.y = meioY() - cy * vista.k;
+      // modo rápido: o corte por zoom derruba a contagem de trechos por quadro,
+      // que é o mesmo caminho que a roda e a pinça já usam
+      agendar(true);
+      voo = requestAnimationFrame(passo);
+    };
+    voo = requestAnimationFrame(passo);
+  }
+
   cv.addEventListener('wheel', e => {
     e.preventDefault();
+    cancelaVoo();
     aplicarZoom(Math.exp(-e.deltaY * 0.0016), e.offsetX, e.offsetY);
     tip.classList.remove('on');
     agendar(true);
   }, { passive: false });
 
   /* ---------- controles ---------- */
-  document.getElementById('btMais').addEventListener('click', () => { aplicarZoom(1.6, W / 2, H / 2); agendar(false); });
-  document.getElementById('btMenos').addEventListener('click', () => { aplicarZoom(1 / 1.6, W / 2, H / 2); agendar(false); });
+  document.getElementById('btMais').addEventListener('click', () => { cancelaVoo(); aplicarZoom(1.6, W / 2, H / 2); agendar(false); });
+  document.getElementById('btMenos').addEventListener('click', () => { cancelaVoo(); aplicarZoom(1 / 1.6, W / 2, H / 2); agendar(false); });
   document.getElementById('btReset').addEventListener('click', () => {
+    cancelaVoo();
     enquadrar(); fixado = false; aplicar(null); agendar(false);
   });
 
@@ -2380,6 +2498,271 @@
     if (window.matchMedia('(max-width: 760px)').matches) abrirHud();
   });
 
+  /* ---------- busca de rio por nome ---------- */
+  /* O resultado tem o grão do GRUPO de `rioDe` — nome mais conectividade —, não
+     o do nome nem o do trecho. Há dezenas de "Rio Preto" sem relação nenhuma no
+     país: agrupados pelo nome dariam uma linha só, com bbox do tamanho do
+     Brasil; soltos por trecho dariam 1.165 linhas iguais. O union-find do
+     processa.py já resolveu isso, e o CSR de cima já o expõe. */
+  const buscaCampo = document.getElementById('buscaCampo');
+  const buscaLista = document.getElementById('buscaLista');
+  const buscaLimpa = document.getElementById('buscaLimpa');
+  const semAcento = s => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+  /* Point-in-polygon contra os próprios contornos que o mapa desenha, para dizer
+     em que estado o rio corre. O contorno_uf.py joga o nome fora, então os anéis
+     chegam sem rótulo — mas cada um dos 27 estados contém exatamente uma
+     capital, e é por elas que os anéis se nomeiam aqui. Nada depende da ordem do
+     array: reordenar o uf.json não desalinha sigla nenhuma. Os oito anéis que
+     sobram são ilhas (Noronha, Ilhabela, Ilha Grande, as do Maranhão) e ficam
+     sem sigla, o que não custa nada — nenhuma tem rio com nome. */
+  const CAPITAIS = [
+    ['AC', -9.97, -67.81], ['AL', -9.65, -35.71], ['AP', 0.03, -51.07], ['AM', -3.10, -60.02],
+    ['BA', -12.97, -38.50], ['CE', -3.73, -38.52], ['DF', -15.79, -47.88], ['ES', -20.32, -40.34],
+    ['GO', -16.68, -49.25], ['MA', -2.53, -44.30], ['MT', -15.60, -56.10], ['MS', -20.44, -54.65],
+    ['MG', -19.92, -43.94], ['PA', -1.46, -48.50], ['PB', -7.12, -34.88], ['PR', -25.43, -49.27],
+    ['PE', -8.05, -34.90], ['PI', -5.09, -42.80], ['RJ', -22.91, -43.20], ['RN', -5.79, -35.21],
+    ['RS', -30.03, -51.23], ['RO', -8.76, -63.90], ['RR', 2.82, -60.67], ['SC', -27.59, -48.55],
+    ['SP', -23.55, -46.63], ['SE', -10.91, -37.07], ['TO', -10.18, -48.33]];
+
+  function noAnel(p, x, y) {
+    let dentro = false;
+    const n = p.length >> 1;
+    for (let i = 0, j = n - 1; i < n; j = i++) {
+      const yi = p[2 * i + 1], yj = p[2 * j + 1];
+      if ((yi > y) !== (yj > y) &&
+          x < (p[2 * j] - p[2 * i]) * (y - yi) / (yj - yi) + p[2 * i]) dentro = !dentro;
+    }
+    return dentro;
+  }
+
+  let ufAneis = null;
+  function rotulaAneis() {
+    if (ufAneis) return ufAneis;
+    // bbox por anel: descarta 34 dos 35 anéis antes de olhar um vértice sequer
+    const caixas = contornos.map(p => {
+      let a = 1, b = 1, c = 0, d = 0;
+      for (let j = 0; j < p.length; j += 2) {
+        if (p[j] < a) a = p[j]; if (p[j] > c) c = p[j];
+        if (p[j + 1] < b) b = p[j + 1]; if (p[j + 1] > d) d = p[j + 1];
+      }
+      return [a, b, c, d];
+    });
+    const sig = new Array(contornos.length).fill('');
+    for (const [sg, la, lo] of CAPITAIS) {
+      const x = projX(lo), y = merc(la);
+      for (let a = 0; a < contornos.length; a++) {
+        const cx = caixas[a];
+        if (sig[a] || x < cx[0] || x > cx[2] || y < cx[1] || y > cx[3]) continue;
+        if (noAnel(contornos[a], x, y)) { sig[a] = sg; break; }
+      }
+    }
+    ufAneis = { sig, caixas };
+    return ufAneis;
+  }
+
+  /* Rio atravessa estado. Amostra até doze trechos do curso e devolve as duas UF
+     mais frequentes ("MG/SP"). Trecho que não cai em anel nenhum não conta: os
+     rios andinos e os do Prata estão no mapa, e escrever "AM" neles seria pior
+     que não escrever nada. */
+  function ufDoRio(i) {
+    const { sig, caixas } = rotulaAneis(), grupo = trechosDoRio(i);
+    const salto = Math.max(1, Math.floor(grupo.length / 12));
+    const conta = new Map();
+    for (let p = 0; p < grupo.length; p += salto) {
+      const t = grupo[p] * 4;
+      const x = (bbox[t] + bbox[t + 2]) / 2, y = (bbox[t + 1] + bbox[t + 3]) / 2;
+      for (let a = 0; a < contornos.length; a++) {
+        const c = caixas[a];
+        if (!sig[a] || x < c[0] || x > c[2] || y < c[1] || y > c[3]) continue;
+        if (!noAnel(contornos[a], x, y)) continue;
+        conta.set(sig[a], (conta.get(sig[a]) || 0) + 1);
+        break;
+      }
+    }
+    return [...conta].sort((a, b) => b[1] - a[1]).slice(0, 2).map(e => e[0]).join('/');
+  }
+
+  /* O índice é preguiçoso: a página já leva alguns segundos para abrir com os
+     462 mil trechos, e este trabalho não pertence a esse caminho. Sai no
+     primeiro foco do campo, ou num tempo ocioso depois do primeiro desenho. */
+  let BUSCA = null;
+  function montaBusca() {
+    if (BUSCA) return BUSCA;
+    const nG = rioDe ? rioIni.length - 1 : 0;
+    // um representante por rio com nome: o trecho de maior vazão, que é a foz —
+    // a vazão acumula a jusante. Guardar bbox aqui seria desperdício: só as oito
+    // linhas exibidas precisam dele, e trechosDoRio é O(1).
+    const reps = new Int32Array(nG);
+    let n = 0;
+    for (let g = 0; g < nG; g++) {
+      const a = rioIni[g], b = rioIni[g + 1], i0 = rioLista[a];
+      // todo trecho do grupo carrega o mesmo nome, por construção do union-find
+      if (!D.nomes[nomeIdx[i0]]) continue;
+      let melhor = i0, qMax = q[i0];
+      for (let p = a + 1; p < b; p++) {
+        const i = rioLista[p];
+        if (q[i] > qMax) { qMax = q[i]; melhor = i; }
+      }
+      reps[n++] = melhor;
+    }
+    const repr = reps.slice(0, n);
+    // o casamento roda sobre os 38 mil nomes, não sobre os 82 mil rios
+    const chaves = D.nomes.map(semAcento);
+    const nN = D.nomes.length;
+    const nomeIni = new Int32Array(nN + 1);
+    for (let j = 0; j < n; j++) nomeIni[nomeIdx[repr[j]] + 1]++;
+    for (let k = 0; k < nN; k++) nomeIni[k + 1] += nomeIni[k];
+    const nomeLista = new Int32Array(n);
+    const cursor = nomeIni.slice(0, nN);
+    for (let j = 0; j < n; j++) nomeLista[cursor[nomeIdx[repr[j]]]++] = j;
+    BUSCA = { repr, chaves, nomeIni, nomeLista };
+    return BUSCA;
+  }
+
+  const MAX_RES = 8;
+  /* Ordena por (peso, vazão). O peso separa "começa com" de "começa uma palavra"
+     de "está no meio de uma": digitar "franc" tem que trazer o Rio Francisco
+     antes do Ribeirão Boa Franca. Dentro do mesmo peso manda a vazão, que é o
+     que desempata os homônimos — o maior "Rio Preto" primeiro. */
+  function buscaRios(consulta) {
+    const alvo = semAcento((consulta || '').trim());
+    if (alvo.length < 2) return [];
+    const ix = montaBusca();
+    const topo = [];
+    for (let k = 0; k < ix.chaves.length; k++) {
+      const c = ix.chaves[k];
+      const p = c.indexOf(alvo);
+      if (p < 0) continue;
+      const peso = p === 0 ? 0 : (c.charCodeAt(p - 1) === 32 ? 1 : 2);
+      for (let j = ix.nomeIni[k]; j < ix.nomeIni[k + 1]; j++) {
+        const i = ix.repr[ix.nomeLista[j]], qq = q[i];
+        // inserção num topo de oito, em vez de ordenar tudo: "rio" casa cinco
+        // mil nomes e dezenas de milhares de rios, e ordenar isso a cada
+        // digitação é trabalho jogado fora
+        let pos = topo.length;
+        while (pos > 0 && (peso < topo[pos - 1].peso ||
+               (peso === topo[pos - 1].peso && qq > topo[pos - 1].q))) pos--;
+        if (pos >= MAX_RES) continue;
+        topo.splice(pos, 0, { i, peso, q: qq });
+        if (topo.length > MAX_RES) topo.pop();
+      }
+    }
+    return topo;
+  }
+
+  let escolhido = -1;
+  const escapa = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+
+  function fechaBusca() {
+    buscaLista.hidden = true;
+    buscaLista.innerHTML = '';
+    escolhido = -1;
+    buscaCampo.setAttribute('aria-expanded', 'false');
+    buscaCampo.removeAttribute('aria-activedescendant');
+  }
+
+  function marcaEscolhido() {
+    const itens = buscaLista.querySelectorAll('li[data-i]');
+    itens.forEach((li, k) => li.setAttribute('aria-selected', String(k === escolhido)));
+    if (escolhido >= 0 && itens[escolhido]) {
+      buscaCampo.setAttribute('aria-activedescendant', itens[escolhido].id);
+      itens[escolhido].scrollIntoView({ block: 'nearest' });
+    } else {
+      buscaCampo.removeAttribute('aria-activedescendant');
+    }
+  }
+
+  function desenhaBusca(achados) {
+    if (!achados.length) {
+      buscaLista.innerHTML = '<li class="vazio">Nenhum rio com esse nome.</li>';
+    } else {
+      // a UF só é calculada para o que aparece, nunca no índice
+      buscaLista.innerHTML = achados.map((r, k) => {
+        const uf = ufDoRio(r.i);
+        const meta = [uf, vazao(r.q), extensao(r.i)].filter(Boolean).join(' · ');
+        return '<li id="busca-op-' + k + '" role="option" aria-selected="false" data-i="' + r.i + '">' +
+          '<span class="busca-nome">' + escapa(D.nomes[nomeIdx[r.i]]) + '</span>' +
+          '<span class="busca-meta">' + meta + '</span></li>';
+      }).join('');
+    }
+    buscaLista.hidden = false;
+    buscaCampo.setAttribute('aria-expanded', 'true');
+    escolhido = achados.length ? 0 : -1;
+    marcaEscolhido();
+  }
+
+  /* Enquadra o rio inteiro, não o trecho: a união dos bbox do grupo. O divisor é
+     1,6, e não o 6 do clique na tabela — lá a caixa é de um trecho só, aqui é do
+     curso todo, e 6 cortaria as pontas. */
+  function vaiAoRio(i) {
+    const grupo = trechosDoRio(i);
+    let minx = 1, miny = 1, maxx = 0, maxy = 0;
+    for (const t of grupo) {
+      const b = t * 4;
+      if (bbox[b] < minx) minx = bbox[b];
+      if (bbox[b + 1] < miny) miny = bbox[b + 1];
+      if (bbox[b + 2] > maxx) maxx = bbox[b + 2];
+      if (bbox[b + 3] > maxy) maxy = bbox[b + 3];
+    }
+    const larg = Math.max(maxx - minx, maxy - miny, 1e-4);
+    fixado = true; aplicar({ i });
+    voar((minx + maxx) / 2, (miny + maxy) / 2,
+         Math.max(kBase(), Math.min(kBase() * 40, Math.min(W, H) / (larg * 1.6))));
+    fechaBusca();
+    buscaCampo.blur();
+    abrirGaveta(false);
+    if (window.matchMedia('(max-width: 760px)').matches) abrirHud();
+  }
+
+  let tecleiEm = null;
+  buscaCampo.addEventListener('input', () => {
+    buscaLimpa.hidden = !buscaCampo.value;
+    clearTimeout(tecleiEm);
+    // 120 ms: filtrar a cada tecla varre 38 mil nomes à toa enquanto a palavra
+    // ainda está sendo escrita
+    tecleiEm = setTimeout(() => {
+      const v = buscaCampo.value.trim();
+      if (v.length < 2) { fechaBusca(); return; }
+      desenhaBusca(buscaRios(v));
+    }, 120);
+  });
+
+  buscaCampo.addEventListener('focus', montaBusca);
+  buscaCampo.addEventListener('keydown', ev => {
+    const itens = buscaLista.querySelectorAll('li[data-i]');
+    if (ev.key === 'Escape') {
+      ev.preventDefault();
+      if (buscaLista.hidden) { buscaCampo.value = ''; buscaLimpa.hidden = true; }
+      fechaBusca();
+      return;
+    }
+    if (ev.key === 'Enter') {
+      if (escolhido >= 0 && itens[escolhido]) { ev.preventDefault(); vaiAoRio(+itens[escolhido].dataset.i); }
+      return;
+    }
+    if (ev.key !== 'ArrowDown' && ev.key !== 'ArrowUp') return;
+    if (!itens.length) return;
+    ev.preventDefault();
+    escolhido = (escolhido + (ev.key === 'ArrowDown' ? 1 : itens.length - 1)) % itens.length;
+    marcaEscolhido();
+  });
+
+  buscaLista.addEventListener('click', ev => {
+    const li = ev.target.closest('li[data-i]');
+    if (li) vaiAoRio(+li.dataset.i);
+  });
+
+  buscaLimpa.addEventListener('click', () => {
+    buscaCampo.value = ''; buscaLimpa.hidden = true;
+    fechaBusca(); buscaCampo.focus();
+  });
+
+  // clique fora fecha a lista, mas não apaga o que foi digitado
+  document.addEventListener('pointerdown', ev => {
+    if (!buscaLista.hidden && !document.getElementById('busca').contains(ev.target)) fechaBusca();
+  });
+
   // painel "Sobre": o que existe na fonte contra o que entrou no mapa
   const nVar = s => { let n = 0; for (let i = 0; i < s.length; i++) if ((IDX[s.charCodeAt(i)] & 32) === 0) n++; return n; };
   (function montaSobre() {
@@ -2455,6 +2838,9 @@
   // depois do primeiro arrasto, e o painel abria com "Estações ( )".
   redimensionar(); enquadrar(); desenhar(); contadores();
   if (animando) tocar();
+  // o índice da busca sai do caminho da carga: já desenhado, num tempo ocioso.
+  // O `focus` no campo também o monta, para quem digitar antes disso.
+  (window.requestIdleCallback || (f => setTimeout(f, 900)))(montaBusca);
   let timerResize;
   window.addEventListener('resize', () => {
     clearTimeout(timerResize);

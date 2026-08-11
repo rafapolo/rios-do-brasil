@@ -88,6 +88,26 @@ describe("celular", () => {
                            "O que ver", "Os rios do Brasil, por vazão"]);
   });
 
+  test("a busca fica no topo com a gaveta recolhida, sem cobrir o 'Tabela e método'", async () => {
+    /* A regressão que isto trava: pôr o campo dentro do #hud. A gaveta recolhida
+       ganha `transform: translateY()`, e ancestral com transform vira bloco
+       contentor de descendente `position: fixed` — o campo desceria junto com ela
+       e sairia da tela, justamente no estado em que mais se quer buscar. */
+    const { pg: p } = await abrir(urlDe(INDEX), { dispositivo: "iPhone 13", fresco: true });
+    expect(await p.$eval("#hud", (e) => e.classList.contains("recolhido"))).toBe(true);
+    const r = await roda<any>(p, `() => {
+      const b = document.getElementById('busca').getBoundingClientRect();
+      const a = document.querySelector('.abrir').getBoundingClientRect();
+      return { bTopo: b.top, bBase: b.bottom, bDir: b.right, aEsq: a.left,
+               altura: window.innerHeight };
+    }`);
+    expect(r.bTopo, "o campo desceu junto com a gaveta").toBeLessThan(r.altura / 3);
+    expect(r.bDir, "a busca cobre o 'Tabela e método'").toBeLessThanOrEqual(r.aEsq);
+    // e alcança 44 px de alvo de toque, como o resto dos controles
+    expect(r.bBase - r.bTopo).toBeGreaterThanOrEqual(44);
+    await p.close();
+  }, LENTO);
+
   test("o puxador continua alcançável com a gaveta rolada", async () => {
     await pg.evaluate(() => {
       const h = document.getElementById("hud")!;
