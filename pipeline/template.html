@@ -802,7 +802,7 @@
   </div>
 
   <div class="cartao ficha vazia" id="ficha">
-    Toque num rio para ver a vazão.
+    Selecione um rio para ver os detalhes
   </div>
 </div>
 
@@ -2180,14 +2180,14 @@
      é como o mapa abre — só há rio para tocar, e mandar procurar reservatório
      seria mandar procurar o que não foi desenhado. */
   function fichaVazia() {
-    const alvos = ['num rio'];
-    if (mostrarEst) alvos.push('numa estação');
-    if (mostrarRes) alvos.push('num reservatório');
-    if (mostrarEtes) alvos.push('numa estação de tratamento');
+    const alvos = ['um rio'];
+    if (mostrarEst) alvos.push('uma estação');
+    if (mostrarRes) alvos.push('um reservatório');
+    if (mostrarEtes) alvos.push('uma estação de tratamento');
     const ult = alvos.pop();
     fichaEl.className = 'cartao ficha vazia';
-    fichaEl.textContent = 'Toque ' + (alvos.length ? alvos.join(', ') + ' ou ' : '') +
-      ult + ' para ver a vazão.';
+    fichaEl.textContent = 'Selecione ' + (alvos.length ? alvos.join(', ') + ' ou ' : '') +
+      ult + ' para ver os detalhes';
   }
 
   function mostrarTip(html, ev) {

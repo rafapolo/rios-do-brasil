@@ -36,7 +36,7 @@ for (const motor of MOTORES) {
       // mais de um tom no canvas: a rede foi de fato desenhada, não só o fundo
       expect(await roda<number>(pg, TINTA)).toBeGreaterThan(20);
       expect(await pg.$eval("#ficha", (e) => e.textContent!.trim()))
-        .toBe("Toque num rio para ver a vazão.");
+        .toBe("Selecione um rio para ver os detalhes");
     }, LENTO);
 
     test(`${motor}: tem as APIs e o CSS de que a página depende`, async () => {

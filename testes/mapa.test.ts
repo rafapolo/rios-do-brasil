@@ -190,13 +190,13 @@ describe("camadas", () => {
   test("a ficha vazia cita só as camadas ligadas", async () => {
     await reinicia(pg);
     const texto = async () => (await pg.textContent("#ficha"))!.trim();
-    expect(await texto()).toBe("Toque num rio para ver a vazão.");
+    expect(await texto()).toBe("Selecione um rio para ver os detalhes");
     await pg.click("#btEst"); await pg.waitForTimeout(250);
-    expect(await texto()).toBe("Toque num rio ou numa estação para ver a vazão.");
+    expect(await texto()).toBe("Selecione um rio ou uma estação para ver os detalhes");
     await pg.click("#btRes"); await pg.waitForTimeout(250);
-    expect(await texto()).toBe("Toque num rio, numa estação ou num reservatório para ver a vazão.");
+    expect(await texto()).toBe("Selecione um rio, uma estação ou um reservatório para ver os detalhes");
     await reinicia(pg);
-    expect(await texto()).toBe("Toque num rio para ver a vazão.");
+    expect(await texto()).toBe("Selecione um rio para ver os detalhes");
   });
 
   test("o fluxo animado desenha no canvas de cima", async () => {
