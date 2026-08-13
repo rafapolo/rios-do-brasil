@@ -1337,10 +1337,38 @@
   // centraliza no que sobra, não no retângulo inteiro
   const rodapeHud = () => (window.matchMedia('(max-width: 760px)').matches ? 66 : 0);
   const kBase = () => Math.min(W / (molduraX * 1.06), (H - rodapeHud()) / (molduraY * 1.06));
+
+  /* Teto do zoom, em múltiplos do enquadramento nacional. Era 40 (~60 m/px, z11
+     de ladrilho) por uma razão que envelheceu: naquele tempo o mapa só desenhava
+     Strahler 5 para cima e aproximar mostrava tela vazia. Hoje a rede vai até o
+     córrego de cabeceira e o `corteZoom` abre sozinho conforme se aproxima, então
+     quem manda no limite é o dado, não o desenho: a malha da BHO vem numa grade
+     de 11 m nos rios de bacia grande e 110 m nos pequenos, e os traços saem
+     simplificados de 20 m (Amazonas) a 350 m (córrego). Em 120× dá ~20 m/px —
+     ainda acima da grade fina, e ainda dentro do z14 nativo do Sentinel-2.
+     Passar muito disso começa a mostrar o degrau da grade como se fosse curva do
+     rio. */
+  const ZOOM_MAX = 120;
   function enquadrar() {
     vista.k = kBase();
     vista.x = W / 2 - (moldura.minx + molduraX / 2) * vista.k;
     vista.y = (H - rodapeHud()) / 2 - (moldura.miny + molduraY / 2) * vista.k;
+  }
+
+  /* Trava do arrasto: o CENTRO da tela não sai da extensão dos dados. Sem isto o
+     mapa é plano infinito — um arrasto distraído joga a rede para fora da tela e
+     não sobra nada indicando para que lado voltar, com o botão de reenquadrar
+     virando a única saída. A caixa é o `bounds`, extensão inteira da BHO (que vai
+     dos Andes ao Prata), e não a `moldura` do contorno do Brasil: dá para chegar
+     à costa e ao vizinho, não ao Atlântico vazio. Prender o centro, e não a
+     borda, é o que mantém a regra a mesma em qualquer zoom. */
+  function prender() {
+    const meio = (H - rodapeHud()) / 2;
+    const cx = (W / 2 - vista.x) / vista.k, cy = (meio - vista.y) / vista.k;
+    const px = Math.min(bounds.maxx, Math.max(bounds.minx, cx));
+    const py = Math.min(bounds.maxy, Math.max(bounds.miny, cy));
+    if (px !== cx) vista.x = W / 2 - px * vista.k;
+    if (py !== cy) vista.y = meio - py * vista.k;
   }
 
   function redimensionar() {
@@ -1672,11 +1700,21 @@
       }
   }
 
+  /* O Map itera na ordem de inserção, então reinserir no uso transforma o
+     descarte de "o mais antigo que entrou" em "o mais antigo que serviu". Sem
+     isto o primeiro a sair seria o nível nacional — que é raro de pedir e é
+     exatamente o pai de que desenhaAncestral() vive. */
+  function usa(chave, img) {
+    satCache.delete(chave);
+    satCache.set(chave, img);
+    return img;
+  }
+
   function satTile(z, x, y) {
     const chave = z + '/' + x + '/' + y;
-    let img = satCache.get(chave);
-    if (img) return img;
-    img = new Image();
+    const achado = satCache.get(chave);
+    if (achado) return usa(chave, achado);
+    const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => { if (mostrarSat) pedeRepinteSat(); };
     img.onerror = () => { img.ruim = true; };
@@ -1686,6 +1724,29 @@
     return img;
   }
 
+  const pronto = img => img && !img.ruim && img.complete && img.naturalWidth;
+
+  /* O nível que acabou de ser pedido demora; o de cima já está no cache e cobre
+     exatamente o mesmo chão, com menos detalhe. Sem isto, cada passo de zoom
+     começa do chapado de terra e a imagem volta em retalhos — o que se lê como
+     falha, não como espera. Aqui o pai entra borrado e é substituído pelo nítido
+     quando ele chega. Só se aproveita o que JÁ está no cache: nada disto pede um
+     ladrilho a mais à rede. Vale também para o ladrilho que não veio: buraco
+     vira borrão, que é bem menos mentiroso sobre o que há no chão. */
+  function desenhaAncestral(z, x, y, px, py, pw, ph) {
+    for (let d = 1; d <= 5 && z - d >= 0; d++) {
+      const k = (z - d) + '/' + (x >> d) + '/' + (y >> d), p = satCache.get(k);
+      if (!pronto(p)) continue;
+      usa(k, p);
+      /* O quadrante deste ladrilho dentro do pai. A conta é fracionária de
+         propósito: `naturalWidth >> d` zera em imagem pequena e o recorte sai
+         fora dos limites, e aí o drawImage não desenha nada — calado. */
+      const m = (1 << d) - 1, sw = p.naturalWidth / (1 << d), sh = p.naturalHeight / (1 << d);
+      octx.drawImage(p, (x & m) * sw, (y & m) * sh, sw, sh, px, py, pw, ph);
+      return;
+    }
+  }
+
   function desenhaSatelite() {
     const z = Math.max(0, Math.min(SAT_ZMAX, Math.round(Math.log2(vista.k * dpr / 256))));
     const n = 2 ** z, lado = vista.k / n;
@@ -1693,14 +1754,15 @@
     const y0 = Math.max(0, Math.floor(w0y * n)), y1 = Math.min(n - 1, Math.floor(w1y * n));
     for (let x = Math.floor(w0x * n); x <= Math.floor(w1x * n); x++)
       for (let y = y0; y <= y1; y++) {
-        const img = satTile(z, ((x % n) + n) % n, y);
-        if (img.ruim || !img.complete || !img.naturalWidth) continue;
+        const xn = ((x % n) + n) % n;
+        const img = satTile(z, xn, y);
         /* Arredondar as duas BORDAS e usar a diferença como largura. Arredondar
            a largura deixa fio de 1 px entre ladrilhos em escala fracionária. */
         const px = Math.round(x * lado + vista.x), py = Math.round(y * lado + vista.y);
-        octx.drawImage(img, px, py,
-          Math.round((x + 1) * lado + vista.x) - px,
-          Math.round((y + 1) * lado + vista.y) - py);
+        const pw = Math.round((x + 1) * lado + vista.x) - px;
+        const ph = Math.round((y + 1) * lado + vista.y) - py;
+        if (pronto(img)) octx.drawImage(img, px, py, pw, ph);
+        else desenhaAncestral(z, xn, y, px, py, pw, ph);
       }
   }
 
@@ -2351,6 +2413,7 @@
     } else {
       vista.x += dx; vista.y += dy;
     }
+    prender();
     tip.classList.remove('on');
     agendar(true);
   });
@@ -2435,13 +2498,12 @@
   }
 
   function aplicarZoom(fator, cx, cy) {
-    // teto de zoom no limite do que a rede comporta: com só os trechos de
-    // Strahler 5 ou mais, aproximar além disso mostra tela vazia
-    const k2 = Math.max(kBase() * 0.9, Math.min(kBase() * 40, vista.k * fator));
+    const k2 = Math.max(kBase() * 0.9, Math.min(kBase() * ZOOM_MAX, vista.k * fator));
     const r = k2 / vista.k;
     vista.x = cx - (cx - vista.x) * r;
     vista.y = cy - (cy - vista.y) * r;
     vista.k = k2;
+    prender();
   }
 
   /* Voo até um enquadramento. O que se interpola é o CENTRO em coordenadas de
@@ -2729,7 +2791,7 @@
     fixado = true; aplicar({ i });
     const cx = (bbox[i * 4] + bbox[i * 4 + 2]) / 2, cy = (bbox[i * 4 + 1] + bbox[i * 4 + 3]) / 2;
     const larg = Math.max(bbox[i * 4 + 2] - bbox[i * 4], bbox[i * 4 + 3] - bbox[i * 4 + 1], 1e-4);
-    vista.k = Math.max(kBase(), Math.min(kBase() * 40, Math.min(W, H) / (larg * 6)));
+    vista.k = Math.max(kBase(), Math.min(kBase() * ZOOM_MAX, Math.min(W, H) / (larg * 6)));
     vista.x = W / 2 - cx * vista.k; vista.y = H / 2 - cy * vista.k;
     agendar(false);
     abrirGaveta(false);
@@ -2946,7 +3008,7 @@
     const larg = Math.max(maxx - minx, maxy - miny, 1e-4);
     fixado = true; aplicar({ i });
     voar((minx + maxx) / 2, (miny + maxy) / 2,
-         Math.max(kBase(), Math.min(kBase() * 40, Math.min(W, H) / (larg * 1.6))));
+         Math.max(kBase(), Math.min(kBase() * ZOOM_MAX, Math.min(W, H) / (larg * 1.6))));
     fechaBusca();
     buscaCampo.blur();
     abrirGaveta(false);

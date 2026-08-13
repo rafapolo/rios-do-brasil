@@ -219,15 +219,42 @@ describe("camadas", () => {
      quieta. O ladrilho é servido aqui mesmo: o teste não pode depender do
      serviço da EOX estar no ar, e nenhum byte precisa atravessar a internet para
      provar o que se quer provar. */
+  /* 256×256 chapado, que é o tamanho que o WMTS entrega de verdade. Já foi 1×1:
+     economiza bytes e esconde bug, porque o recorte do ladrilho pai num quadrante
+     de imagem de um pixel só sai fora dos limites e o drawImage não desenha nada,
+     sem reclamar. */
   const LADRILHO = Buffer.from(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGO4xrAFAAM6AYvm0puCAAAAAElFTkSuQmCC",
-    "base64");
+    "iVBORw0KGgoAAAANSUhEUgAAAQAAAAEACAIAAADTED8xAAACAElEQVR42u3TQQ0AAAgDsfnXgxb07I0Gm" +
+    "lTBJZfNwFuRAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADAAGAAOAAcAAY" +
+    "AAwABgADAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADAAGAAOAAcAAGEAFDAAGAAOAAcAAYAAwA" +
+    "BgADAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwABgADAAGAAOAAcAAYAAwA" +
+    "BgADAAGAAOAAcAAYAAwABgADAAGAANgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMA" +
+    "AYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAADq" +
+    "IABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA" +
+    "4ABwABgADAAGAAMAAYAA4ABwABgADAAGAAMAAYAA4ABwABgAAwABgADgAHAAGAAMAAYAAwABgADgAHAA" +
+    "GAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAAGAAMAAYAAwABgADgAHAA" +
+    "GAAMAAYAK4Cll0XF65BKJ0AAAAASUVORK5CYII=", "base64");
+
+  /* a cor que mais aparece no canvas do fundo: com a camada ligada é o ladrilho
+     sob o véu, e sem ela é o chapado de terra — os dois não se confundem */
+  const FUNDO = `() => {
+    const c = document.getElementById('cv');
+    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    const conta = new Map();
+    for (let i = 0; i < d.length; i += 4 * 997) {
+      const k = d[i] + ',' + d[i + 1] + ',' + d[i + 2];
+      conta.set(k, (conta.get(k) ?? 0) + 1);
+    }
+    return [...conta].sort((a, b) => b[1] - a[1])[0][0];
+  }`;
 
   test("desligada não pede nada à rede; ligada pede o ladrilho e pinta", async () => {
     await reinicia(pg);
     const pedidos: string[] = [];
+    let recusa = false;
     await pg.route("**tiles.maps.eox.at/**", (r) => {
       pedidos.push(r.request().url());
+      if (recusa) return r.abort();
       /* o crossOrigin='anonymous' do template exige a permissão de volta; sem
          ela a imagem nem carrega, e com ela o canvas não fica manchado */
       r.fulfill({ contentType: "image/png", body: LADRILHO,
@@ -276,6 +303,20 @@ describe("camadas", () => {
       expect(lat(y + 1, n), `ladrilho ${u}: x e y trocados`).toBeGreaterThan(-50);
     }
 
+    /* Aproximar sem o pai deixava o chão voltar ao chapado de terra até o nível
+       novo chegar, e a imagem voltava em retalhos — foi o que se leu como
+       "buracos". Aqui o nível novo é recusado de propósito e para sempre: o que
+       sobrar no canvas só pode ter vindo do pai que já estava em cache. */
+    const comSat = await roda<string>(pg, FUNDO);
+    recusa = true;
+    const antesDoZoom = pedidos.length;
+    await pg.click("#btMais"); await pg.waitForTimeout(500);
+    await pg.click("#btMais"); await pg.waitForTimeout(1500);
+    expect(pedidos.length, "o zoom não chegou a pedir nível novo").toBeGreaterThan(antesDoZoom);
+    expect(await roda<string>(pg, FUNDO),
+      "o zoom com ladrilho recusado voltou ao chapado, em vez de usar o pai").toBe(comSat);
+
+    recusa = false;
     await pg.click("#btSat");
     await pg.waitForTimeout(300);
     expect(await pg.getAttribute("#creditoSat", "class")).not.toContain("on");
@@ -486,6 +527,37 @@ describe("controles", () => {
     await pg.click("#btReset"); await pg.waitForTimeout(600);
     expect(await roda<number>(pg, TINTA)).toBe(inicial);
   });
+
+  test("arrastar longe não joga a rede para fora da tela", async () => {
+    await reinicia(pg);
+    const inicial = await roda<number>(pg, TINTA);
+    // seis arrastos para o mesmo canto: sem trava, o mapa é plano infinito e a
+    // rede sai de vista, deixando o reenquadrar como única saída
+    for (let i = 0; i < 6; i++) {
+      await pg.mouse.move(500, 300);
+      await pg.mouse.down();
+      await pg.mouse.move(1200, 690, { steps: 12 });
+      await pg.mouse.up();
+      await pg.waitForTimeout(120);
+    }
+    await pg.waitForTimeout(600);
+    expect(await roda<number>(pg, TINTA),
+      "a rede sumiu da tela depois do arrasto").toBeGreaterThan(20);
+
+    // e para o canto oposto, que é o outro lado da mesma trava
+    for (let i = 0; i < 6; i++) {
+      await pg.mouse.move(1200, 690);
+      await pg.mouse.down();
+      await pg.mouse.move(500, 300, { steps: 12 });
+      await pg.mouse.up();
+      await pg.waitForTimeout(120);
+    }
+    await pg.waitForTimeout(600);
+    expect(await roda<number>(pg, TINTA)).toBeGreaterThan(20);
+
+    await pg.click("#btReset"); await pg.waitForTimeout(700);
+    expect(await roda<number>(pg, TINTA)).toBe(inicial);
+  }, LENTO);
 
   test("o filtro de detalhe reduz a rede desenhada", async () => {
     await reinicia(pg);

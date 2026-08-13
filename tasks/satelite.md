@@ -10,9 +10,10 @@
   filtrando o que não é `file:`. O requisito de abrir offline continua de pé.
 - Ligar pede ladrilho de verdade: 35 na vista nacional em 1280×860 com `dpr` 1.
 - **O `z` pedido bate com a conta do plano.** Vista nacional com `dpr` 2 → z6. No fim do trave de
-  zoom (`kBase()*40`) → z11, com 622 ladrilhos numa varredura de 40 passos. **O teto z14 do
-  Sentinel-2 nunca é alcançado**, que era a aposta que justificou escolher a fonte aberta em vez
-  da Esri.
+  zoom, hoje em `ZOOM_MAX = 120`, → z12 com `dpr` 1. **O teto z14 do Sentinel-2 continua sem ser
+  alcançado**, que era a aposta que justificou escolher a fonte aberta em vez da Esri. Medido
+  aproximando passo a passo do Solimões: 152 ladrilhos pedidos, **152 respostas 200, nenhuma
+  falha** — o que se viu como "buraco" era espera, não erro (ver o pai em cache, mais abaixo).
 - Interruptor, `aria-pressed`, crédito que aparece e some junto com a camada, canvas que muda:
   todos ok. Nenhum erro de JS no console em nenhum momento.
 - A rede azul continua legível sobre a imagem com o véu em 0,38 — conferido em tela nacional e
@@ -117,11 +118,17 @@ Crédito obrigatório, na forma que o próprio serviço declara:
 - **O teto útil é z13–14, não o que o servidor entrega.** O Sentinel-2 é de 10 m, ~z14 no
   equador. z15 e z16 respondem 200, mas a imagem é interpolada — conferido a olho sobre Manaus:
   z12 sai nítido, z16 sai borrado, sem detalhe novo. Travar o `z` em 14.
-- **O trave de zoom da página já limita mais que a fonte.** `vista.k` é preso em `kBase()*40`
-  (`template.html:2322`), o que dá z≈11 (~60 m/px). Ou seja o teto do Sentinel-2 **sobra** no
-  alcance atual — nada se perde por usar a fonte aberta em vez da Esri. Se um dia o trave subir
-  (80–200×), aí sim z14 vira o limite, e junto vêm o `corteZoom` e a camada de fluxo, que não
-  foram calibrados para essa faixa.
+- **O trave de zoom da página já limita mais que a fonte.** Era `kBase()*40` (z≈11, ~60 m/px);
+  **hoje é `ZOOM_MAX = 120`** (z≈12–13, ~20 m/px), uma constante só, ao lado do `kBase()`, que
+  os três lugares que travam zoom leem. O teto do Sentinel-2 continua sobrando — nada se perde
+  por usar a fonte aberta em vez da Esri. O medo que o número antigo carregava não se
+  confirmou: conferido em 120× sobre o Solimões, a malha da BHO não mostra degrau de grade, o
+  `corteZoom` abre sozinho e a camada de fluxo anima sem artefato (34 trechos em vista), com
+  zero erro de console. O comentário que justificava o 40 estava velho — falava de quando o
+  mapa só desenhava Strahler 5 para cima e aproximar dava tela vazia. Quem manda no limite
+  agora é o dado: grade de 11 m nas bacias grandes e 110 m nas pequenas, traço simplificado de
+  20 m (Amazonas) a 350 m (córrego). Subir muito além de 120× começa a mostrar o degrau da
+  grade como se fosse meandro do rio.
 - **O peso não é desprezível.** Média de **8,3 kB por ladrilho** em z7 sobre o Brasil (20
   ladrilhos amostrados); a tela nacional pega ~132 ladrilhos, ou **~1 MB**. `cache-control:
   max-age=604800` (7 dias) ajuda na revisita, não na primeira. Motivo a mais para a camada
@@ -136,6 +143,17 @@ Crédito obrigatório, na forma que o próprio serviço declara:
   camada está ligada — senão ele tapa a imagem que acabou de ser desenhada.
 - **Emenda entre ladrilhos.** Em escala fracionária o `drawImage` deixa fio de 1 px. Arredondar
   as **duas** bordas e usar a diferença como largura, nunca arredondar a largura.
+- **Cada passo de zoom começava do chão limpo, e isso se lê como falha.** O nível novo demora ~1 s
+  a chegar e o `desenhaSatelite()` só desenhava o `z` pedido, então a imagem voltava em retalhos
+  sobre o chapado de terra — reclamado como "muitos buracos", sendo que a medição não achou uma
+  resposta que não fosse 200. O conserto é o pai: `desenhaAncestral()` procura no cache o
+  ladrilho de `z-1`, `z-2`… (até 5 níveis) e desenha o quadrante certo dele esticado, com os
+  quatro argumentos de origem do `drawImage`. A imagem entra borrada e vira nítida quando o
+  nível pedido chega, em vez de piscar em pedaços. **Não pede nada a mais à rede** — só usa o
+  que já está no cache. Serve também para o ladrilho que de fato não veio: buraco vira borrão.
+  Junto veio uma correção que o pai torna necessária: o descarte do `satCache` era FIFO por
+  inserção, e **os primeiros a sair eram justamente os níveis grosseiros** que servem de pai —
+  o `usa()` reinsere no acesso e transforma o descarte em "o mais antigo que serviu".
 - **É composto anual, não uma data — e o ano é 2016.** A lâmina d'água é mediana do ano. Num
   mapa cujo assunto é vazão e seca, alguém vai ler a largura do rio na imagem como se fosse
   medição, e ainda por cima numa imagem uma década mais velha que o resto da página. A nota do

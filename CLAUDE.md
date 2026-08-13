@@ -127,6 +127,16 @@ Todos os JSON intermediários são gitignored. Os HTML gerados são versionados 
 
 - **Português** em nomes, comentários e commits (`type: descrição em minúscula`). Os scripts do
   `../rodado` são em inglês; os daqui não.
+- **Os limites da câmera do mapa moram em dois lugares só, e nenhum deles é literal solto.**
+  O teto de zoom é `ZOOM_MAX` (hoje 120 × o enquadramento nacional, ~20 m/px), lido pelos três
+  pontos que travam escala — botão, roda/pinça e os dois voos de enquadramento. O limite de
+  arrasto é `prender()`, chamado no fim do `pointermove` e do `aplicarZoom()`: ele impede que o
+  **centro da tela** saia do `bounds` (a extensão inteira da BHO, dos Andes ao Prata — não a
+  `moldura`, que é só o contorno do Brasil). Sem ele o mapa é plano infinito e um arrasto
+  distraído joga a rede para fora da tela sem deixar pista de para que lado voltar. Quem subir
+  o `ZOOM_MAX` precisa reconferir duas coisas que não são cobertas por teste: o degrau da grade
+  da BHO (11 m nas bacias grandes, 110 m nas pequenas) e a camada de fluxo, que nunca foi
+  calibrada acima dessa faixa.
 - **`<meta name="viewport">` é obrigatório** e as duas páginas ficaram sem ele por muito tempo.
   Sem a tag, o celular adota um viewport de 980 px e reduz tudo por zoom: o texto sai minúsculo
   e **nenhuma media query de `max-width` dispara**, então todo o CSS de celular vira letra
