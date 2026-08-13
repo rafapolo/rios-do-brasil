@@ -410,6 +410,7 @@
   .icone.res { color: var(--usina); background: color-mix(in srgb, var(--usina) 18%, transparent); }
   .icone.flu { color: var(--ramp-3); background: color-mix(in srgb, var(--ramp-3) 20%, transparent); }
   .icone.ete { color: var(--ete); background: color-mix(in srgb, var(--ete) 18%, transparent); }
+  .icone.sat { color: var(--ink-2); background: color-mix(in srgb, var(--ink-2) 16%, transparent); }
   .switch {
     width: 34px; height: 20px; border-radius: 99px; flex: none; position: relative;
     background: color-mix(in srgb, var(--ink-3) 40%, transparent);
@@ -428,6 +429,19 @@
 
   /* Rodapé direito, acima do "Tabela e método" (16 + 40 + 12): o topo da direita
      agora é do "Sobre os dados" e da coluna de cartões. */
+  /* Crédito da imagem: a CC BY exige atribuição visível enquanto a obra está à
+     mostra, então ele aparece com a camada e some com ela. */
+  .credito-sat {
+    position: fixed; left: 12px; bottom: 10px; z-index: 3; display: none;
+    max-width: min(52ch, calc(100vw - 24px));
+    font-size: 0.66rem; line-height: 1.35; color: var(--ink-2);
+    background: var(--vidro); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    padding: 5px 8px; border-radius: 6px; box-shadow: var(--sombra);
+  }
+  .credito-sat.on { display: block; }
+  .credito-sat a { color: inherit; }
+  @media (max-width: 760px) { .credito-sat { bottom: 72px; } }
+
   .zoom {
     position: fixed; right: 16px; top: auto; bottom: 68px; z-index: 3;
     display: flex; flex-direction: column; gap: 6px;
@@ -671,6 +685,12 @@
   nos cursos que drenam algumas centenas de km².</p>
 <div class="tip" id="tip"></div>
 
+<div class="credito-sat" id="creditoSat">
+  Imagem: <a href="https://cloudless.eox.at" target="_blank" rel="noopener">EOxCloudless</a>
+  por EOX IT Services GmbH — dados Copernicus Sentinel modificados de <strong>2016</strong>,
+  sob <a href="https://creativecommons.org/licenses/by/4.0/" target="_blank" rel="noopener">CC BY 4.0</a>.
+</div>
+
 <div class="zoom">
   <button id="btMais" title="Aproximar" aria-label="Aproximar">+</button>
   <button id="btMenos" title="Afastar" aria-label="Afastar">−</button>
@@ -793,6 +813,11 @@
         <span class="rotulo">Fluxo animado <b id="nFluxo"></b></span>
         <span class="switch"></span>
       </button>
+      <button id="btSat" class="chave" aria-pressed="false">
+        <span class="icone sat">▦</span>
+        <span class="rotulo">Imagem de satélite <b>2016</b></span>
+        <span class="switch"></span>
+      </button>
     </div>
   </div>
 
@@ -883,6 +908,15 @@
       dentro de 2× do valor observado e <span data-15x></span>% dentro de 1,5×, sem viés
       sistemático (mediana <span data-vies></span>×). Nos grandes rios da Amazônia a estimativa
       fica a menos de 10% das vazões publicadas.
+    </p>
+    <p>
+      A <strong>imagem de satélite</strong> é opcional e desligada por padrão — é a única parte
+      desta página que busca algo na rede; o resto abre offline. Ela é o mosaico sem nuvem
+      <strong>Sentinel-2 cloudless de 2016</strong>, da EOX, sob CC BY 4.0. Serve para conferir o
+      leito, o reservatório e o entorno do trecho — <strong>não serve para ler mudança</strong>:
+      é composto de um ano só, uma década mais velho que as vazões desta página, então
+      desmatamento, lavoura nova ou barragem recente não aparecem. A largura do rio na imagem é
+      mediana de 2016, não medição: o número é a vazão.
     </p>
     <p class="ressalva">
       <strong>Onde erra mais:</strong> a estimativa ignora barragens, transposições e captações —
@@ -1596,6 +1630,65 @@
     for (let j = a + 2; j < b; j += 2)
       c.lineTo(coords[j] * vista.k + vista.x, coords[j + 1] * vista.k + vista.y);
   }
+  /* ---------- base de satélite (opcional, e só ela sai à rede) ----------
+     A coordenada de mundo desta página já é Mercator normalizado em [0,1]
+     (projX/merc lá em cima), que é exatamente o espaço dos ladrilhos XYZ: o
+     ladrilho (z,x,y) ocupa [x/2^z,(x+1)/2^z] x [y/2^z,(y+1)/2^z]. Por isso a
+     camada é um drawImage na mesma câmera, sem reprojeção e sem biblioteca.
+
+     É a ÚNICA parte da página que depende da rede. Nasce desligada e cai calada
+     para a base vetorial se o ladrilho não vier — abrir por file:// sem internet
+     tem que continuar funcionando, que é requisito, não conveniência.
+
+     O ano é 2016 por causa da licença, não da estética: no WMTS da EOX só a
+     camada sem sufixo (o mosaico de 2016) é CC BY 4.0; de 2017 em diante é
+     CC BY-NC-SA, e o ShareAlike não cabe no MIT deste repositório. */
+  let mostrarSat = false;
+  const SAT_URL = 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/GoogleMapsCompatible/';
+  const SAT_ZMAX = 14;          // o Sentinel-2 é de 10 m; acima disso o servidor só interpola
+  const satCache = new Map();
+  let satTimer = null;
+
+  /* Um ladrilho que chega não pode repintar a rede inteira na hora: numa tela
+     nacional são ~130 ladrilhos, e cada repinte estático redesenha dezenas de
+     milhares de trechos. Junta tudo numa passada por vez. */
+  function pedeRepinteSat() {
+    if (satTimer) return;
+    satTimer = setTimeout(() => { satTimer = null; repintarFundo(); }, 120);
+  }
+
+  function satTile(z, x, y) {
+    const chave = z + '/' + x + '/' + y;
+    let img = satCache.get(chave);
+    if (img) return img;
+    img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = pedeRepinteSat;
+    img.onerror = () => { img.ruim = true; };
+    img.src = SAT_URL + z + '/' + y + '/' + x + '.jpg';   // atenção: y antes de x
+    satCache.set(chave, img);
+    if (satCache.size > 500) satCache.delete(satCache.keys().next().value);
+    return img;
+  }
+
+  function desenhaSatelite() {
+    const z = Math.max(0, Math.min(SAT_ZMAX, Math.round(Math.log2(vista.k * dpr / 256))));
+    const n = 2 ** z, lado = vista.k / n;
+    const [w0x, w0y] = paraMundo(0, 0), [w1x, w1y] = paraMundo(W, H);
+    const y0 = Math.max(0, Math.floor(w0y * n)), y1 = Math.min(n - 1, Math.floor(w1y * n));
+    for (let x = Math.floor(w0x * n); x <= Math.floor(w1x * n); x++)
+      for (let y = y0; y <= y1; y++) {
+        const img = satTile(z, ((x % n) + n) % n, y);
+        if (img.ruim || !img.complete || !img.naturalWidth) continue;
+        /* Arredondar as duas BORDAS e usar a diferença como largura. Arredondar
+           a largura deixa fio de 1 px entre ladrilhos em escala fracionária. */
+        const px = Math.round(x * lado + vista.x), py = Math.round(y * lado + vista.y);
+        octx.drawImage(img, px, py,
+          Math.round((x + 1) * lado + vista.x) - px,
+          Math.round((y + 1) * lado + vista.y) - py);
+      }
+  }
+
   function desenharEstatico() {
     const z = zAtual = vista.k / kBase();
     octx.clearRect(0, 0, W, H);
@@ -1606,16 +1699,26 @@
 
     octx.lineCap = 'round'; octx.lineJoin = 'round';
 
-    // massa de terra por baixo de tudo
-    octx.beginPath();
-    octx.fillStyle = COR_TERRA;
-    for (const p of terra) {
-      octx.moveTo(p[0] * vista.k + vista.x, p[1] * vista.k + vista.y);
-      for (let j = 2; j < p.length; j += 2)
-        octx.lineTo(p[j] * vista.k + vista.x, p[j + 1] * vista.k + vista.y);
-      octx.closePath();
+    // massa de terra por baixo de tudo — ou a imagem, quando a camada está ligada
+    if (mostrarSat) {
+      desenhaSatelite();
+      /* Véu por cima da imagem: a rampa é sequencial azul e o pé dela
+         (--ramp-0..2) desaparece sobre água e mata escura. Sem isto a metade
+         fina da rede some justamente onde o leitor foi conferir o rio. */
+      octx.fillStyle = COR_TERRA; octx.globalAlpha = 0.38;
+      octx.fillRect(0, 0, W, H);
+      octx.globalAlpha = 1;
+    } else {
+      octx.beginPath();
+      octx.fillStyle = COR_TERRA;
+      for (const p of terra) {
+        octx.moveTo(p[0] * vista.k + vista.x, p[1] * vista.k + vista.y);
+        for (let j = 2; j < p.length; j += 2)
+          octx.lineTo(p[j] * vista.k + vista.x, p[j + 1] * vista.k + vista.y);
+        octx.closePath();
+      }
+      octx.fill('evenodd');
     }
-    octx.fill('evenodd');
 
     // divisa dos países um pouco mais forte que a das UFs
     octx.beginPath();
@@ -2407,6 +2510,12 @@
     if (v) tocar(); else { parar(); fctx.clearRect(0, 0, W, H); quadroUnico(); }
     contadores();
   });
+  alterna('btSat', () => mostrarSat, v => {
+    mostrarSat = v;
+    // a CC BY pede atribuição enquanto a imagem está à mostra
+    document.getElementById('creditoSat').classList.toggle('on', v);
+    repintarFundo();
+  });
 
   const rg = document.getElementById('rgOrdem');
   const rgTexto = document.getElementById('rgTexto');
@@ -2927,7 +3036,9 @@
     'Vazões: séries históricas das estações fluviométricas da ANA, ' + anoIni + '–' + anoFim + '. ' +
     'Reservatórios: Sistema de Acompanhamento de Reservatórios da ANA, operação diária 2000–2022.' +
     (ETES.length ? ' Tratamento de esgoto: camada ETE 2019 do Atlas Esgotos da ANA, ' +
-      ETES.length + ' estações — a remoção de DBO é a declarada no Atlas, não medida no rio.' : '');
+      ETES.length + ' estações — a remoção de DBO é a declarada no Atlas, não medida no rio.' : '') +
+    ' Imagem de satélite (camada opcional): EOxCloudless, EOX IT Services GmbH, ' +
+    'dados Copernicus Sentinel modificados de 2016, CC BY 4.0.';
 
   /* ---------- início ---------- */
   lerCores();
