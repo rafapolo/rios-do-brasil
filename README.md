@@ -17,6 +17,11 @@ ela vem pronta na topologia da base da ANA.
 
 - **Largura e cor de cada traço** proporcionais à vazão média, em escala logarítmica
 - **Fluxo animado** correndo no sentido real do escoamento (opcional, desligado por padrão)
+- **Imagem de satélite** por baixo da rede, para conferir no chão o que a página afirma —
+  o reservatório que encolheu, o pivô encostado no trecho pintado de laranja. Opcional e
+  desligada por padrão: é a única parte da página que sai à rede, e sem ela o arquivo
+  continua se bastando por `file://`. O mosaico é de **2016**, não de agora — a largura do
+  rio na imagem é composto anual de uma década atrás, e o número na ficha é que é a vazão
 - **1.851 estações fluviométricas** com série longa, cada uma com o regime mês a mês —
   quando enche, quando seca e a razão entre os extremos
 - **168 reservatórios** do Sistema Interligado Nacional, com 22 anos de operação diária:
@@ -99,6 +104,7 @@ UHE Itá, com +70% por década, que é o enchimento do reservatório.
 | Reservatórios | Sistema de Acompanhamento de Reservatórios (SAR), ANA |
 | Contorno dos estados | `br_geobr_mapas` / IBGE |
 | Terra e fronteiras | [Natural Earth](https://www.naturalearthdata.com) 1:50m |
+| Imagem de satélite (camada opcional) | [EOxCloudless](https://cloudless.eox.at) 2016, da EOX IT Services GmbH — dados Copernicus Sentinel modificados, sob [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 
 ## Como a vazão é estimada
 
@@ -206,3 +212,8 @@ redesenhada quando a vista muda; a animação de fluxo tem canvas próprio por c
 ## Licença
 
 Código sob MIT. Os dados são públicos, da ANA, do IBGE e do Natural Earth — cite as fontes.
+
+A camada de satélite é o mosaico **de 2016** do EOxCloudless, e o ano é escolha de licença, não
+de estética: no WMTS da EOX só ele é CC BY 4.0, e de 2017 em diante tudo é CC BY-NC-SA. O
+ShareAlike não caberia aqui — a página funde a imagem com a rede num canvas só, o que é
+adaptação, e obrigaria a relicenciar o conjunto.

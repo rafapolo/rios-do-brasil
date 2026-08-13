@@ -8,7 +8,7 @@ medidas contra o serviço, não supostas.
 |---|---|---|
 | [Barragens e rio livre](barragens.md) | SNISB via ArcGIS do SNIRH | fonte confirmada, falta escrever o ETL |
 | [Qualidade da água medida](qualidade-agua.md) | Indicadores de Qualidade (RNQA) do SNIRH | fonte confirmada, falta escrever o ETL |
-| [Camada de satélite](satelite.md) | Sentinel-2 cloudless da EOX, mosaico de 2016 (CC BY 4.0) | **implementado na branch `wip/satelite-2016`, parado na suíte** — o `mapa.test.ts` não fecha e a causa não foi diagnosticada. Os anos 2017+ são BY-NC-SA e não cabem no MIT deste repo |
+| [Camada de satélite](satelite.md) | Sentinel-2 cloudless da EOX, mosaico de 2016 (CC BY 4.0) | **implementado e com a suíte fechando** — o que travava era uma asserção, não a camada. Os anos 2017+ são BY-NC-SA e não cabem no MIT deste repo |
 
 ## Parados, mas prontos no lake
 

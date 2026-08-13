@@ -1,9 +1,8 @@
 # Camada de satélite (Sentinel-2 cloudless)
 
-> **Estado: implementado, NÃO validado. Branch `wip/satelite-2016`, fora da `main`.**
-> O roteiro abaixo está todo escrito em `pipeline/template.html` e `index.html` (as mesmas 9
-> edições nos dois). O que falta é fechar a pendência da suíte, na seção
-> [O que trava a entrega](#o-que-trava-a-entrega). Não juntar na `main` antes disso.
+> **Estado: implementado e validado.** O roteiro abaixo está todo escrito em
+> `pipeline/template.html` e `index.html` (as mesmas edições nos dois), e a suíte fecha.
+> O que travava está resolvido — ver [O que travava a entrega](#o-que-travava-a-entrega).
 
 ## Conferido (13/08/2026, chromium headless, por `file://`)
 
@@ -19,41 +18,38 @@
 - A rede azul continua legível sobre a imagem com o véu em 0,38 — conferido em tela nacional e
   com zoom, no tema claro. **Falta conferir no tema escuro**, onde `--terra` é `#141a1e`.
 - `bun test testes/estrutura.test.ts`: **19 passam, 0 falham**. É o arquivo que compara template
-  contra artefato, então o par de edições não divergiu.
+  contra artefato, então o par de edições não divergiu. O `btSat` e o `let mostrarSat = false`
+  entraram na lista que ele confere, senão a camada podia divergir entre os dois arquivos ou
+  nascer ligada sem nada reclamar.
 
-## O que trava a entrega
+## O que travava a entrega
 
-**`testes/mapa.test.ts` não fechou, e a causa não foi diagnosticada.** Duas rodadas do mesmo
-arquivo, sem mexer em nada entre elas:
+**Era uma asserção só, e a lentidão era da máquina.** A rodada de 799 s com 28 falhas foi feita
+enquanto os navegadores da rodada anterior — cortada por timeout, sem deixar o `afterAll` chamar
+`fecharTudo()` — ainda estavam vivos disputando a máquina. Com a máquina limpa, o mesmo
+`mapa.test.ts` sem nenhuma correção fechou em **174,9 s, 47 passam e 1 falha**: exatamente o
+tempo de antes da camada. Fica a regra: **rodada cortada na mão deixa navegador solto, e a
+rodada seguinte não vale como medida** — conferir `ps` antes de acreditar num tempo.
 
-| Rodada | Tempo | Resultado |
-|---|---|---|
-| 1ª (cortada por timeout meu aos 170 s) | 170 s | 43 passam, 5 falham |
-| 2ª (deixada terminar) | **799 s** | 20 passam, **28 falham** |
+A falha real, única, era boba: `as quatro nascem desligadas` exigia
+`/^\(\d[\d.]*\)$/` de **todo** `#hud button.chave b`, e o `<b>` do satélite traz `2016`, que é o
+ano do mosaico e não um contador. O teste agora pede o contador das camadas que contam e checa
+o ano à parte.
 
-Todas as falhas saem como `evaluate: Target page, context or browser has been closed`, a partir
-do `reinicia()` (`testes/comum.ts:164`). **A mesma suíte ficou 4,7× mais lenta entre duas rodadas
-idênticas** — e isso não está explicado. Pode ser a camada, pode ser contenção de máquina
-deixada pela primeira rodada que eu matei. **Não presumir que é instabilidade da suíte**: antes
-desta mudança o arquivo fechava dentro do teto de 3 minutos.
+A pista da suíte segurando ladrilho em voo **não era a causa** — nenhum teste ligava a camada —,
+mas apontava para um defeito de verdade no produto, que foi corrigido junto:
 
-Pista que vale investigar primeiro, e que é concreta:
+- **Desligar não cancelava nada.** Os ladrilhos que a última vista pediu seguiam baixando, e
+  cada um que chegava disparava `pedeRepinteSat()` → repinte dos 462 mil trechos com a camada
+  já desligada. Agora o `onload` só repinta se `mostrarSat`, e `paraSatelite()` corta o que está
+  em voo (`img.src = ''`, ouvintes soltos, chave fora do `satCache`) quando o interruptor cai.
 
-- **`REINICIA` clica em toda `#hud button.chave` com `aria-pressed="true"`**
-  (`testes/comum.ts:148-149`) — e `#btSat` agora é uma delas. A camada nasce desligada, então em
-  princípio nunca dispara; mas a suíte **reaproveita a mesma página entre testes**, e um único
-  teste que ligue a camada deixa dezenas de carregamentos de ladrilho em voo atravessando os
-  testes seguintes. Um `img` pendente contra a rede, numa página `file://` que o Playwright vai
-  fechar, é candidato natural a segurar o fechamento e a estourar o tempo.
-
-### Como fechar isso
-
-1. Reproduzir com um só motor e com a rede bloqueada (`page.route('**tiles.maps.eox.at**', r =>
-   r.abort())`) — se a suíte volta ao tempo de antes, é a camada; se não volta, era a máquina.
-2. Se for a camada: cancelar os carregamentos em voo quando o interruptor desliga (`img.src = ''`
-   nos pendentes, ou um `AbortController` por vista), e limpar o `satCache` no `reinicia()`.
-3. Só então escrever o teste novo do item 6 do roteiro, e rodar a suíte inteira nos três motores
-   dentro do teto de 3 minutos.
+O teste do item 6 do roteiro está em `testes/mapa.test.ts`, na `describe("camadas")`, e serve o
+ladrilho localmente com `page.route` — não depende do serviço da EOX estar no ar e não gasta um
+byte de internet. Ele cobre quatro coisas: desligada a página não pede nada à rede nem ao mexer
+no mapa; ligada pede ladrilho, pinta o canvas e acende o crédito; a URL segue o padrão do WMTS;
+e a ordem `{z}/{y}/{x}` está certa — quem denuncia a troca é a latitude, porque lido como
+`{x}/{y}` o mesmo pedido aterrissa acima do paralelo 30 norte.
 
 **Objetivo.** O mapa desenha o rio como traço sobre chapado de cor. Não há como o leitor
 confrontar o que a página afirma com o chão: o reservatório que encolheu, o pivô de irrigação

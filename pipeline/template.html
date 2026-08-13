@@ -1657,13 +1657,28 @@
     satTimer = setTimeout(() => { satTimer = null; repintarFundo(); }, 120);
   }
 
+  /* Desligar corta o que está em voo. Sem isto, os ladrilhos que a última vista
+     pediu continuam baixando contra uma camada que ninguém mais vê, e cada um
+     que chega dispara um repinte dos 462 mil trechos. Some da memória junto:
+     ladrilho pela metade não serve de cache, e volta a ser pedido se ligar de
+     novo. */
+  function paraSatelite() {
+    if (satTimer) { clearTimeout(satTimer); satTimer = null; }
+    for (const [chave, img] of satCache)
+      if (!img.complete) {
+        img.onload = img.onerror = null;
+        img.src = '';
+        satCache.delete(chave);
+      }
+  }
+
   function satTile(z, x, y) {
     const chave = z + '/' + x + '/' + y;
     let img = satCache.get(chave);
     if (img) return img;
     img = new Image();
     img.crossOrigin = 'anonymous';
-    img.onload = pedeRepinteSat;
+    img.onload = () => { if (mostrarSat) pedeRepinteSat(); };
     img.onerror = () => { img.ruim = true; };
     img.src = SAT_URL + z + '/' + y + '/' + x + '.jpg';   // atenção: y antes de x
     satCache.set(chave, img);
@@ -2512,6 +2527,7 @@
   });
   alterna('btSat', () => mostrarSat, v => {
     mostrarSat = v;
+    if (!v) paraSatelite();
     // a CC BY pede atribuição enquanto a imagem está à mostra
     document.getElementById('creditoSat').classList.toggle('on', v);
     repintarFundo();

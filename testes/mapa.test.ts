@@ -166,16 +166,19 @@ describe("legenda em barra log", () => {
 });
 
 describe("camadas", () => {
-  test("as quatro nascem desligadas", async () => {
+  test("as cinco nascem desligadas", async () => {
     const { pg: p } = await abrir(urlDe(INDEX), { fresco: true });
     const estado = await p.$$eval("#hud button.chave",
       (e) => Object.fromEntries(e.map((b) => [b.id, b.getAttribute("aria-pressed")])));
     for (const v of Object.values(estado)) expect(v).toBe("false");
     expect(Object.keys(estado).length).toBeGreaterThanOrEqual(3);
-    // e os contadores ao lado de cada uma vêm preenchidos, não "( )"
-    const n = await p.$$eval("#hud button.chave b", (e) => e.map((b) => b.textContent?.trim()));
+    /* e os contadores ao lado de cada uma vêm preenchidos, não "( )". O satélite
+       fica de fora: no lugar do contador ele traz o ano do mosaico, que é
+       ressalva de leitura — a imagem é de 2016 e o resto da página não. */
+    const n = await p.$$eval("#hud button.chave:not(#btSat) b", (e) => e.map((b) => b.textContent?.trim()));
     expect(n.length).toBeGreaterThanOrEqual(3);
     for (const v of n) expect(v).toMatch(/^\(\d[\d.]*\)$/);
+    expect(await p.textContent("#btSat b")).toBe("2016");
   }, LENTO);
 
   test("ligar as estações muda o que está desenhado", async () => {
@@ -210,6 +213,75 @@ describe("camadas", () => {
     expect(await roda(pg, vazio)).toBe(false);
     await pg.click("#btFluxo");
   });
+
+  /* A camada de satélite é a única parte da página que sai à rede, e o requisito
+     de abrir por file:// sem internet depende de ela nascer desligada e ficar
+     quieta. O ladrilho é servido aqui mesmo: o teste não pode depender do
+     serviço da EOX estar no ar, e nenhum byte precisa atravessar a internet para
+     provar o que se quer provar. */
+  const LADRILHO = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGO4xrAFAAM6AYvm0puCAAAAAElFTkSuQmCC",
+    "base64");
+
+  test("desligada não pede nada à rede; ligada pede o ladrilho e pinta", async () => {
+    await reinicia(pg);
+    const pedidos: string[] = [];
+    await pg.route("**tiles.maps.eox.at/**", (r) => {
+      pedidos.push(r.request().url());
+      /* o crossOrigin='anonymous' do template exige a permissão de volta; sem
+         ela a imagem nem carrega, e com ela o canvas não fica manchado */
+      r.fulfill({ contentType: "image/png", body: LADRILHO,
+                  headers: { "access-control-allow-origin": "*" } });
+    });
+    const externos: string[] = [];
+    const ouve = (req: { url: () => string }) => {
+      if (!req.url().startsWith("file:")) externos.push(req.url());
+    };
+    pg.on("request", ouve);
+
+    // desligada: mexer no mapa não puxa um byte
+    await pg.click("#btMais");
+    await pg.waitForTimeout(800);
+    expect(externos, "a página desligada saiu à rede").toEqual([]);
+    await pg.click("#btReset");
+    await pg.waitForTimeout(400);
+
+    const antes = await roda<number>(pg, TINTA);
+    await pg.click("#btSat");
+    await pg.waitForTimeout(1200);
+    expect(pedidos.length, "ligar a camada não pediu ladrilho nenhum").toBeGreaterThan(0);
+    expect(externos.every((u) => u.includes("tiles.maps.eox.at")),
+      `saiu à rede para fora do serviço de ladrilho: ${externos.join(" ")}`).toBe(true);
+    expect(await roda<number>(pg, TINTA), "o ladrilho não chegou ao canvas").not.toBe(antes);
+    // a CC BY 4.0 pede o crédito enquanto a imagem está à mostra
+    expect(await pg.getAttribute("#creditoSat", "class")).toContain("on");
+
+    for (const u of pedidos)
+      expect(u).toMatch(/s2cloudless_3857\/default\/GoogleMapsCompatible\/\d+\/\d+\/\d+\.jpg$/);
+    /* {z}/{y}/{x} — y antes de x, ao contrário do {z}/{x}/{y} do CARTO. Trocar a
+       ordem devolve 200 com a imagem errada, não erro, então nada além disto
+       flagraria. Quem denuncia é o meridiano: no enquadramento do Brasil todo
+       ladrilho pedido começa a oeste de -15°, e lido ao contrário o mesmo pedido
+       vai parar entre -11° e +34° — no Atlântico e na África. A latitude vem
+       junto, com folga larga: o z depende do tamanho da janela, e a conta não
+       pode passar a depender dele. */
+    const lon = (t: number, n: number) => (t / n) * 360 - 180;
+    const lat = (t: number, n: number) =>
+      (Math.atan(Math.sinh(Math.PI * (1 - 2 * t / n))) * 180) / Math.PI;
+    for (const u of pedidos) {
+      const [, z, y, x] = u.match(/\/(\d+)\/(\d+)\/(\d+)\.jpg$/)!.map(Number);
+      const n = 2 ** z;
+      expect(lon(x, n), `ladrilho ${u}: x e y trocados`).toBeLessThan(-15);
+      expect(lat(y, n), `ladrilho ${u}: x e y trocados`).toBeLessThan(30);
+      expect(lat(y + 1, n), `ladrilho ${u}: x e y trocados`).toBeGreaterThan(-50);
+    }
+
+    await pg.click("#btSat");
+    await pg.waitForTimeout(300);
+    expect(await pg.getAttribute("#creditoSat", "class")).not.toContain("on");
+    pg.off("request", ouve);
+    await pg.unroute("**tiles.maps.eox.at/**");
+  }, LENTO);
 });
 
 describe("ficha", () => {

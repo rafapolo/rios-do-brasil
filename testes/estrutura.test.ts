@@ -209,7 +209,10 @@ describe("mudanças recentes, nos dois arquivos", () => {
     for (const [nome, p] of DOIS) {
       const s = texto(p);
       expect(s, nome).toContain("let mostrarEst = false, mostrarRes = false;");
-      for (const bt of ["btEst", "btRes", "btEtes", "btFluxo"]) {
+      /* a de satélite é a única que sai à rede: nascer ligada quebraria o
+         requisito de abrir por file:// sem internet */
+      expect(s, nome).toContain("let mostrarSat = false;");
+      for (const bt of ["btEst", "btRes", "btEtes", "btFluxo", "btSat"]) {
         expect(s, `${nome}/${bt}`).toContain(`<button id="${bt}" class="chave" aria-pressed="false">`);
       }
     }
