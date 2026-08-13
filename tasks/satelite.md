@@ -16,7 +16,12 @@
 - Interruptor, `aria-pressed`, crédito que aparece e some junto com a camada, canvas que muda:
   todos ok. Nenhum erro de JS no console em nenhum momento.
 - A rede azul continua legível sobre a imagem com o véu em 0,38 — conferido em tela nacional e
-  com zoom, no tema claro. **Falta conferir no tema escuro**, onde `--terra` é `#141a1e`.
+  com zoom, **nos dois temas**, sobre ladrilho de verdade no Solimões (mata fechada em z≈11, que
+  é o pior caso da rampa). No escuro, onde `--terra` é `#141a1e`, o véu escurece a mata o
+  bastante para a capilaridade fina aparecer com folga. **O tema claro é o mais apertado dos
+  dois**: ali o pé da rampa é quase branco e a mata velada fica cinza-esverdeada de meio-tom, e
+  o córrego de cabeceira se lê, mas por pouco. Se um dia alguém mexer no alfa, é o claro que
+  decide o limite, não o escuro.
 - `bun test testes/estrutura.test.ts`: **19 passam, 0 falham**. É o arquivo que compara template
   contra artefato, então o par de edições não divergiu. O `btSat` e o `let mostrarSat = false`
   entraram na lista que ele confere, senão a camada podia divergir entre os dois arquivos ou
