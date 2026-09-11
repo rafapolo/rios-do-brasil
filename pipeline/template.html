@@ -546,6 +546,10 @@
     font-size: 0.7rem; color: var(--ink-3); line-height: 1.5;
     margin: 11px 0 0; padding-top: 10px; border-top: 1px solid var(--rule);
   }
+  /* sem regra própria o link do rodapé cai no azul/roxo padrão do navegador,
+     que não existe em lugar nenhum desta HUD */
+  .sobre-corpo .rodape a { color: var(--accent); text-decoration: none; }
+  .sobre-corpo .rodape a:hover { text-decoration: underline; }
 
   .gaveta {
     position: fixed; top: 0; right: 0; bottom: 0; z-index: 6;
@@ -3093,7 +3097,10 @@
       linha('Viés mediano', '×' + String(val.vies).replace('.', ',')) +
       '<p class="rodape">Vazões da ANA, ' + anoIni + '–' + anoFim +
       '. Rede: Base Hidrográfica Ottocodificada 2017. Reservatórios: SAR/ANA, ' +
-      'operação diária 2000–2022. Geração: cobrança pelo uso da água, ANA.</p>';
+      'operação diária 2000–2022. Geração: cobrança pelo uso da água, ANA.</p>' +
+      '<p class="rodape">Veja também: <a href="https://xn--2dk.xyz/dataviz/friba/pop_3d" ' +
+      'target="_blank" rel="noopener">Nova Friburgo em 3D</a> — os 115.377 endereços que o ' +
+      'CNEFE registrou na cidade, empilhados em colunas de densidade.</p>';
   })();
   const btSobreNums = document.getElementById('btSobreNums');
   btSobreNums.addEventListener('click', () => {
