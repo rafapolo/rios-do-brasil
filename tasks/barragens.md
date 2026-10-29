@@ -84,3 +84,19 @@ Desativada 347 · Em descaracterização 148 · Construção 99 · 1º enchiment
    km até a primeira barragem subindo e descendo → **rio livre**.
 4. Modo novo no mapa, ou camada de pontos com ficha. Se virar modo de cor, lembrar que a
    rampa sequencial azul é da vazão; fragmentação é outro eixo e pede outra escala.
+
+## O que ficou para depois
+
+- **Camada de risco.** O roteiro previa colorir as barragens por `CATEGORIA_RISCO`; a ficha
+  mostra a categoria (e o selo "sem classificação de risco"), mas o mapa não pinta por ela.
+  Se virar camada, a nota precisa dizer que 43% do cadastro é "Não Classificado".
+- **As 10.965 órfãs.** Estão a mais de 550 m de qualquer trecho desenhado. Dá para contá-las
+  por bacia e dizer, na ficha do trecho, quantas barragens há em córregos não desenhados acima
+  dele — hoje elas somem do número.
+- **Barragens fora do Brasil.** Yacyretá e as do Paraguai, da Argentina e dos Andes não estão
+  em base nenhuma; o modo deixa a rede de fora do país no cinza. Uma lista curta das grandes
+  binacionais e estrangeiras (Yacyretá, Salto Grande, as do Paraguai) corrigiria o Paraná e o
+  Uruguai abaixo da fronteira.
+- **Métrica ponderada.** O número é geométrico (km conectados). Um índice como o de
+  Grill et al. (2019), ponderado por vazão e volume de reservatório, diria quanto da ÁGUA,
+  e não do comprimento, está represada.
