@@ -26,6 +26,12 @@ if (S / "etes.json").exists():
     pagina = pagina.replace("/*__ETES__*/", embutir("etes.json"))
 else:
     print("  etes.json ausente — mapa sai sem a camada de tratamento")
+# Idem para as barragens: sem barragens.json a camada de pontos some, e sem os
+# campos livre/barJus/barMont no rede_vazao.json o modo "Rio livre" também.
+if (S / "barragens.json").exists():
+    pagina = pagina.replace("/*__BARRAGENS__*/", embutir("barragens.json"))
+else:
+    print("  barragens.json ausente — mapa sai sem a camada de barragens")
 # Idem para a tendência: sem ela a ficha da estação perde a linha de %/década e
 # o modo "Tendência" some do cartão "O que ver", junto com a faixa dele.
 if (S / "tendencia_mapa.json").exists():

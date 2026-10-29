@@ -49,6 +49,12 @@
        sujo". Aqui quer dizer "rio já prometido", que é outra coisa. */
     --out-0: #f7dcec; --out-1: #f0b6d8; --out-2: #e88ac0; --out-3: #d95fa4;
     --out-4: #bf3a85; --out-5: #991f64; --out-6: #660d43;
+    /* Rio livre: terra, do mais picado (escuro) ao pedaço quase inteiro
+       (claro). Nem azul, que é vazão, nem a divergente, que é tendência: aqui
+       a cor mede o tamanho do pedaço que sobrou entre muros, e o tom forte vai
+       para o rio mais retalhado, que é o que o modo existe para mostrar. Pedaço
+       de 10 mil km ou mais não pinta -- fica no cinza da rede. */
+    --livre-0: #5c3317; --livre-1: #8c5a2b; --livre-2: #b98546; --livre-3: #d9b47c;
     /* Escala DIVERGENTE, a mesma do series.html (pipeline/template_series.html),
        para as duas páginas dizerem a mesma coisa com a mesma cor. As rampas
        acima são sequenciais porque vazão e efluente são magnitude; tendência
@@ -95,6 +101,7 @@
       --pol-ind: #a894ee;
       --out-0: #4a1030; --out-1: #6d1a46; --out-2: #92255c; --out-3: #b83373;
       --out-4: #d94a91; --out-5: #f269ae; --out-6: #ff8cc6;
+      --livre-0: #ffc98c; --livre-1: #d99a55; --livre-2: #a86d34; --livre-3: #7a4c24;
       --seca-3: #ffb995; --seca-2: #f0824a; --seca-1: #b8501c;
       --neutro: #3a464c;
       --enche-1: #2c5f9e; --enche-2: #5f9ee8; --enche-3: #a9cdf7;
@@ -129,6 +136,7 @@
     --pol-ind: #a894ee;
     --out-0: #4a1030; --out-1: #6d1a46; --out-2: #92255c; --out-3: #b83373;
     --out-4: #d94a91; --out-5: #f269ae; --out-6: #ff8cc6;
+    --livre-0: #ffc98c; --livre-1: #d99a55; --livre-2: #a86d34; --livre-3: #7a4c24;
     --seca-3: #ffb995; --seca-2: #f0824a; --seca-1: #b8501c;
     --neutro: #3a464c;
     --enche-1: #2c5f9e; --enche-2: #5f9ee8; --enche-3: #a9cdf7;
@@ -754,13 +762,22 @@
         </button>
         <!-- As mesmas três ondas da vazão, afinando em vez de engrossar: o
              ícone é o irmão invertido daquele, que é o que o modo faz com o
-             número. Atravessa as duas colunas por ser o quinto de um grid par. -->
-        <button class="modo largo" data-modo="tendencia" aria-pressed="false">
+             número. -->
+        <button class="modo" data-modo="tendencia" aria-pressed="false">
           <svg viewBox="0 0 16 16" aria-hidden="true">
             <path d="M1.5 4.2q1.6-1.6 3.2 0t3.2 0t3.2 0" stroke-width="2.4"/>
             <path d="M1.5 8.4q1.6-1.6 3.2 0t3.2 0t3.2 0" stroke-width="1.4"/>
             <path d="M1.5 12.6q1.6-1.6 3.2 0t3.2 0t3.2 0" stroke-width="0.7"/>
           </svg><span>Tendência</span>
+        </button>
+        <!-- A onda da vazão cortada por um muro: o que o modo pinta é o
+             tamanho do pedaço de rio que sobra entre um corte e outro. -->
+        <button class="modo" data-modo="livre" aria-pressed="false">
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M1.2 8.6q1.4-1.6 2.8 0t2.4 0"/>
+            <path d="M9.6 8.6q1.4-1.6 2.8 0t2.4 0"/>
+            <path class="cheio" d="M7.2 3.6h2v9.6h-2z"/>
+          </svg><span>Rio livre</span>
         </button>
       </div>
       <!-- A faixa mora aqui, e não no cartão da rede: aquele conta trechos
@@ -937,6 +954,7 @@
 <script id="dados" type="text/plain">/*__DADOS__*/</script>
 <script id="usinas" type="text/plain">/*__RESERV__*/</script>
 <script id="etes" type="text/plain">/*__ETES__*/</script>
+<script id="barragens" type="text/plain">/*__BARRAGENS__*/</script>
 <script id="tendencia" type="text/plain">/*__TENDMAPA__*/</script>
 <script>
 (async function () {
@@ -968,8 +986,9 @@
     if (!t || t.startsWith('/*')) return [];
     try { return await carrega(id); } catch { return []; }
   };
-  const [D, RES, ETES, TENDBRUTA] = await Promise.all([
-    carrega('dados'), carrega('usinas'), opcional('etes'), opcional('tendencia')]);
+  const [D, RES, ETES, TENDBRUTA, BARRB] = await Promise.all([
+    carrega('dados'), carrega('usinas'), opcional('etes'), opcional('tendencia'),
+    opcional('barragens')]);
   /* A tendência por estação, do mesmo cálculo que alimenta o series.html:
      Theil-Sen em % da média da própria estação, por década. Camada opcional
      como as ETEs — quem não rodou o tendencia_mapa.py fica sem a linha na ficha
@@ -1197,7 +1216,7 @@
 
   const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
   let RAMPA = [], POL = [], OUT = [], TND = [], COR_FLUXO = '', COR_UF = '', COR_ACC = '', COR_USINA = '', COR_ETE = '', COR_LEITO = '', COR_TERRA = '', COR_DIVISA = '';
-  let COR_FRIA = '', COR_IND = '', COR_SEM = '';
+  let COR_FRIA = '', COR_IND = '', COR_SEM = '', LIV = [], COR_BARR = '';
   // A divergente não é uma família de sete tokens numerados como as outras: os
   // dois lados têm nome próprio de propósito, para ninguém escrever --tend-5 e
   // achar que está pedindo "mais intenso" quando está pedindo "outro sinal".
@@ -1212,6 +1231,8 @@
     COR_USINA = css('--usina'); COR_LEITO = css('--leito'); COR_ETE = css('--ete');
     COR_TERRA = css('--terra'); COR_DIVISA = css('--divisa');
     COR_FRIA = css('--rede-fria'); COR_IND = css('--pol-ind'); COR_SEM = css('--sem-dado');
+    LIV = [0, 1, 2, 3].map(i => css('--livre-' + i));
+    COR_BARR = css('--ink');
   };
   const cor = v => RAMPA[Math.max(0, Math.min(6, Math.round(t01(v) * 6)))];
   const corPol = v => POL[Math.max(0, Math.min(6, Math.round(p01(v) * 6)))];
@@ -1229,6 +1250,7 @@
   const CORTES_TEND = [escTend(1), escTend(0.6), escTend(0.2),
                        -escTend(0.2), -escTend(0.6), -escTend(1)];
   const corTend = p => { let i = 0; while (i < 6 && p >= CORTES_TEND[i]) i++; return TND[i]; };
+  const classeLivre = km => { let i = 0; while (i < 4 && km >= LIVRE_CORTES[i]) i++; return i; };
   const largura = (v, z) => (0.35 + 3.4 * Math.pow(t01(v), 2.1)) * (1 + 0.5 * Math.log2(z));
 
   /* ---------- estado ---------- */
@@ -1333,9 +1355,53 @@
     }
     ordemTend.sort((a, b) => q[b] - q[a]);
   }
+  /* Rio livre, do barragens.py: o tamanho em km do pedaço de rede -- rio e
+     afluentes -- que fica conectado a cada trecho depois de cortada a rede em
+     cada barragem; a distância até a primeira barragem rio abaixo (-1 quando
+     não há nenhuma até a foz); e quantas há a montante. Opcional como o resto:
+     sem o script, o botão do modo some. */
+  /* O sinal diz se alguma barragem encosta no pedaço: negativo (−km − 1) é bacia
+     intacta, pequena ou grande, e fica no cinza -- um rio costeiro curto sem
+     muro nenhum não é rio retalhado. */
+  const LIVRE_BRUTO = D.livre ? Int32Array.from(varints(D.livre, 0, D.livre.length)) : null;
+  const LIVRE = LIVRE_BRUTO ? LIVRE_BRUTO.map(v => v < 0 ? -v - 1 : v) : null;
+  const cortado = i => LIVRE_BRUTO[i] >= 0;
+  const BAR_JUS = D.barJus ? Int32Array.from(varints(D.barJus, 0, D.barJus.length)) : null;
+  const BAR_MONT = D.barMont ? Int32Array.from(varints(D.barMont, 0, D.barMont.length)) : null;
+  const LIVRE_CORTES = [10, 100, 1000, 10000];   // km; acima do último, não pinta
+  // Do mais longo para o mais curto: o pedaço mais retalhado é desenhado por
+  // cima, e é ele que o modo tem a mostrar.
+  let ordemLivre = null, KM_BR = 0, KM_PICADO = 0, KM_ATE_FOZ = 0;
+  if (LIVRE) {
+    ordemLivre = [];
+    for (let i = 0; i < N; i++) {
+      // Fora do Brasil não pinta: as barragens do Paraguai, da Argentina e dos
+      // Andes não estão em base nenhuma, e o rio de lá pareceria intacto.
+      if (foraBr.has(i)) continue;
+      const pinta = cortado(i) && LIVRE[i] < LIVRE_CORTES[3];
+      if (pinta) ordemLivre.push(i);
+      if (!comps) continue;
+      const km = comps[i] / 10;
+      KM_BR += km;
+      if (pinta) KM_PICADO += km;
+      if (BAR_JUS && BAR_JUS[i] < 0) KM_ATE_FOZ += km;
+    }
+    ordemLivre.sort((a, b) => LIVRE[b] - LIVRE[a]);
+  }
+  /* As barragens chegam em colunas (são 17 mil, e repetir chaves dobrava o
+     arquivo); aqui viram objetos com lon/lat, que é o que acharPonto() e o
+     anel de realce esperam. */
+  const BARR = [];
+  if (BARRB && BARRB.n) {
+    for (let k = 0; k < BARRB.n; k++) {
+      BARR.push({ lon: BARRB.lon[k], lat: BARRB.lat[k], k, i: BARRB.trecho[k],
+                  nome: BARRB.nome[k] || 'barragem sem nome' });
+    }
+  }
+  const tabB = (col, k) => { const v = BARRB[col][k]; return v >= 0 ? BARRB[col + 'Tab'][v] : null; };
   let animando = false;
   let estaticoSujo = true;
-  let realce = -1, estRealce = null, resRealce = null, eteRealce = null, fixado = false, selecao = null;
+  let realce = -1, estRealce = null, resRealce = null, eteRealce = null, barRealce = null, fixado = false, selecao = null;
 
   // no mobile a faixa recolhida come o rodapé da tela: o enquadramento
   // centraliza no que sobra, não no retângulo inteiro
@@ -1478,7 +1544,7 @@
     const el = document.getElementById('classes');
     // a tendência é a única em classes: a escala dela tem sinal e cai em corte
     // fixo, e o rótulo precisa dizer a direção antes do número
-    el.classList.toggle('cunha', modo !== 'tendencia');
+    el.classList.toggle('cunha', modo !== 'tendencia' && modo !== 'livre');
     tituloLegenda.textContent = TITULO_LEGENDA[modo] || TITULO_LEGENDA.vazao;
     if (modo === 'vazao') {
       el.innerHTML = barraLog({
@@ -1499,6 +1565,20 @@
         '<div class="classe"><span class="amostra" style="height:4px;background:' +
         corTend(i === 0 ? -99 : i === 6 ? 99 : (CORTES_TEND[i - 1] + CORTES_TEND[i]) / 2) +
         '"></span>' + rot + '</div>').join('');
+      return;
+    }
+    if (modo === 'livre') {
+      // Classes de corte fixo, do mesmo LIV[] que o canvas usa. O cinza e a
+      // barragem entram como linhas próprias: sem elas o leitor acha que a
+      // rede cinza é rio sem dado, quando é o rio mais inteiro do país.
+      const rot = ['menos de 10 km', '10 – 100 km', '100 – 1 mil km', '1 mil – 10 mil km'];
+      el.innerHTML = rot.map((r, k) =>
+        '<div class="classe"><span class="amostra" style="height:4px;background:' + LIV[k] +
+        '"></span>' + r + '</div>').join('') +
+        '<div class="classe"><span class="amostra" style="height:4px;background:' + COR_FRIA +
+        '"></span>≥ 10 mil km ou intacto</div>' +
+        (BARR.length ? '<div class="classe"><span class="amostra" style="width:7px;height:7px;' +
+          'background:' + COR_BARR + '"></span>barragem</div>' : '');
       return;
     }
     if (modo === 'outorga') {
@@ -1537,6 +1617,7 @@
     industria: 'Quanto do rio é efluente industrial',
     outorga: 'Vazão já licenciada',
     tendencia: 'Tendência da vazão (%/década)',
+    livre: 'Rio livre conectado ao trecho',
   };
 
   const NOTA_MODO = {
@@ -1577,12 +1658,30 @@
         fmt(TEND_PISO * 100) + '% da vazão dela. O que fica cinza não tem estação abaixo, ou é ' +
         'fino demais para carregar a medição.' : ''),
   };
+  NOTA_MODO.livre = !LIVRE ? '' :
+    'Cada barragem corta a rede; a cor diz o tamanho do pedaço de rio — com todos os ' +
+    'afluentes — que fica conectado ao trecho sem muro no caminho. Fica no cinza o pedaço de ' +
+    '10 mil km ou mais, o que nenhuma barragem toca (bacia pequena e intacta não é rio ' +
+    'cortado) e o que está fora do país. ' + fmt(Math.round(100 * KM_PICADO / KM_BR)) +
+    '% da rede brasileira está em pedaços cortados menores que 10 mil km, e ' + fmt(Math.round(100 * KM_ATE_FOZ / KM_BR)) +
+    '% corre até o mar sem barragem nenhuma. ' +
+    (BARRB && BARRB.n
+      ? 'São ' + fmt(BARRB.n) + ' barragens desenhadas: o cadastro de segurança do SNISB e as ' +
+        'usinas da Aneel com potência fiscalizada. Outras ' + fmt(BARRB.orfas) + ' estão a mais ' +
+        'de 550 m de qualquer rio do mapa e não cortam nada aqui — barram córregos que o mapa ' +
+        'não desenha, ou ficam fora do leito. '
+      : '') +
+    'Três ressalvas. Açude fora do leito mas perto dele ainda corta o córrego mais próximo, ' +
+    'e isso picota demais as cabeceiras agrícolas. Barragem sem cadastro não aparece, e o ' +
+    'semiárido tem muito mais açude do que o SNISB. E as barragens do Paraguai e da Argentina ' +
+    'não estão em base nenhuma, então o Paraná abaixo de Itaipu parece mais livre do que é.';
   const TITULO_MODO = {
     vazao: 'Os rios do Brasil, por vazão',
     esgoto: 'Os rios do Brasil, por esgoto',
     industria: 'Os rios do Brasil, por efluente industrial',
     outorga: 'Os rios do Brasil, por licença de retirada',
     tendencia: 'Os rios do Brasil, por tendência da vazão',
+    livre: 'Os rios do Brasil, por rio livre de barragem',
   };
 
   /* Triângulo, não círculo nem quadrado: com estação (círculo laranja) e
@@ -1614,6 +1713,25 @@
       } else {
         cx.strokeStyle = COR_ETE; cx.stroke();
       }
+    }
+    cx.globalAlpha = 1;
+  }
+
+  /* Barragens só no modo delas, e como traço curto na cor da tinta: são 17 mil,
+     e um disco por barragem fecharia o Sudeste numa mancha. A marca cresce com
+     o zoom, quando elas já se separam. */
+  function desenhaBarragens(cx, z) {
+    if (modo !== 'livre' || !BARR.length) return;
+    // Em escala nacional são poeira: um pixel e meio, translúcidos. Com o
+    // marcador de 2 px o Rio Grande do Sul virava uma mancha preta e a cor dos
+    // rios, que é o dado do modo, sumia embaixo.
+    const l = Math.min(6, 0.9 + 0.55 * z);
+    cx.fillStyle = COR_BARR;
+    cx.globalAlpha = z > 4 ? 0.9 : z > 2 ? 0.6 : 0.35;
+    for (const b of BARR) {
+      const [sx, sy] = paraTela(projX(b.lon), merc(b.lat));
+      if (sx < -8 || sy < -8 || sx > W + 8 || sy > H + 8) continue;
+      cx.fillRect(sx - l / 2, sy - l / 2, l, l);
     }
     cx.globalAlpha = 1;
   }
@@ -1911,6 +2029,27 @@
         octx.stroke();
       }
 
+      /* Rio livre: o mesmo molde da tendência, por cima do cinza. Só pinta o
+         pedaço menor que o último corte; o resto fica no cinza da rede, que a
+         legenda nomeia. */
+      if (modo === 'livre') {
+        let corL = '', larL = -1;
+        octx.beginPath();
+        for (const i of (ordemLivre || [])) {
+          if (q[i] < corteQ) continue;
+          if (bbox[i * 4 + 2] < w0x || bbox[i * 4] > w1x ||
+              bbox[i * 4 + 3] < w0y || bbox[i * 4 + 1] > w1y) continue;
+          const c = LIV[classeLivre(LIVRE[i])], lw = Math.max(1, Math.round(largura(q[i], z) * 3) / 3);
+          if (c !== corL || lw !== larL) {
+            octx.stroke(); octx.beginPath();
+            octx.strokeStyle = c; octx.lineWidth = lw;
+            corL = c; larL = lw;
+          }
+          traca(octx, i);
+        }
+        octx.stroke();
+      }
+
       /* Onde a cidade coleta esgoto e não há outorga nenhuma: não é rio limpo,
          é rio sem registro. Vai antes da rampa para nunca cobrir um dado real.
          Os modos vêm nomeados, não negados: o tracejado fala de efluente, e um
@@ -2002,6 +2141,7 @@
       octx.globalAlpha = 1;
     }
     desenhaEtes(octx, z);
+    desenhaBarragens(octx, z);
     estaticoSujo = false;
     vazioEl.classList.toggle('on', visiveis.length === 0 && z > 2);
   }
@@ -2116,6 +2256,7 @@
     if (estRealce && mostrarEst) anel(estRealce, COR_ACC, 8);
     if (resRealce && mostrarRes) anel(resRealce, COR_USINA, 11);
     if (eteRealce && mostrarEtes) anel(eteRealce, COR_ETE, 10);
+    if (barRealce && modo === 'livre') anel(barRealce, COR_BARR, 8);
   }
 
   /* laço de animação: só roda com o fluxo ligado */
@@ -2223,6 +2364,7 @@
       efluenteHTML(i) +
       outorgaHTML(i) +
       tendenciaDoTrechoHTML(i) +
+      livreDoTrechoHTML(i) +
       '<div class="selo' + (medido ? '' : ' neutro') + '">' +
       (medido ? 'vazão medida em estação' : 'vazão estimada') + '</div>';
   }
@@ -2360,6 +2502,46 @@
                                                        : 'ETE ' + t.status) + '</div>';
   }
 
+  /* A ficha da barragem diz o que ela corta: o pedaço de rio livre acima dela
+     é o do trecho em que ela foi casada, porque o corte é posto no fim dele.
+     Risco "não classificado" vira selo, e não linha com traço: é metade do
+     cadastro, e a ausência é a informação. */
+  function fichaBarragem(b) {
+    const k = b.k, risco = tabB('risco', k), dano = tabB('dano', k);
+    const semClasse = !risco || /não classificad/i.test(risco);
+    const kw = BARRB.kw[k], cap = BARRB.cap[k], alt = BARRB.alt[k];
+    const onde = [BARRB.mun[k], tabB('uf', k)].filter(Boolean).join(' · ');
+    fichaEl.className = 'cartao ficha';
+    fichaEl.innerHTML =
+      '<div class="nome">' + b.nome + '</div>' +
+      linha('Uso principal', tabB('uso', k) || 'não informado') +
+      (tabB('tipo', k) ? linha('Tipo', tabB('tipo', k)) : '') +
+      (tabB('fase', k) ? linha('Fase', tabB('fase', k)) : '') +
+      (alt != null ? linha('Altura', fmt(alt, 1) + ' m') : '') +
+      (cap != null ? linha('Reservatório', fmt(cap, cap < 10 ? 2 : 0) + ' hm³') : '') +
+      (kw != null ? linha('Potência fiscalizada', fmt(kw / 1000, kw < 1e4 ? 1 : 0) + ' MW') : '') +
+      (onde ? linha('Município', onde) : '') +
+      (LIVRE ? linha('Rio livre acima dela', fmt(LIVRE[b.i]) + ' km') : '') +
+      (BAR_MONT && BAR_MONT[b.i] > 1 ? linha('Outras barragens rio acima', fmt(BAR_MONT[b.i] - 1)) : '') +
+      (BARRB.aneel[k]
+        ? '<div class="selo neutro">usina em operação no cadastro da Aneel</div>'
+        : semClasse
+          ? '<div class="selo">sem classificação de risco no SNISB</div>'
+          : linha('Categoria de risco', risco) + (dano ? linha('Dano potencial', dano) : ''));
+  }
+
+  /* No modo rio livre, o trecho diz o tamanho do pedaço a que pertence e onde
+     fica o primeiro muro rio abaixo. Fora do modo a linha não tem cor na tela
+     a que se referir, e some -- como a da tendência. */
+  function livreDoTrechoHTML(i) {
+    if (modo !== 'livre' || !LIVRE) return '';
+    const j = BAR_JUS ? BAR_JUS[i] : -1;
+    return linha('Rio livre conectado', fmt(LIVRE[i]) + ' km' +
+                 (cortado(i) ? '' : ' · nenhuma barragem no pedaço')) +
+      linha('Primeira barragem rio abaixo', j < 0 ? 'nenhuma até a foz' : 'a ' + fmt(j) + ' km') +
+      (BAR_MONT ? linha('Barragens rio acima', fmt(BAR_MONT[i])) : '');
+  }
+
   /* O convite só pode citar o que está na tela. Com as camadas desligadas — que
      é como o mapa abre — só há rio para tocar, e mandar procurar reservatório
      seria mandar procurar o que não foi desenhado. */
@@ -2368,6 +2550,7 @@
     if (mostrarEst) alvos.push('uma estação');
     if (mostrarRes) alvos.push('um reservatório');
     if (mostrarEtes) alvos.push('uma estação de tratamento');
+    if (modo === 'livre' && BARR.length) alvos.push('uma barragem');
     const ult = alvos.pop();
     fichaEl.className = 'cartao ficha vazia';
     fichaEl.textContent = 'Selecione ' + (alvos.length ? alvos.join(', ') + ' ou ' : '') +
@@ -2443,6 +2626,7 @@
   function alvo(sx, sy, tol) {
     if (mostrarRes) { const u = acharPonto(RES, sx, sy, tol); if (u) return { u }; }
     if (mostrarEtes) { const t = acharPonto(ETES, sx, sy, tol); if (t) return { t }; }
+    if (modo === 'livre' && BARR.length) { const b = acharPonto(BARR, sx, sy, tol); if (b) return { b }; }
     if (mostrarEst) { const e = acharPonto(EST_VIS, sx, sy, tol); if (e) return { e }; }
     const i = acharTrecho(sx, sy, tol);
     return i >= 0 ? { i } : null;
@@ -2455,6 +2639,7 @@
     estRealce = a && a.e ? a.e : null;
     resRealce = a && a.u ? a.u : null;
     eteRealce = a && a.t ? a.t : null;
+    barRealce = a && a.b ? a.b : null;
   }
   function aplicar(a) {
     selecao = a || null;
@@ -2462,6 +2647,7 @@
     if (!a) fichaVazia();
     else if (a.u) fichaUsina(a.u);
     else if (a.t) fichaEte(a.t);
+    else if (a.b) fichaBarragem(a.b);
     else if (a.e) fichaEstacao(a.e);
     else fichaTrecho(a.i);
   }
@@ -2473,6 +2659,9 @@
     if (!a) { tip.classList.remove('on'); return; }
     const html = a.u
       ? '<b>' + a.u.nome + '</b><div class="linha">Turbinada <em>' + fmt(a.u.turb || 0) + ' m³/s</em></div>'
+      : a.b
+        ? '<b>' + a.b.nome + '</b><div class="linha">' + (tabB('uso', a.b.k) || 'uso não informado') +
+          '</div>'
       : a.t
         ? '<b>' + a.t.nome + '</b><div class="linha">Remoção de DBO <em>' +
           (a.t.dbo != null ? a.t.dbo + '%' : '—') + '</em></div>'
@@ -2714,6 +2903,13 @@
     if ((m === 'esgoto' || m === 'industria') && !fEsg) b.remove();
     else if (m === 'outorga' && !fOut) b.remove();
     else if (m === 'tendencia' && !TEND_OK.length) { b.remove(); faixaTend.remove(); }
+    else if (m === 'livre' && !LIVRE) b.remove();
+  }
+  /* O grid do cartão é de duas colunas: com um número ímpar de modos, o último
+     atravessa a linha inteira em vez de deixar um buraco ao lado. */
+  {
+    const restantes = [...document.querySelectorAll('.modos .modo')];
+    if (restantes.length % 2) restantes[restantes.length - 1].classList.add('largo');
   }
   // idem para as ETEs: interruptor que não acende nada é pior que interruptor
   // nenhum, porque o leitor conclui que não existe ETE no Brasil

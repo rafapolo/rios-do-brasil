@@ -178,6 +178,8 @@ export function copiaSondada(): string {
     "  window.__testes = { N, q, areas, comps, fEsg, fInd, fOut, semDado, medidos, foraBr,\n" +
     "    RES, ETES, D, nomeIdx, bbox, TEND, TEND_OK, CORTES_TEND, LIMIARES_TEND,\n" +
     "    TEND_TR, TEND_PCT, TEND_LISTA, TEND_PISO, ordemTend, KM_TEND,\n" +
+    "    LIVRE, LIVRE_BRUTO, BAR_JUS, BAR_MONT, LIVRE_CORTES, ordemLivre, BARR,\n" +
+    "    fichaBarragem: (b) => fichaBarragem(b),\n" +
     "    filtraTend: (c) => filtraTend(c), corTend: (p) => corTend(p),\n" +
     "    fichaTrecho: (i) => fichaTrecho(i), fichaEstacao: (e) => fichaEstacao(e),\n" +
     "    aplicaModo: (m) => aplicaModo(m), vista,\n" +

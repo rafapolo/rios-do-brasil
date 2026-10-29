@@ -123,7 +123,7 @@ describe("legenda em barra log", () => {
   test("o título da legenda muda em cada modo", async () => {
     await reinicia(pg);
     const visto: Record<string, string> = {};
-    for (const m of ["vazao", "esgoto", "industria", "outorga", "tendencia"]) {
+    for (const m of ["vazao", "esgoto", "industria", "outorga", "tendencia", "livre"]) {
       await pg.click(`.modo[data-modo="${m}"]`);
       await pg.waitForTimeout(300);
       visto[m] = (await pg.textContent("#tituloLegenda")) ?? "";
@@ -134,8 +134,9 @@ describe("legenda em barra log", () => {
       industria: "Quanto do rio é efluente industrial",
       outorga: "Vazão já licenciada",
       tendencia: "Tendência da vazão (%/década)",
+      livre: "Rio livre conectado ao trecho",
     });
-    expect(new Set(Object.values(visto)).size).toBe(5);
+    expect(new Set(Object.values(visto)).size).toBe(6);
   });
 
   test("cada modo traz o seu próprio eixo, e a tendência segue em classes", async () => {
@@ -975,4 +976,57 @@ describe("busca de rio", () => {
     expect(await pg.$eval("#buscaLista", (e) => (e as HTMLElement).hidden)).toBe(true);
     expect(await roda<number>(pg, TINTA)).toBe(antes);
   }, LENTO);
+});
+
+describe("rio livre", () => {
+  test("só pinta pedaço que uma barragem cortou, dentro do Brasil", async () => {
+    /* Bacia pequena e intacta não é rio retalhado, e fora do país as barragens
+       não estão em base nenhuma: os dois ficam no cinza. Se a ordem do desenho
+       deixar entrar um deles, o rio costeiro do Nordeste vira "picado". */
+    const r = await roda(sonda, `() => {
+      const t = window.__testes;
+      let intacto = 0, fora = 0, grande = 0;
+      for (const i of t.ordemLivre) {
+        if (t.LIVRE_BRUTO[i] < 0) intacto++;
+        if (t.foraBr.has(i)) fora++;
+        if (t.LIVRE[i] >= t.LIVRE_CORTES[3]) grande++;
+      }
+      return { n: t.ordemLivre.length, intacto, fora, grande, barr: t.BARR.length };
+    }`);
+    expect(r.n).toBeGreaterThan(10000);
+    expect(r.barr).toBeGreaterThan(10000);
+    expect({ intacto: r.intacto, fora: r.fora, grande: r.grande }).toEqual({ intacto: 0, fora: 0, grande: 0 });
+  });
+
+  test("a legenda sai das mesmas cores que pintam o rio", async () => {
+    await reinicia(pg);
+    await pg.click('.modo[data-modo="livre"]');
+    await pg.waitForTimeout(400);
+    const amostrasLegenda = await pg.$$eval("#classes .classe .amostra",
+      (e) => e.slice(0, 4).map((s) => getComputedStyle(s).backgroundColor));
+    // dos tokens que lerCores() lê para o canvas (o LIV da sonda é o array
+    // vazio de antes da leitura: a sonda copia o valor, não a variável)
+    const doCanvas = await roda(pg, `() => [0, 1, 2, 3].map(k => {
+      const c = getComputedStyle(document.documentElement).getPropertyValue('--livre-' + k).trim();
+      const d = document.createElement('div'); d.style.background = c; document.body.append(d);
+      const v = getComputedStyle(d).backgroundColor; d.remove(); return v; })`);
+    expect(amostrasLegenda).toEqual(doCanvas);
+    expect(await pg.textContent("#classes")).toContain("barragem");
+    await reinicia(pg);
+  });
+
+  test("a ficha da barragem diz quanto rio livre ela fecha por baixo", async () => {
+    const html = await roda(sonda, `() => {
+      const t = window.__testes;
+      t.aplicaModo('livre');
+      const b = t.BARR.find(b => b.nome.startsWith('Itaipu (Parte'));
+      t.fichaBarragem(b);
+      const h = document.getElementById('ficha').innerHTML;
+      t.aplicaModo('vazao');
+      return h;
+    }`);
+    expect(html).toContain("Itaipu");
+    expect(html).toContain("Rio livre acima dela");
+    expect(html).toContain("Aneel");
+  });
 });
