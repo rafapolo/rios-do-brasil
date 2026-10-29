@@ -26,8 +26,8 @@ ela vem pronta na topologia da base da ANA.
   quando enche, quando seca e a razão entre os extremos
 - **168 reservatórios** do Sistema Interligado Nacional, com 22 anos de operação diária:
   quanto passou pelas turbinas, quanto foi vertido, quanto chegou de montante
-- **Cinco modos de cor**: vazão, esgoto, efluente industrial, **licença de retirada** e
-  **tendência**. A licença é quanto de cada rio já está prometido em outorga de captação,
+- **Seis modos de cor**: vazão, esgoto, efluente industrial, **licença de retirada**,
+  **tendência** e **rio livre**. A licença é quanto de cada rio já está prometido em outorga de captação,
   somando tudo que foi licenciado rio acima: 95 mil tomadas d'água casadas à rede, 4.451 m³/s,
   e em **2.558 trechos** a licença iguala ou passa a vazão média do próprio rio
 - **A tendência pinta o rio, não o posto.** As 394 estações que passam nos dois testes do
@@ -36,6 +36,15 @@ ela vem pronta na topologia da base da ANA.
   São **204,5 mil km de rio** coloridos em 42.302 trechos, dos quais **5,8 mil km caem mais de
   25% por década**. Não é tendência medida no trecho — é a da estação, estendida à área que
   ela mede, e a ficha de cada trecho nomeia a régua de onde a cor veio
+- **Rio livre de barragem.** 17.440 barragens — o cadastro de segurança do SNISB e as
+  usinas da Aneel com potência fiscalizada — cortam a rede, e cada trecho é pintado pelo
+  tamanho do pedaço de rio, com afluentes, que sobra conectado a ele sem muro no caminho.
+  **48% da rede brasileira está em pedaços cortados menores que 10 mil km, e 39% corre até o
+  mar sem barragem nenhuma.** Pedaço que nenhuma barragem toca fica no cinza: rio costeiro
+  curto e intacto não é rio retalhado. Outras 10.965 barragens do cadastro estão a mais de
+  550 m de qualquer rio desenhado e não cortam nada — barram córregos que o mapa não mostra,
+  ou ficam fora do leito. A ficha da barragem traz uso, fase, altura, reservatório e risco,
+  e diz quando o SNISB não a classificou, que é o caso de quase metade
 - **Controle de detalhe** para filtrar a rede por vazão mínima
 - Passar o cursor acende o **rio inteiro**, não o trecho de poucos quilômetros
 
@@ -79,6 +88,17 @@ no levantamento *A morte das águas no Oeste da Bahia* (2024), feito a pé com a
 sub-bacias do Corrente e do Carinhanha — 3.050 trechos secos, 7.120 km — têm estação da ANA e
 série medida: o Itaguari caiu de 63 para 37 m³/s desde os anos 1960, o Formoso de 96 para 46.
 
+**Fora da régua.** Dois painéis fecham a página com dados que não vêm de estação. O primeiro é o
+único instrumento independente dela: a superfície de água do MapBiomas, classificada de imagem
+Landsat, cai de **192.596 km² na média de 1985–1989 para 168.658 km² na de 2017–2021, −12,4%**.
+A maior perda é a do Pantanal — Mato Grosso do Sul −57,7%, Mato Grosso −46,0% —, seguida do
+semiárido: Paraíba −49,4%, Ceará −48,2%, Rio Grande do Norte −44,1%. Goiás (+30,7%) e Tocantins
+(+18,1%) sobem por represa: a classe inclui reservatório, então o número é líquido das barragens
+enchidas no período. O segundo é o que acontece com a água depois de sair do rio: no município
+mediano, **29,9% da água tratada se perde na distribuição** (SNIS, 2022), contra 31,1% em 2006, e
+em 837 dos 5.404 municípios que informam a perda é de metade ou mais. Entre estados a mediana vai
+de 23,9% em São Paulo a 77,8% no Acre.
+
 **Duas janelas, de propósito.** A série mensal funde o arquivo histórico (1901 a agosto de 2023)
 com o serviço SOAP da ANA e chega a maio de 2026 — é ela que sustenta as tendências, o calendário
 da cheia e o tamanho da rede. A série **diária** existe só no arquivo e para em 2023, porque o
@@ -101,6 +121,9 @@ UHE Itá, com +70% por década, que é o enchimento do reservatório.
 | Rede de drenagem, área de drenagem, topologia | [Base Hidrográfica Ottocodificada 2017 (1:5.000)](https://dadosabertos.ana.gov.br), ANA |
 | Vazões medidas (mapa) | Séries históricas das estações fluviométricas da ANA, 1995–2025 |
 | Séries históricas (`series.html`) | [`anagovbr/hidro-dados-estacoes-convencionais`](https://github.com/anagovbr/hidro-dados-estacoes-convencionais) (1901–2023) fundido com o SOAP `HidroSerieHistorica` (até 2026-05) |
+| Superfície de água (`series.html`) | [MapBiomas](https://mapbiomas.org), classe 33, por UF, 1985–2021 |
+| Perda na distribuição (`series.html`) | SNIS, índice IN049 por município, 2006–2022 |
+| Barragens (modo rio livre) | [SNISB](https://www.snisb.gov.br), camada `IG/SNISB` do SNIRH, e empreendimentos hidrelétricos da Aneel (`SPR/Aproveitamento_Hidreletrico_AHE`), só os com potência fiscalizada |
 | Reservatórios | Sistema de Acompanhamento de Reservatórios (SAR), ANA |
 | Contorno dos estados | `br_geobr_mapas` / IBGE |
 | Terra e fronteiras | [Natural Earth](https://www.naturalearthdata.com) 1:50m |
@@ -169,6 +192,8 @@ python3 baixa_topologia.py 1     # COTRECHO/NUTRJUS/COBACIA da BHO, sem geometri
 python3 poluicao.py              # recalcula esg/ind/semDado no rede_vazao.json (~5 s)
 python3 outorga.py               # recalcula out no rede_vazao.json (~12 min)
 python3 tendencia_rede.py        # reparte a rede entre as estações com tendência (~10 s)
+python3 baixa_barragens.py       # SNISB + hidrelétricas da Aneel -> barragens.parquet (~3 min)
+python3 barragens.py             # corta a rede: livre/barJus/barMont + barragens.json (~10 s)
 python3 monta_pagina.py
 ```
 
@@ -177,7 +202,8 @@ E a página de séries históricas, que depende do ETL do arquivo da ANA já est
 
 ```bash
 python3 analisa_tendencia.py     # Mann-Kendall + Theil-Sen + FDR -> tendencia.json
-python3 prepara_paineis.py       # rio seco, cheia, Q7,10, tamanho da rede -> paineis.json
+python3 prepara_paineis.py       # rio seco, cheia, Q7,10, rede, espelho d'água, perda -> paineis.json
+                                 # (prepara_paineis.py espelho perda refaz só esses dois)
 python3 monta_series.py          # gera o series.html (770 KB)
 ```
 
@@ -194,7 +220,7 @@ então só é preciso rodar se quiser trocar a base de contornos.
 
 Dependências: `requests`, `polars`, `numpy`, `scipy`, `shapely`, `pyarrow`.
 
-## Como a página cabe em 13 MB
+## Como a página cabe em 17 MB
 
 São 2,6 milhões de vértices. Em JSON de inteiros isso daria 34 MB. Três medidas:
 

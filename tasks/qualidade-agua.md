@@ -8,6 +8,13 @@ credibilidade disponível para o que o mapa já afirma.
 
 ## Fonte
 
+> **29/10/2026: o serviço abaixo saiu do ar** (`{"error":{"code":404,"message":"Service not
+> found"}}`). Varridas todas as pastas do ArcGIS do SNIRH e o Hub `dadosabertos.ana.gov.br`: o
+> que sobra é `SPR/Monitoramento_QA_2001_a_2017` (só pontos em operação por ano — `CDSESTACAO`,
+> `ANO`, `CORPODAGUA`, nenhum valor medido) e `DADOSABERTOS/IQA` (58 pontos, um recorte
+> regional). Nenhum dos dois serve ao objetivo, que é confrontar medição com carga modelada.
+> A tarefa está bloqueada até achar outra fonte nacional com valores.
+
 ```
 https://www.snirh.gov.br/arcgis/rest/services/SPR/Indicadores_Qualidade_v31072023/MapServer
 ```

@@ -7,9 +7,10 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Duas páginas HTML autocontidas sobre os rios do Brasil, geradas por scripts Python:
 
 - **`index.html`** — mapa dos 462.539 trechos da Base Hidrográfica Ottocodificada da ANA,
-  desenhados pela vazão média. Canvas 2D, 14 MB.
+  desenhados pela vazão média. Canvas 2D, 17 MB.
 - **`series.html`** — análise da série histórica da ANA (1901–2023): tendência de vazão por
-  estação, dias de rio seco, deslocamento da cheia, Q7,10, tamanho da rede. SVG, 770 KB.
+  estação, dias de rio seco, deslocamento da cheia, Q7,10, tamanho da rede, espelho d'água
+  (MapBiomas) e perda na distribuição (SNIS). SVG, 990 KB.
 
 **Não há build system, nem `package.json`, nem dependência em runtime.** Os dados vão embutidos
 como gzip+base64 dentro do próprio HTML e são descomprimidos no navegador com
@@ -66,13 +67,15 @@ python3 baixa_topologia.py 1      # só atributos da BHO — usado por tendencia
 python3 tendencia_mapa.py         # %/década por estação, do tendencia.json (opcional)
 python3 tendencia_rede.py         # leva o %/década da estação para os trechos, ~10 s
 python3 bacia_rede.py             # nome da bacia (22 maiores por km) na ficha do trecho, ~10 s
+python3 baixa_barragens.py        # SNISB + hidrelétricas da Aneel, ~3 min (opcional)
+python3 barragens.py              # modo "Rio livre": corta a rede em cada barragem, ~10 s
 python3 monta_pagina.py
 
 # séries históricas (series.html) — só depende do lake
 # analisa_tendencia.py roda antes do par tendencia_mapa.py/tendencia_rede.py: é ele que faz
 # o tendencia.json de que os dois vivem
 python3 pipeline/analisa_tendencia.py
-python3 pipeline/prepara_paineis.py
+python3 pipeline/prepara_paineis.py                 # ou: ... espelho perda (só esses dois)
 python3 pipeline/monta_series.py
 ```
 
@@ -106,7 +109,7 @@ Três coisas ao mexer na suíte:
   não dá para alcançá-los de fora. `copiaSondada()` gera uma cópia temporária do `index.html`
   com `window.__testes` injetado antes do marcador `/* ---------- início ---------- */` — o
   produto não ganha porta de depuração por causa do teste.
-- Abrir o `index.html` custa ~9 s (14 MB, gzip, 462 mil trechos). Cada par (motor, URL) é aberto
+- Abrir o `index.html` custa ~9 s (17 MB, gzip, 462 mil trechos). Cada par (motor, URL) é aberto
   uma vez e reaproveitado; quem mexe no estado da página chama `reinicia()` antes.
 
 ## Como uma página é montada
@@ -219,6 +222,32 @@ Todos os JSON intermediários são gitignored. Os HTML gerados são versionados 
   no estuário do Amazonas antes de qualquer trecho voltar a se chamar rio, e o terminal do grupo
   vem rotulado "Baía de Marajó" pela ANA — sem o `RENOMEIA` do script, o quinto maior rio do
   país apareceria com nome de acidente geográfico.
+- **O "rio livre" é um pedaço de rede, não um rio.** O `barragens.py` corta a rede em cada
+  trecho barrado (a barragem vai para o fim dele, rio abaixo) e soma o comprimento de tudo
+  que fica conectado — tronco e afluentes. Três decisões fazem parte do número, não são
+  acabamento: **(a)** só casa barragem a menos de 550 m (`TOL`) de um trecho desenhado; com os
+  2 km da outorga, açude de encosta grudava no córrego do vale vizinho, e 10.965 ficam de fora
+  por isso — a mediana do SNISB está a 0,49 km da rede, porque o mapa não desenha os menores
+  córregos. O nome do rio resgata até 3 km para a Aneel (a casa de força de Belo Monte fica num
+  canal a 2,5 km do Xingu) e 1,1 km para o SNISB. **(b)** Pedaço que nenhuma barragem toca vai
+  com sinal negativo no `livre` e fica cinza: sem isso todo rio costeiro curto e intacto saía
+  pintado como retalhado. **(c)** A usina da Aneel que duplica uma do SNISB sai só da camada de
+  pontos, e continua cortando a rede — o ponto do SNISB de Sobradinho cai num córrego seco e o
+  da Aneel no São Francisco.
+- **A camada "em operação" da Aneel traz usina que não existe.** `SPR/Aproveitamento_
+  Hidreletrico_AHE` tem 2.993 empreendimentos, entre eles São Luiz do Tapajós (licença negada
+  em 2016), Marabá e Jamanxim. O que separa é `AHE_NU_POTFISC_KW`, nula em quem não opera:
+  sobram 1.456 (215 UHE, 438 PCH, 803 CGH). Ela também devolve 504 com página de 1.000
+  registros; com 250 passa.
+- **O SNISB oscila.** Em 29/10/2026 o `count` foi de 28.902 a 0 e voltou em meia hora, sem
+  erro HTTP. O `baixa_barragens.py` recusa contagem zero e página curta. `ING_CD_CURSODAGUA_
+  TRECHO`, que estava vazio em agosto, agora vem preenchido — mas só aponta para um curso a
+  menos de 5 km em 65% das barragens (parece outra versão da BHO), então é desempate, não join.
+  E `BAR_NU_CAP_TOTAL_RESERV` às vezes vem em m³ e não hm³ (Santo Antônio: 2,3 bilhões): acima
+  de 100 mil, divide por 10⁶.
+- **O serviço de indicadores de qualidade da água saiu do ar** (`SPR/Indicadores_Qualidade_
+  v31072023` → 404 em out/2026), e nada no SNIRH tem os valores medidos no lugar dele. Ver
+  `tasks/qualidade-agua.md`.
 - **A ordem de Strahler não vale fora do Brasil** na BHO, e o nome do trecho às vezes é de um
   afluente pequeno — por isso o filtro do mapa é por vazão, não por ordem.
 - **`MunicipioCodigo` da ANA não é IBGE**, e o inventário de 2023 marca descarga líquida como

@@ -1,5 +1,11 @@
 # Barragens e "rio livre"
 
+> **Estado: implementado (29/10/2026).** Modo "Rio livre" no mapa, com camada de pontos e
+> ficha. `pipeline/baixa_barragens.py` baixa, `pipeline/barragens.py` casa e corta a rede. Os
+> números abaixo são do levantamento de agosto; o que mudou desde então — contagem caída para
+> 28.902, `ING_CD_CURSODAGUA_TRECHO` preenchido mas de outra versão da BHO, a camada da Aneel
+> com usina que nunca operou — está nas docstrings dos dois scripts e no CLAUDE.md.
+
 **Objetivo.** O mapa desenha 168 reservatórios do Sistema Interligado Nacional. O país tem
 31.136 barragens cadastradas. Com a topologia da BHO que o `outorga.py` já percorre, dá para
 responder a pergunta que este mapa está melhor equipado que qualquer outro para responder:
