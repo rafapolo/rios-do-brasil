@@ -16,15 +16,21 @@ recortes, cada um respondendo uma pergunta que o mapa de vazão média não alca
   rede     — estamos medindo nossos rios menos do que nos anos 1990?
              Estações reportando por ano. É meta-dado, mas é a barra de erro
              honesta de todo o resto da página.
+  espelho  — o satélite vê a mesma coisa que a régua?
+             Superfície de água do MapBiomas por UF, 1985–2021.
+  perda    — quanto da água tratada some no cano antes de chegar?
+             Índice de perda na distribuição do SNIS, por município.
 
 Saída: pipeline/paineis.json
 
 Uso:
-    python3 pipeline/prepara_paineis.py
+    python3 pipeline/prepara_paineis.py                  # todos
+    python3 pipeline/prepara_paineis.py espelho perda    # só estes, sobre o json que existe
 """
 import json
 import math
 import subprocess
+import sys
 from collections import defaultdict
 from pathlib import Path
 
@@ -277,7 +283,130 @@ def painel_rede() -> dict:
     }
 
 
+MAPBIOMAS = "~/rodado/br_mapbiomas_estatisticas/cobertura_uf_classe/**/*.parquet"
+SNIS = "~/rodado/br_mdr_snis/municipio_agua_esgoto/**/*.parquet"
+# Cinco anos em cada ponta, não um: o espelho d'água nacional oscila 10% de um
+# ano para o seguinte (1986 → 1988 sobe de 184 para 204 mil km²) com cheia e
+# seca, e comparar um ano contra outro mediria o clima daqueles dois anos.
+ESPELHO_INI = (1985, 1989)
+ESPELHO_FIM = (2017, 2021)
+# A série do SNIS começa em 1995, mas até 2005 menos de 3 mil municípios
+# informam o índice de perda; a mediana de 2004 (34%) é de outra amostra, não de
+# outro país. Corta onde a cobertura passa de 4 mil.
+SNIS_INICIO = 2006
+
+
+def painel_espelho() -> dict:
+    """Superfície de água do MapBiomas, por UF e ano — instrumento independente.
+
+    Tudo o mais nesta página vem de régua de estação; isto vem de satélite. A
+    classe 33 é "Rio, Lago e Oceano": inclui reservatório, o que quer dizer que
+    a perda é LÍQUIDA de cada barragem enchida no período (Serra da Mesa e
+    Lajeado põem Goiás e Tocantins no positivo). Só existe por UF no lake — as
+    tabelas municipais são de transição de classe, não de área.
+    """
+    linhas = consulta(f"""
+        SELECT sigla_uf AS uf, ano, sum(area) AS km2
+          FROM read_parquet('{MAPBIOMAS}')
+         WHERE id_classe = '33'
+         GROUP BY 1, 2 ORDER BY 1, 2;""")
+    por_ano: dict[int, float] = defaultdict(float)
+    por_uf: dict[str, dict[int, float]] = defaultdict(dict)
+    for r in linhas:
+        por_ano[r["ano"]] += r["km2"]
+        por_uf[r["uf"]][r["ano"]] = r["km2"]
+
+    def media(serie, janela):
+        v = [serie[a] for a in range(janela[0], janela[1] + 1) if a in serie]
+        return sum(v) / len(v) if v else None
+
+    ufs = []
+    for uf, serie in por_uf.items():
+        ini, fim = media(serie, ESPELHO_INI), media(serie, ESPELHO_FIM)
+        if ini and fim is not None:
+            ufs.append([uf, round(ini), round(fim), round(100 * (fim / ini - 1), 1)])
+    ufs.sort(key=lambda l: l[3])
+    return {
+        "anos": [[a, round(por_ano[a])] for a in sorted(por_ano)],
+        "ufs": ufs,
+        "janelas": [ESPELHO_INI, ESPELHO_FIM],
+    }
+
+
+def painel_perda() -> dict:
+    """Perda na distribuição de água tratada, município a município (SNIS).
+
+    Usa o indicador IN049 que o próprio SNIS calcula por município e resume pela
+    mediana e pelos quartis. A soma nacional dos volumes NÃO serve: a água que
+    um município importa do vizinho entra na produção dos dois, e a conta
+    nacional sai inflada em até seis pontos nos anos em que a importação salta
+    (2008, 2010, 2018). Índice fora de 0–100 é erro de preenchimento e sai.
+    """
+    linhas = consulta(f"""
+        WITH t AS (
+            SELECT ano, sigla_uf AS uf, indice_perda_distribuicao_agua AS p
+              FROM read_parquet('{SNIS}')
+             WHERE ano >= {SNIS_INICIO}
+               AND indice_perda_distribuicao_agua BETWEEN 0 AND 100)
+        SELECT ano, count(*) AS n,
+               quantile_cont(p, 0.25) AS p25, median(p) AS p50,
+               quantile_cont(p, 0.75) AS p75,
+               count(*) FILTER (WHERE p >= 50) AS metade
+          FROM t GROUP BY 1 ORDER BY 1;""")
+    ultimo = max(r["ano"] for r in linhas)
+    ufs = consulta(f"""
+        SELECT sigla_uf AS uf, count(*) AS n,
+               median(indice_perda_distribuicao_agua) AS p50
+          FROM read_parquet('{SNIS}')
+         WHERE ano = {ultimo}
+           AND indice_perda_distribuicao_agua BETWEEN 0 AND 100
+         GROUP BY 1 ORDER BY 3 DESC;""")
+    return {
+        "anos": [[r["ano"], r["n"], round(r["p25"], 1), round(r["p50"], 1),
+                  round(r["p75"], 1), r["metade"]] for r in linhas],
+        "ufs": [[r["uf"], r["n"], round(r["p50"], 1)] for r in ufs],
+        "ultimo": ultimo,
+    }
+
+
+def resume_espelho(p: dict) -> None:
+    a = dict(p["anos"])
+    nac = [sum(a[x] for x in range(j[0], j[1] + 1)) / (j[1] - j[0] + 1) for j in p["janelas"]]
+    print(f"  espelho d'água {p['janelas'][0]} → {p['janelas'][1]}: "
+          f"{nac[0]:,.0f} → {nac[1]:,.0f} km² ({100 * (nac[1] / nac[0] - 1):+.1f}%)")
+    print(f"  mais perdeu: {p['ufs'][0]} · mais ganhou: {p['ufs'][-1]}")
+
+
+def resume_perda(p: dict) -> None:
+    ini, fim = p["anos"][0], p["anos"][-1]
+    print(f"  mediana da perda: {ini[3]}% em {ini[0]} ({ini[1]} municípios) → "
+          f"{fim[3]}% em {fim[0]} ({fim[1]}); {fim[5]} perdem metade ou mais")
+
+
+# Painéis que dá para refazer sozinhos, sem tocar nos outros. Os quatro de
+# vazão consultam tabelas que o rodado atualiza; refazê-los só para acrescentar
+# um painel de outra fonte mexeria em número que o README cita.
+AVULSOS = {"espelho": (painel_espelho, resume_espelho),
+           "perda": (painel_perda, resume_perda)}
+
+
 def main() -> int:
+    destino = S / "paineis.json"
+    pedidos = sys.argv[1:]
+    if pedidos:
+        desconhecidos = set(pedidos) - set(AVULSOS)
+        if desconhecidos:
+            raise SystemExit(f"painéis avulsos possíveis: {', '.join(AVULSOS)}")
+        paineis = json.loads(destino.read_text())
+        for nome in pedidos:
+            print(f"painel: {nome}...")
+            fazer, resumo = AVULSOS[nome]
+            paineis[nome] = fazer()
+            resumo(paineis[nome])
+        destino.write_text(json.dumps(paineis, ensure_ascii=False, separators=(",", ":")))
+        print(f"\nescrito {destino} ({destino.stat().st_size / 1e6:.1f} MB)")
+        return 0
+
     paineis = {}
 
     print("painel: dias de rio seco...")
@@ -316,6 +445,11 @@ def main() -> int:
     cons = {r[0]: r for r in paineis["rede"]["consistencia"]}
     print(f"  consistência: {cons[2014][1]} estações consistidas em 2014, "
           f"{cons[cheio][1]} em {cheio}")
+
+    for nome, (fazer, resumo) in AVULSOS.items():
+        print(f"painel: {nome}...")
+        paineis[nome] = fazer()
+        resumo(paineis[nome])
 
     paineis["janelas"] = {"antes": ANTES, "depois": DEPOIS}
     # Procedência por painel: os dois grãos têm alcances diferentes e quem

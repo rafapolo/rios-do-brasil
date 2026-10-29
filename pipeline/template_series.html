@@ -122,6 +122,12 @@
     font-size: 1.32rem; letter-spacing: -0.01em; font-weight: 650;
     margin: 0 0 4px; text-wrap: balance;
   }
+  /* Subtítulo entre o gráfico de série e o de estados, no mesmo cartão. */
+  .cartao > h3 {
+    font-family: var(--mono); font-size: 0.62rem; font-weight: 500;
+    letter-spacing: 0.09em; text-transform: uppercase; color: var(--ink-3);
+    margin: 22px 0 10px;
+  }
   /* Texto ocupa a largura do cartão, igual aos gráficos. */
   .desc { color: var(--ink-2); margin: 0 0 18px; width: 100%; }
   .desc strong { font-weight: 640; color: var(--ink); }
@@ -227,6 +233,10 @@
   .barra.fraca { background: transparent; box-shadow: inset 0 0 0 1.5px currentColor; }
   .barra.fraca.cai  { color: var(--seca-2); }
   .barra.fraca.sobe { color: var(--enche-2); }
+  /* Trilho de magnitude, sem sinal: a barra nasce na borda esquerda e o zero
+     do meio, que lá é o eixo, aqui seria uma marca mentindo. */
+  .trilho.seq::before { display: none; }
+  .barra.neutra { left: 0; background: var(--ink-3); border-radius: 0 2px 2px 0; }
   .val {
     font-family: var(--mono); font-size: 0.72rem; font-variant-numeric: tabular-nums;
     text-align: right; color: var(--ink-2);
@@ -433,7 +443,9 @@
       estações convencionais (<code>anagovbr/hidro-dados-estacoes-convencionais</code>, retrato de
       04/08/2023) fundidas com o serviço <code>HidroSerieHistorica</code> até maio de 2026;
       chuva das estações pluviométricas do mesmo arquivo; e outorgas de captação vigentes do
-      SNIRH.
+      SNIRH. Os dois painéis finais vêm de fora da ANA: superfície de água do
+      <a href="https://mapbiomas.org">MapBiomas</a> (classe 33, 1985–2021) e índice de perda na
+      distribuição do SNIS, do Ministério das Cidades (2006–2022).
       Método e código em <a href="https://github.com/rafapolo/rios-do-brasil">rafapolo/rios-do-brasil</a>.
     </p>
     <p>
@@ -1579,6 +1591,225 @@
       c.append(nota2);
       pag.append(c);
     }
+  }
+
+  // Barra por UF, nas duas variantes que os painéis de fora da régua usam:
+  // divergente (com sinal, meia-largura por lado) ou de magnitude.
+  function linhaUF(rotulo, v, teto, txt, ficha, divergente) {
+    const linha = el('div', { class: 'linha' });
+    const rot = el('div', { class: 'rot' });
+    rot.innerHTML = rotulo;
+    const trilho = el('div', { class: 'trilho' + (divergente ? '' : ' seq') });
+    const barra = el('div', {
+      class: 'barra ' + (divergente ? (v < 0 ? 'cai' : 'sobe') : 'neutra')
+    });
+    if (divergente) {
+      barra.style.width = Math.abs(v) / teto * 50 + '%';
+      if (v < 0) barra.style.right = '50%'; else barra.style.left = '50%';
+    } else {
+      barra.style.width = v / teto * 100 + '%';
+    }
+    trilho.append(barra);
+    linha.append(rot, trilho, el('div', { class: 'val' }, txt));
+    liga(linha, ficha);
+    return linha;
+  }
+
+  // =========================================================
+  //  8 · o satélite vê o mesmo?
+  // =========================================================
+  /* Tudo acima vem de régua. Este painel é o único instrumento independente da
+     página: o MapBiomas classifica pixel de Landsat, sem passar por estação
+     nenhuma. A classe 33 inclui reservatório, então a perda é líquida das
+     barragens enchidas no período — e é por isso que Goiás e Tocantins sobem.
+     A cor reusa o par da página: laranja é água sumindo, azul é água a mais. */
+  if (P.espelho) {
+    const E = P.espelho;
+    const [jI, jF] = E.janelas;
+    const anoA = Object.fromEntries(E.anos);
+    const mediaJ = j => {
+      let t = 0;
+      for (let a = j[0]; a <= j[1]; a++) t += anoA[a];
+      return t / (j[1] - j[0] + 1);
+    };
+    const mI = mediaJ(jI), mF = mediaJ(jF);
+    const queda = 100 * (1 - mF / mI);
+    const c = el('div', { class: 'cartao' });
+    c.append(el('h2', {}, 'O satélite vê o mesmo: o espelho d’água encolheu'));
+    const pantanal = E.ufs.filter(l => l[0] === 'MS' || l[0] === 'MT');
+    // Só os estados do semiárido que perderam ao menos um terço: a frase é
+    // sobre a escala da perda, e listar o Sergipe com −18% a diluiria.
+    const semiarido = E.ufs.filter(l => ['PB', 'CE', 'RN', 'PE', 'PI', 'AL', 'SE', 'BA']
+      .includes(l[0]) && l[3] <= -33);
+    const p = el('p', { class: 'desc' });
+    p.innerHTML =
+      `Até aqui, tudo veio de régua. O MapBiomas mede outra coisa, com outro instrumento: ` +
+      `quantos quilômetros quadrados do país aparecem cobertos de água na imagem de satélite. ` +
+      `Na média de ${jI[0]}–${jI[1]} eram <strong>${num(mI)} km²</strong>; na de ` +
+      `${jF[0]}–${jF[1]}, <strong>${num(mF)} km²</strong> — ` +
+      `<strong>${num(queda, 1)}% a menos</strong>, uma área de ${num(mI - mF)} km² que deixou ` +
+      `de ser água. ` +
+      (pantanal.length === 2
+        ? `A maior perda é a do Pantanal: ${pantanal.map(l =>
+            `${l[0]} ${sinal(l[3], 0)}%`).join(' e ')}. `
+        : '') +
+      (semiarido.length
+        ? `No semiárido, ${semiarido.map(l => `${l[0]} ${sinal(l[3], 0)}%`).join(', ')}. `
+        : '') +
+      `Quem ganha água no período ganha por represa.`;
+    c.append(p);
+
+    const leg = el('div', { class: 'legenda' });
+    leg.innerHTML =
+      '<span><i style="background:var(--enche-2)"></i>superfície de água no ano</span>' +
+      '<span><i style="background:var(--accent)"></i>média de cada janela de cinco anos</span>';
+    c.append(leg);
+
+    const anos = E.anos;
+    const W = Math.max(largura(), anos.length * 13), H = 240, M = { t: 14, r: 14, b: 30, l: 58 };
+    const vals = anos.map(l => l[1]);
+    // Eixo que não começa no zero, e o rótulo diz isso: a área nunca passa
+    // perto de zero, e partir dele achataria a queda em quatro pixels.
+    const marcas = ticks(Math.max(...vals) - Math.min(...vals), 4);
+    const passo = marcas[1] || 10000;
+    const base = Math.floor(Math.min(...vals) / passo) * passo;
+    const topo = Math.ceil(Math.max(...vals) / passo) * passo;
+    const a0 = anos[0][0], a1 = anos[anos.length - 1][0];
+    const px = a => M.l + (a - a0) / (a1 - a0) * (W - M.l - M.r);
+    const py = v => H - M.b - (v - base) / (topo - base) * (H - M.t - M.b);
+    const svg = s('svg', { width: W, height: H, role: 'img',
+      'aria-label': `superfície de água do Brasil por ano, ${a0} a ${a1}` });
+    for (let v = base; v <= topo + 1; v += passo) {
+      svg.append(s('line', { class: 'grade', x1: M.l, x2: W - M.r, y1: py(v), y2: py(v) }));
+      svg.append(s('text', { x: M.l - 6, y: py(v) + 3.5, 'text-anchor': 'end' },
+                   num(v / 1000) + ' mil'));
+    }
+    svg.append(s('path', {
+      d: anos.map((l, i) => (i ? 'L' : 'M') + px(l[0]).toFixed(1) + ' ' + py(l[1]).toFixed(1)).join(' '),
+      fill: 'none', stroke: 'var(--enche-2)', 'stroke-width': 2, 'stroke-linejoin': 'round' }));
+    for (const [j, m] of [[jI, mI], [jF, mF]]) {
+      svg.append(s('line', { x1: px(j[0]), x2: px(j[1]), y1: py(m), y2: py(m),
+        stroke: 'var(--accent)', 'stroke-width': 3, 'stroke-linecap': 'round' }));
+    }
+    for (const l of anos) {
+      if (l[0] % 5 === 0) {
+        svg.append(s('text', { x: px(l[0]), y: H - 11, 'text-anchor': 'middle' }, l[0]));
+      }
+      const alvo = s('rect', { x: px(l[0]) - 6, y: M.t, width: 12,
+        height: H - M.t - M.b, fill: 'transparent' });
+      liga(alvo, `<b>${l[0]}</b><span class="mn"><u>${num(l[1])}</u> km² de água</span>`);
+      svg.append(alvo);
+    }
+    const wrap = el('div', { class: 'svgwrap recente' });
+    wrap.append(svg);
+    c.append(wrap);
+
+    c.append(el('h3', {}, `Por estado, ${jI[0]}–${jI[1]} contra ${jF[0]}–${jF[1]}`));
+    const rank = el('div', { class: 'rank' });
+    const teto = Math.max(...E.ufs.map(l => Math.abs(l[3]))) || 1;
+    for (const [uf, ini, fim, pct] of E.ufs) {
+      rank.append(linhaUF(`<b>${uf}</b><em>${num(fim)} km²</em>`, pct, teto, sinal(pct, 1) + '%',
+        `<b>${uf}</b><span class="mn"><u>${num(ini)}</u> km² em ${jI[0]}–${jI[1]}<br>` +
+        `<u>${num(fim)}</u> km² em ${jF[0]}–${jF[1]}</span>`, true));
+    }
+    c.append(rank);
+
+    const nota = el('p', { class: 'nota' });
+    nota.innerHTML =
+      `Classe 33 do MapBiomas, “rio, lago e oceano”, somada por UF. Ela inclui reservatório: ` +
+      `cada represa enchida no período soma área, e o número é a perda <strong>líquida</strong> ` +
+      `delas. A comparação é entre médias de cinco anos porque um ano isolado oscila até 10% ` +
+      `com a cheia. É superfície, não volume — e o dado só existe por estado, não por bacia, ` +
+      `então não dá para pô-lo ao lado de uma estação do ranking.`;
+    c.append(nota);
+    pag.append(c);
+  }
+
+  // =========================================================
+  //  9 · a água que some no cano
+  // =========================================================
+  /* Não é rio: é o que acontece com a água depois que ela sai dele. Entra na
+     página porque a captação de abastecimento é parte da outorga que o painel
+     de licença mostra, e um terço dela não chega a torneira nenhuma. Sem sinal
+     — perda é magnitude —, então nem laranja nem azul. */
+  if (P.perda) {
+    const R = P.perda;
+    const ini = R.anos[0], fim = R.anos[R.anos.length - 1];
+    const c = el('div', { class: 'cartao' });
+    c.append(el('h2', {}, 'A água tratada que some antes da torneira'));
+    const p = el('p', { class: 'desc' });
+    p.innerHTML =
+      `Do que sai da estação de tratamento, quanto se perde no caminho — vazamento, ligação ` +
+      `clandestina, medidor errado? No município mediano do país, <strong>${num(fim[3], 1)}%` +
+      `</strong> em ${fim[0]}, contra ${num(ini[3], 1)}% em ${ini[0]}: ` +
+      `<strong>${fim[0] - ini[0]} anos quase parados</strong>. Em ${num(fim[5])} dos ${num(fim[1])} ` +
+      `municípios que informam, metade ou mais da água tratada não chega a ninguém. ` +
+      `E a diferença entre estados é maior que a do tempo: a mediana vai de ` +
+      `${num(R.ufs[R.ufs.length - 1][2], 1)}% em ${R.ufs[R.ufs.length - 1][0]} a ` +
+      `${num(R.ufs[0][2], 1)}% em ${R.ufs[0][0]}.`;
+    c.append(p);
+
+    const leg = el('div', { class: 'legenda' });
+    leg.innerHTML =
+      '<span><i style="background:var(--ink)"></i>município mediano</span>' +
+      '<span><i style="background:var(--neutro)"></i>metade do meio dos municípios (25% a 75%)</span>';
+    c.append(leg);
+
+    const anos = R.anos;
+    const W = Math.max(largura(), anos.length * 20), H = 220, M = { t: 14, r: 14, b: 30, l: 40 };
+    const a0 = ini[0], a1 = fim[0];
+    const marcas = ticks(Math.max(...anos.map(l => l[4])));
+    const maxV = marcas[marcas.length - 1];
+    const px = a => M.l + (a - a0) / (a1 - a0) * (W - M.l - M.r);
+    const py = v => H - M.b - v / maxV * (H - M.t - M.b);
+    const svg = s('svg', { width: W, height: H, role: 'img',
+      'aria-label': `perda mediana na distribuição de água, ${a0} a ${a1}` });
+    for (const v of marcas) {
+      svg.append(s('line', { class: 'grade', x1: M.l, x2: W - M.r, y1: py(v), y2: py(v) }));
+      svg.append(s('text', { x: M.l - 6, y: py(v) + 3.5, 'text-anchor': 'end' }, num(v) + '%'));
+    }
+    const faixa = anos.map((l, i) => (i ? 'L' : 'M') + px(l[0]).toFixed(1) + ' ' + py(l[4]).toFixed(1)).join(' ') +
+      anos.slice().reverse().map(l => 'L' + px(l[0]).toFixed(1) + ' ' + py(l[2]).toFixed(1)).join(' ') + 'Z';
+    svg.append(s('path', { d: faixa, fill: 'var(--neutro)', 'fill-opacity': 0.55, stroke: 'none' }));
+    svg.append(s('path', {
+      d: anos.map((l, i) => (i ? 'L' : 'M') + px(l[0]).toFixed(1) + ' ' + py(l[3]).toFixed(1)).join(' '),
+      fill: 'none', stroke: 'var(--ink)', 'stroke-width': 2, 'stroke-linejoin': 'round' }));
+    for (const l of anos) {
+      if (l[0] % 2 === 0) {
+        svg.append(s('text', { x: px(l[0]), y: H - 11, 'text-anchor': 'middle' }, l[0]));
+      }
+      const alvo = s('rect', { x: px(l[0]) - 9, y: M.t, width: 18,
+        height: H - M.t - M.b, fill: 'transparent' });
+      liga(alvo, `<b>${l[0]}</b><span class="mn">mediana <u>${num(l[3], 1)}%</u><br>` +
+        `metade do meio entre ${num(l[2], 1)}% e ${num(l[4], 1)}%<br>` +
+        `${num(l[1])} municípios informaram</span>`);
+      svg.append(alvo);
+    }
+    svg.append(s('line', { class: 'eixo', x1: M.l, x2: W - M.r, y1: py(0), y2: py(0) }));
+    const wrap = el('div', { class: 'svgwrap recente' });
+    wrap.append(svg);
+    c.append(wrap);
+
+    c.append(el('h3', {}, `Mediana por estado, ${R.ultimo}`));
+    const rank = el('div', { class: 'rank' });
+    const teto = Math.max(...R.ufs.map(l => l[2])) || 1;
+    for (const [uf, n, med] of R.ufs) {
+      rank.append(linhaUF(`<b>${uf}</b><em>${num(n)} mun.</em>`, med, teto, num(med, 1) + '%',
+        `<b>${uf}</b><span class="mn">perda mediana <u>${num(med, 1)}%</u><br>` +
+        `${num(n)} municípios informaram em ${R.ultimo}</span>`, false));
+    }
+    c.append(rank);
+
+    const nota = el('p', { class: 'nota' });
+    nota.innerHTML =
+      `Índice de perda na distribuição (IN049) do SNIS, declarado por cada prestador, de ` +
+      `${a0} — quando mais de 4 mil municípios passam a informar — a ${a1}. Mediana e quartis ` +
+      `entre municípios, não soma nacional: a água que um município compra do vizinho entra ` +
+      `na produção dos dois, e a conta somada sai inflada. Os municípios pequenos pesam o ` +
+      `mesmo que as capitais, de propósito — é o retrato do município típico, não do litro ` +
+      `típico. Valores fora de 0 a 100% são erro de preenchimento e ficam de fora.`;
+    c.append(nota);
+    pag.append(c);
   }
 
   // Só marca como rolável o que de fato transborda — o aviso tem que
