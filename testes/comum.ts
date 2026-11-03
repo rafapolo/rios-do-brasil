@@ -113,7 +113,16 @@ export async function abrir(url: string, o: Opcoes = {}): Promise<Pagina> {
   pg.on("pageerror", (e) => erros.push(`pageerror: ${e.message}`));
   pg.on("console", (m) => { if (m.type() === "error") erros.push(`console: ${m.text()}`); });
   await pg.goto(url);
-  await pg.waitForTimeout(ESPERA);
+  /* O mapa tem um véu "carregando" que só sai depois do primeiro desenho; esperar
+   * por ele em vez de um tempo fixo corta uns 5 s de cada abertura. O 1,5 s de
+   * folga cobre o índice da busca (ocioso, 900 ms) e os primeiros ladrilhos. As
+   * outras páginas não têm véu e seguem no tempo fixo. */
+  if (await pg.$("#carregando")) {
+    await pg.waitForSelector("#carregando", { state: "detached", timeout: ESPERA * 6 });
+    await pg.waitForTimeout(1500);
+  } else {
+    await pg.waitForTimeout(ESPERA);
+  }
 
   const p = { pg, erros };
   if (!o.fresco) cache.set(chave, p);

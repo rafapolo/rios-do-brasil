@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Duas páginas HTML autocontidas sobre os rios do Brasil, geradas por scripts Python:
 
 - **`index.html`** — mapa dos 462.539 trechos da Base Hidrográfica Ottocodificada da ANA,
-  desenhados pela vazão média. Canvas 2D, 17 MB.
+  desenhados pela vazão média. Canvas 2D, 17,2 MB.
 - **`series.html`** — análise da série histórica da ANA (1901–2023): tendência de vazão por
   estação, dias de rio seco, deslocamento da cheia, Q7,10, tamanho da rede, espelho d'água
   (MapBiomas) e perda na distribuição (SNIS). SVG, 990 KB.
@@ -89,11 +89,12 @@ conferência: `processa.py` roda validação cruzada 5-fold contra estações re
 (semiárido caindo, arco de desmatamento subindo). Ao mexer nos números, compare contra o que o
 README afirma — os valores lá são resultado medido, não arredondamento.
 
-**As páginas geradas, sim.** 76 testes em `testes/`, com Bun e Playwright:
+**As páginas geradas, sim.** 97 testes em `testes/`, com Bun e Playwright:
 
 ```bash
 bun install && bun run preparar   # baixa chromium, firefox e webkit (uma vez)
-bun test                          # ~4 min, 76 testes nos três motores
+bun test                          # em série, ~2,5 min, 97 testes nos três motores
+bun run test                      # um processo por arquivo, 3 ao mesmo tempo, ~1,5 min (testes/roda.ts)
 ```
 
 Isso continua não sendo build system: o `package.json` e o `node_modules/` são só de
@@ -109,8 +110,8 @@ Três coisas ao mexer na suíte:
   não dá para alcançá-los de fora. `copiaSondada()` gera uma cópia temporária do `index.html`
   com `window.__testes` injetado antes do marcador `/* ---------- início ---------- */` — o
   produto não ganha porta de depuração por causa do teste.
-- Abrir o `index.html` custa ~9 s (17 MB, gzip, 462 mil trechos). Cada par (motor, URL) é aberto
-  uma vez e reaproveitado; quem mexe no estado da página chama `reinicia()` antes.
+- Abrir o `index.html` custa ~4 s (17 MB, gzip, 462 mil trechos): `abrir()` espera o véu `#carregando` sair, não um tempo fixo. Cada par (motor, URL) é aberto
+  uma vez e reaproveitado; quem mexe no estado da página chama `reinicia()` antes. Página aberta com `fresco: true` e que não vai mais ser usada deve ser fechada (`p.context().close()`): cada uma guarda 462 mil trechos. O teto é 3 min por rodada: a busca de rio tem arquivo próprio (`busca.test.ts`) para a rodada paralela se repartir bem; se o `mapa.test.ts` voltar a passar de ~2 min, parta-o de novo em vez de aumentar o teto.
 
 ## Como uma página é montada
 
@@ -234,6 +235,9 @@ Todos os JSON intermediários são gitignored. Os HTML gerados são versionados 
   pintado como retalhado. **(c)** A usina da Aneel que duplica uma do SNISB sai só da camada de
   pontos, e continua cortando a rede — o ponto do SNISB de Sobradinho cai num córrego seco e o
   da Aneel no São Francisco.
+  **(d)** Na página, `livre` não é km por trecho: é o número do pedaço mais a tabela `livreKm`
+  (sem perda), e `barJus` vem em degraus de `barJusPasso` = 5 km. Mexer em um lado do par
+  (`barragens.py` / `template.html`) sem o outro quebra o modo calado.
 - **A camada "em operação" da Aneel traz usina que não existe.** `SPR/Aproveitamento_
   Hidreletrico_AHE` tem 2.993 empreendimentos, entre eles São Luiz do Tapajós (licença negada
   em 2016), Marabá e Jamanxim. O que separa é `AHE_NU_POTFISC_KW`, nula em quem não opera:
