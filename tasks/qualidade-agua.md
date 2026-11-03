@@ -14,6 +14,7 @@ credibilidade disponível para o que o mapa já afirma.
 > `ANO`, `CORPODAGUA`, nenhum valor medido) e `DADOSABERTOS/IQA` (58 pontos, um recorte
 > regional). Nenhum dos dois serve ao objetivo, que é confrontar medição com carga modelada.
 > A tarefa está bloqueada até achar outra fonte nacional com valores.
+> Pista principal: a API HidroWebService, que pede cadastro — ver [`hidroweb-acesso.md`](hidroweb-acesso.md).
 
 > **Busca de 03/11/2026 (~30 min), sem fonte viável. Tarefa continua aberta e bloqueada.**
 >
