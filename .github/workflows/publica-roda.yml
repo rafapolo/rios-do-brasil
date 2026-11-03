@@ -19,7 +19,7 @@ jobs:
             echo "RODADO_DEPLOY_TOKEN ainda não está definido; deploy não acionado."
             exit 0
           fi
-          curl -sS -o /dev/null -w "%{http_code}\n" \
+          curl -fsS -o /dev/null -w "%{http_code}\n" \
             -X POST "https://api.github.com/repos/rafapolo/rodado/dispatches" \
             -H "Authorization: Bearer $TOKEN" \
             -H "Accept: application/vnd.github+json" \
