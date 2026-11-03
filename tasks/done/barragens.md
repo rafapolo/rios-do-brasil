@@ -1,6 +1,6 @@
 # Barragens e "rio livre"
 
-> **Estado: implementado (29/10/2026).** Modo "Rio livre" no mapa, com camada de pontos e
+> **Estado: implementado (29/10/2026), conferido e arquivado em 03/11/2026.** Modo "Rio livre" no mapa, com camada de pontos e
 > ficha. `pipeline/baixa_barragens.py` baixa, `pipeline/barragens.py` casa e corta a rede. Os
 > números abaixo são do levantamento de agosto; o que mudou desde então — contagem caída para
 > 28.902, `ING_CD_CURSODAGUA_TRECHO` preenchido mas de outra versão da BHO, a camada da Aneel
@@ -100,3 +100,24 @@ Desativada 347 · Em descaracterização 148 · Construção 99 · 1º enchiment
 - **Métrica ponderada.** O número é geométrico (km conectados). Um índice como o de
   Grill et al. (2019), ponderado por vazão e volume de reservatório, diria quanto da ÁGUA,
   e não do comprimento, está represada.
+
+## Conferência (03/11/2026)
+
+Antes de mover para `done/`, conferido no código e na página:
+
+- **Pipeline.** `pipeline/baixa_barragens.py` e `pipeline/barragens.py` existem e rodam (o
+  segundo em ~10 s: 17.440 pontos, 97,4% da rede em pedaços que encostam numa barragem,
+  43,8% corre até a foz sem barragem). A topologia do `rede_vazao.json` confere com a BHO.
+- **Template.** Botão `data-modo="livre"` no `template.html`, tokens `--livre-0..3` nos três
+  blocos de tema, `LIVRE`/`BAR_JUS`/`BAR_MONT`, `ordemLivre` desenhada por cima do cinza,
+  legenda em classes (4 cortes + cinza + barragem), nota do modo, ficha do trecho
+  ("Rio livre conectado", "Primeira barragem rio abaixo", "Barragens rio acima"), ficha da
+  barragem e anel de realce. O botão some sozinho se o campo não vier no blob.
+- **Suíte.** Os testes `rio livre` (só pinta pedaço cortado e dentro do Brasil; legenda sai
+  das mesmas cores do canvas; ficha da barragem; ficha do trecho) e o de `?mapa=livre` na
+  legenda passam nos 3 motores/arquivos: 96 de 96 antes das mudanças de hoje, 97 de 97 depois.
+- **Não conferido a olho.** Nenhuma captura de tela foi feita nesta sessão; a verificação da
+  cor é a dos testes (computed style do canvas e da legenda).
+
+As pendências de "O que ficou para depois" continuam valendo como ideias, não bloqueiam o modo.
+O peso do `index.html` que o modo trouxe foi tratado em `peso-do-mapa.md`.

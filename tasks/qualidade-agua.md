@@ -15,6 +15,34 @@ credibilidade disponível para o que o mapa já afirma.
 > regional). Nenhum dos dois serve ao objetivo, que é confrontar medição com carga modelada.
 > A tarefa está bloqueada até achar outra fonte nacional com valores.
 
+> **Busca de 03/11/2026 (~30 min), sem fonte viável. Tarefa continua aberta e bloqueada.**
+>
+> - O serviço migrou de servidor, e nada com valores foi junto. Os dois serviços de
+>   indicadores (`SPR/Indicadores_Qualidade_v31072023` e `..._v13052021`, os dois como
+>   `MapServer` e `FeatureServer`) respondem `404 Service not found`. O Hub
+>   `dadosabertos.ana.gov.br` (API `/api/search/v1/collections/all/items?q=...`) ainda lista as
+>   camadas, mas com a URL do serviço morto: é só vitrine. O registro de metadados
+>   (`metadados.snirh.gov.br`, "Indicadores de Qualidade de Água (2001 a 2021)") também aponta
+>   para lá.
+> - O servidor novo é `https://portal1.snirh.gov.br/server/rest/services/dados_abertos`
+>   (179 serviços). Os de qualidade: `Estacao_de_Qualidade_de_Agua` (1.602 estações, campos
+>   `CODIGO`, `LATITUDE`, `LONGITUDE`, `AREADRENAGEM`, `OPERANDO`, `BACIANOME`; **sem nenhum valor
+>   medido**), `Rede_de_Monitoramento_de_Qualidade_de_Agua_Pontos_Em_Operacao` (1.817 pontos, só
+>   cadastro), `Pontos_de_Monitoramento_..._Meta_2020` (4.453, só cadastro),
+>   `IQA_Media_da_Serie_Disponivel` (erro 500 "GISService not instantiated", o serviço está
+>   parado) e `IQA_Media_do_Ultimo_Ano_da_Serie` (responde, mas com zero camadas; descrição fala de
+>   2001–2014). Os `Balanco_Hidrico_Qualitativo_*` são modelados, não medidos.
+> - A API nova da ANA, `www.ana.gov.br/hidrowebservice/EstacoesTelemetricas/HidroSerieQA`,
+>   responde `401 Unauthorized`: exige token do cadastro no HidroWeb (identificador e senha do
+>   usuário). Não foi tentado, porque não há credencial; **é a pista mais promissora** — se o
+>   Rafael tiver ou puder pedir o cadastro, a rota `HidroSerieQA` deve devolver as séries de
+>   qualidade por estação. Vale testar antes de qualquer outra.
+> - `dados.gov.br` (API pública de conjuntos) devolve 401 sem token; o CKAN antigo da ANA não existe
+>   mais (`Cannot GET /api/3/...`). CETESB, IGAM, INEA, Waterbase e GEMStat não foram
+>   investigados a fundo: o Waterbase é europeu; o GEMStat exige pedido de dados e tem poucas
+>   estações no Brasil; os órgãos estaduais publicam relatórios em PDF e portais por estado, sem
+>   um esquema único que caiba num download nacional neste esforço.
+
 ```
 https://www.snirh.gov.br/arcgis/rest/services/SPR/Indicadores_Qualidade_v31072023/MapServer
 ```
