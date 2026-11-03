@@ -1363,10 +1363,18 @@
   /* O sinal diz se alguma barragem encosta no pedaço: negativo (−km − 1) é bacia
      intacta, pequena ou grande, e fica no cinza -- um rio costeiro curto sem
      muro nenhum não é rio retalhado. */
-  const LIVRE_BRUTO = D.livre ? Int32Array.from(varints(D.livre, 0, D.livre.length)) : null;
+  /* `livre` chega como o número do pedaço de cada trecho e `livreKm` como a tabela
+     de km dos pedaços (sinal incluído); aqui vira o valor por trecho. */
+  const LIVRE_BRUTO = D.livre && D.livreKm ? (() => {
+    const tab = Int32Array.from(varints(D.livreKm, 0, D.livreKm.length));
+    return Int32Array.from(varints(D.livre, 0, D.livre.length), id => tab[id]);
+  })() : null;
   const LIVRE = LIVRE_BRUTO ? LIVRE_BRUTO.map(v => v < 0 ? -v - 1 : v) : null;
   const cortado = i => LIVRE_BRUTO[i] >= 0;
-  const BAR_JUS = D.barJus ? Int32Array.from(varints(D.barJus, 0, D.barJus.length)) : null;
+  /* A distância vem em degraus de `barJusPasso` km; -1 segue sendo "nenhuma até a foz". */
+  const BAR_PASSO = D.barJusPasso || 1;
+  const BAR_JUS = D.barJus ? Int32Array.from(varints(D.barJus, 0, D.barJus.length),
+                                              v => v < 0 ? -1 : v * BAR_PASSO) : null;
   const BAR_MONT = D.barMont ? Int32Array.from(varints(D.barMont, 0, D.barMont.length)) : null;
   const LIVRE_CORTES = [10, 100, 1000, 10000];   // km; acima do último, não pinta
   // Do mais longo para o mais curto: o pedaço mais retalhado é desenhado por
@@ -2538,7 +2546,9 @@
     const j = BAR_JUS ? BAR_JUS[i] : -1;
     return linha('Rio livre conectado', fmt(LIVRE[i]) + ' km' +
                  (cortado(i) ? '' : ' · nenhuma barragem no pedaço')) +
-      linha('Primeira barragem rio abaixo', j < 0 ? 'nenhuma até a foz' : 'a ' + fmt(j) + ' km') +
+      linha('Primeira barragem rio abaixo', j < 0 ? 'nenhuma até a foz'
+        : j === 0 && BAR_PASSO > 1 ? 'a menos de ' + fmt(BAR_PASSO / 2 + 0.5 | 0) + ' km'
+        : 'a cerca de ' + fmt(j) + ' km') +
       (BAR_MONT ? linha('Barragens rio acima', fmt(BAR_MONT[i])) : '');
   }
 

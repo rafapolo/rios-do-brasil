@@ -14,9 +14,11 @@ A definição, porque "rio livre" admite várias:
                de todos os trechos do pedaço deste trecho — rio principal e
                afluentes juntos, porque é isso que fica conectado. Vai com sinal
                negativo (−km − 1) quando nenhuma barragem encosta no pedaço:
-               bacia pequena e intacta não é rio cortado.
+               bacia pequena e intacta não é rio cortado. Na página vai como
+               número do pedaço + tabela de km (`livre` e `livreKm`).
   barJus     — km do fim deste trecho até a primeira barragem rio abaixo, ou -1
-               quando a água chega à foz (ou sai do país) sem barramento.
+               quando a água chega à foz (ou sai do país) sem barramento. Vai
+               arredondado em degraus de BAR_PASSO km.
   barMont    — quantas barragens há a montante, contando a do próprio trecho.
 
 Não é a métrica de conectividade de Grill et al. (2019), que pondera por vazão
@@ -72,6 +74,8 @@ TOL_NOME = {"aneel": 0.03, "snisb": 0.01}
 # Duas hidrelétricas (Aneel e SNISB) a menos disto, no mesmo trecho casado ou no
 # vizinho, são a mesma usina; a camada de pontos desenha só a do SNISB.
 TOL_DUP = 0.01
+# Degrau, em km, da distância até a primeira barragem rio abaixo.
+BAR_PASSO = 5
 
 
 def normaliza(s: str | None) -> str:
@@ -234,11 +238,23 @@ def main() -> int:
 
     corta = cortado[frag]
     print(f"  km em pedaços que encostam numa barragem: {comp[corta].sum() / total * 100:.1f}%")
-    # Sinal no próprio número, para não pagar um quarto campo: positivo é pedaço
-    # cortado, negativo (−km − 1) é pedaço que nenhuma barragem toca.
-    dados["livre"] = codifica([int(round(v)) if c else -int(round(v)) - 1
-                               for v, c in zip(livre, corta)])
-    dados["barJus"] = codifica([int(round(v)) if v >= 0 else -1 for v in bjus])
+    # `livre` não guarda o km de cada trecho -- guarda o número do PEDAÇO, em
+    # ordem decrescente de tamanho, e `livreKm` é a tabela dele: km, com o sinal
+    # no próprio número (positivo é pedaço cortado, negativo, −km − 1, é pedaço
+    # que nenhuma barragem toca). Sem perda: 13,9 mil pedaços para 462 mil
+    # trechos, e o gzip cai de 579 para ~500 kB.
+    ordem = np.argsort(-km_frag, kind="stable")
+    rank = np.empty(nfrag, dtype=np.int64)
+    rank[ordem] = np.arange(nfrag)
+    tab = [int(round(km_frag[f])) if cortado[f] else -int(round(km_frag[f])) - 1
+           for f in ordem]
+    dados["livre"] = codifica([int(v) for v in rank[frag]])
+    dados["livreKm"] = codifica(tab)
+    # A distância até a primeira barragem rio abaixo vai em degraus de BAR_PASSO
+    # km (a ficha diz "a cerca de 35 km"): metade do tamanho do campo, e -1
+    # continua querendo dizer "nenhuma até a foz".
+    dados["barJusPasso"] = BAR_PASSO
+    dados["barJus"] = codifica([int(round(v / BAR_PASSO)) if v >= 0 else -1 for v in bjus])
     dados["barMont"] = codifica([int(v) for v in nmont])
     caminho = S / "rede_vazao.json"
     caminho.write_text(json.dumps(dados, separators=(",", ":"), ensure_ascii=False))

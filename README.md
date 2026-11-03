@@ -232,6 +232,13 @@ São 2,6 milhões de vértices. Em JSON de inteiros isso daria 34 MB. Três medi
 
 O resultado ainda é comprimido em gzip e descomprimido no navegador com `DecompressionStream`.
 
+O modo "Rio livre" acrescentou três campos à rede, e dois deles foram enxugados sem tirar
+informação da ficha: `livre` guarda o número do pedaço de rede de cada trecho mais uma tabela
+com o km de cada pedaço (13,9 mil pedaços para 462 mil trechos), idêntico ao antigo valor por
+trecho e 77 kB gz menor; `barJus`, a distância até a primeira barragem rio abaixo, vai em
+degraus de 5 km (a ficha diz "a cerca de 35 km"; erro máximo de 2 km), 106 kB gz menor. Medido
+no `index.html`: **17.433.585 → 17.190.093 bytes (17,4 → 17,2 MB)**.
+
 O render é Canvas 2D puro, sem biblioteca: a rede vai para um canvas fora de tela e só é
 redesenhada quando a vista muda; a animação de fluxo tem canvas próprio por cima.
 
