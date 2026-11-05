@@ -239,18 +239,54 @@ trecho e 77 kB gz menor; `barJus`, a distância até a primeira barragem rio aba
 degraus de 5 km (a ficha diz "a cerca de 35 km"; erro máximo de 2 km), 106 kB gz menor. Medido
 no `index.html`: **17.433.585 → 17.190.093 bytes (17,4 → 17,2 MB)**.
 
-O render é Canvas 2D puro, sem biblioteca: a rede vai para um canvas fora de tela e só é
-redesenhada quando a vista muda; a animação de fluxo tem canvas próprio por cima. De longe são tracinhos tracejados no eixo de cada
-trecho; de perto (a mistura vai de 10× a 26× o enquadramento nacional) viram partículas com rastro
-que some nas pontas, em faixas paralelas dentro da largura do rio e seguindo o leito suavizado,
-com velocidade que cresce devagar com a vazão. A qualidade cai sozinha se o quadro passar de ~24 ms,
-e com `prefers-reduced-motion` a camada fica ligada e parada.
+O render é WebGL sobre a **MapLibre GL JS 4.7.1**, embutida no HTML (gzip + base64, descomprimida na
+carga, como os dados): a página continua abrindo por `file://` e offline. A biblioteca veio de
+`bun add maplibre-gl@4.7.1` e está em `pipeline/vendor/` com a licença; o `monta_pagina.py` a embute.
+Ela custou **+321 kB** (17.374.044 → 17.694.988 bytes, 17,37 → 17,69 MB): 211 kB de JS e 9 kB de CSS
+em gzip, mais o base64.
+
+**Por que a biblioteca.** Para a vista inclinar e girar de verdade (a câmera 3D) sem reescrever
+gestos, pinça, hash de câmera e satélite raster. **Por que não a camada `line` dela:** o spike
+(`notas/spike-maplibre.md`) mediu a camada nativa sobre os 462 mil trechos em GeoJSON e ela
+funciona — mas leva o RSS de 0,64 para 2,2 GB, e os modos do mapa viravam propriedades por feição
+que obrigam o worker a refazer os ladrilhos a cada troca. A rede é, então, uma camada `custom` da
+MapLibre, própria: cada segmento é um quad instanciado, estendido no vertex shader em pixels de tela
+e afinado pela perspectiva quando a vista inclina; cor e espessura de cada TRECHO ficam em texturas
+(N × 4 bytes), então trocar de modo é regravar uma textura. Os trechos ficam agrupados em blocos
+(faixa de vazão × célula de 40×40), cortados pela matriz da câmera a cada quadro — o que
+substitui o `corteZoom` e o teto de 60 mil trechos do Canvas 2D. Marcadores (estações,
+reservatórios, ETEs, barragens) são uma segunda camada própria; terra, divisas e estados, camadas
+nativas de GeoJSON; o satélite, uma fonte raster que só existe enquanto está ligado. O fluxo animado
+continua em Canvas 2D por cima, reprojetado pela mesma matriz.
+
+**Vista 3D** é uma camada que se liga a pedido (cartão Camadas): desligada o mapa é plano, com o
+norte para cima, e os gestos de giro e inclinação ficam desativados; ligada, a câmera sobe a ~50°
+(botão direito ou Ctrl para girar, dois dedos no celular, botão de bússola para voltar ao norte). A URL
+guarda o estado: `?3d=1` e a câmera em `#zoom/lat/lon/giro/inclinação`, ao lado de `?mapa=<modo>`.
+
+Medido no chromium embutido do Playwright, Mac M4, `index.html` por `file://`
+(`notas/spike/base.ts`, `notas/spike/final.ts`):
+
+| | Canvas 2D (antes) | MapLibre + camada própria (depois) |
+|---|---|---|
+| Abrir até o véu sair, placa (Metal) | 1,10 s | 1,24 s |
+| Heap JS após `gc()` / RSS de todos os processos | 99 MB / 642 MB | 154 MB / 803 MB |
+| fps girando com inclinação de 55° (Brasil / perto / teto de zoom) | — | 104 / 83 / 74 |
+| fps arrastando | 120 | — |
+| WebGL por software (SwiftShader): abrir | 1,17 s | 2,7 s |
+| por software: fps ao arrastar ou girar, plano | 57 | 3 a 6 |
+
+Por software o mapa abre com um aviso, plano, com menos faixas de vazão por quadro (teto de 40 mil
+segmentos): é utilizável, mas lento; é o ponto fraco da escolha.
 
 ## Licença
 
 Código sob MIT. Os dados são públicos, da ANA, do IBGE e do Natural Earth — cite as fontes.
 
+A página embute a **MapLibre GL JS 4.7.1** (BSD de 3 cláusulas, © contribuidores da MapLibre), sem
+alteração; o texto da licença está em `pipeline/vendor/maplibre-gl-LICENSE.txt`.
+
 A camada de satélite é o mosaico **de 2016** do EOxCloudless, e o ano é escolha de licença, não
 de estética: no WMTS da EOX só ele é CC BY 4.0, e de 2017 em diante tudo é CC BY-NC-SA. O
-ShareAlike não caberia aqui — a página funde a imagem com a rede num canvas só, o que é
+ShareAlike não caberia aqui — a página funde a imagem com a rede na mesma vista, o que é
 adaptação, e obrigaria a relicenciar o conjunto.

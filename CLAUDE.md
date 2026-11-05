@@ -7,12 +7,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Duas páginas HTML autocontidas sobre os rios do Brasil, geradas por scripts Python:
 
 - **`index.html`** — mapa dos 462.539 trechos da Base Hidrográfica Ottocodificada da ANA,
-  desenhados pela vazão média. Canvas 2D, 17,2 MB.
+  desenhados pela vazão média. MapLibre GL embutida + camada WebGL própria (vista 3D a pedido), 17,7 MB.
 - **`series.html`** — análise da série histórica da ANA (1901–2023): tendência de vazão por
   estação, dias de rio seco, deslocamento da cheia, Q7,10, tamanho da rede, espelho d'água
   (MapBiomas) e perda na distribuição (SNIS). SVG, 990 KB.
 
-**Não há build system, nem `package.json`, nem dependência em runtime.** Os dados vão embutidos
+**Não há build system, nem dependência em runtime que venha da rede.** A MapLibre GL JS 4.7.1 (BSD-3) está em `pipeline/vendor/` e vai embutida no HTML como os dados. Os dados vão embutidos
 como gzip+base64 dentro do próprio HTML e são descomprimidos no navegador com
 `DecompressionStream`. Abrir o arquivo por `file://` tem que funcionar — é requisito, não
 conveniência.
@@ -89,16 +89,22 @@ conferência: `processa.py` roda validação cruzada 5-fold contra estações re
 (semiárido caindo, arco de desmatamento subindo). Ao mexer nos números, compare contra o que o
 README afirma — os valores lá são resultado medido, não arredondamento.
 
-**As páginas geradas, sim.** 115 testes em `testes/`, com Bun e Playwright:
+**As páginas geradas, sim.** 126 testes em `testes/`, com Bun e Playwright:
 
 ```bash
 bun install && bun run preparar   # baixa chromium, firefox e webkit (uma vez)
-bun test                          # em série, ~2,5 min, 115 testes nos três motores
+bun test                          # em série, ~2,5 min, 126 testes nos três motores
 bun run test                      # um processo por arquivo, 3 ao mesmo tempo, ~1,5 min (testes/roda.ts)
 ```
 
 Isso continua não sendo build system: o `package.json` e o `node_modules/` são só de
-desenvolvimento, nada deles entra no HTML publicado, e o `.gitignore` segura o `node_modules/`.
+desenvolvimento (a MapLibre embutida vem de `pipeline/vendor/`, não do `node_modules/`), nada deles entra no HTML publicado, e o `.gitignore` segura o `node_modules/`.
+
+O mapa é WebGL, e o chromium embutido do Playwright cai em SwiftShader (CPU) se ninguém pedir a
+placa: no Mac `testes/comum.ts` liga `--use-angle=metal` (`TESTES_SW=1` desliga, para ver o pior
+caso). Como o canvas é WebGL, os testes que contam pixels copiam o `#cv` para um canvas 2D
+(`TINTA`). Os de WebGL sem/por software/perdido ficam em `plataformas.test.ts`; os da vista 3D em
+`vista3d.test.ts`.
 
 Três coisas ao mexer na suíte:
 
@@ -110,7 +116,7 @@ Três coisas ao mexer na suíte:
   não dá para alcançá-los de fora. `copiaSondada()` gera uma cópia temporária do `index.html`
   com `window.__testes` injetado antes do marcador `/* ---------- início ---------- */` — o
   produto não ganha porta de depuração por causa do teste.
-- Abrir o `index.html` custa ~4 s (17 MB, gzip, 462 mil trechos): `abrir()` espera o véu `#carregando` sair, não um tempo fixo. Cada par (motor, URL) é aberto
+- Abrir o `index.html` custa ~1,5 s (17 MB, gzip, 462 mil trechos; no chromium da suíte, com GPU): `abrir()` espera o véu `#carregando` sair, não um tempo fixo. Cada par (motor, URL) é aberto
   uma vez e reaproveitado; quem mexe no estado da página chama `reinicia()` antes. Página aberta com `fresco: true` e que não vai mais ser usada deve ser fechada (`p.context().close()`): cada uma guarda 462 mil trechos. O teto é 3 min por rodada: os bugs de plataforma (celular, Tab, notch, sem JS) portados do cantography moram em `plataformas.test.ts`; a busca de rio tem arquivo próprio (`busca.test.ts`) para a rodada paralela se repartir bem; se o `mapa.test.ts` voltar a passar de ~2 min, parta-o de novo em vez de aumentar o teto.
 
 ## Como uma página é montada
@@ -131,10 +137,27 @@ Todos os JSON intermediários são gitignored. Os HTML gerados são versionados 
 
 - **Português** em nomes, comentários e commits (`type: descrição em minúscula`). Os scripts do
   `../rodado` são em inglês; os daqui não.
+- **O mapa é a MapLibre GL com uma camada `custom` própria para a rede** (e outra para os
+  marcadores): cada segmento é um quad instanciado, a cor e a largura de cada trecho moram em
+  texturas (`preencheTexturas()`; alfa 0 = não desenhar, é por ele que o filtro de detalhe, a faixa
+  da tendência e os pisos dos modos atuam), e os vértices vão agrupados em blocos faixa de
+  vazão × célula (`FAIXAS`, `GC`), cortados pela matriz da câmera a cada quadro. **Nunca desenhe a
+  rede como GeoJSON da biblioteca**: o spike mediu 2,2 GB de RSS (`notas/spike-maplibre.md`). Nada de
+  camada `symbol` com texto nem `glyphs`/`sprite` no estilo: seriam requisições à rede com a página
+  aberta (um teste confere que desligada ela não pede nada). O fluxo animado e os anéis de realce
+  ficam num canvas 2D por cima, reprojetados por `MAT` (a matriz da câmera, `lerCamera()`); todo
+  acerto de cursor/toque usa `paraTela`/`paraMundo` e tolera a perspectiva.
+- **A vista 3D é uma camada a pedido** (`#bt3d`, `define3D(on, {animar, manterCamera})`, exposta na
+  sonda): desligada, pitch 0, bearing 0 e `dragRotate`, `touchPitch` e a rotação por toque
+  desativados; ligada, ~50° (`PITCH_3D`) e os gestos voltam. A URL guarda `?3d=1` e a câmera em
+  `#zoom/lat/lon/giro/inclinação`; a câmera da URL é lida **antes** da biblioteca mexer na vista
+  (`HASH0`, `BUSCA0`). O tour deve chamar `define3D` e restaurar o estado ao sair. Por WebGL por
+  software (`POR_SOFTWARE`) a página avisa, abre plana e corta mais faixas de vazão.
 - **Os limites da câmera do mapa moram em dois lugares só, e nenhum deles é literal solto.**
-  O teto de zoom é `ZOOM_MAX` (hoje 180 × o enquadramento nacional, ~13 m/px; a 240 o córrego pequeno vira escada), lido pelos três
-  pontos que travam escala — botão, roda/pinça e os dois voos de enquadramento. O limite de
-  arrasto é `prender()`, chamado no fim do `pointermove` e do `aplicarZoom()`: ele impede que o
+  O teto de zoom é `ZOOM_MAX` (hoje 180 × o enquadramento nacional, ~13 m/px; a 240 o córrego pequeno vira escada), traduzido em
+  `limitesDeZoom()` para o zoom da biblioteca (`512·2^zoom` = `vista.k`). O limite de
+  arrasto é `prender()`, ligado ao `transformCameraUpdate` da biblioteca (o `maxBounds` prende a
+  BORDA da tela e não serve com a vista inclinada): ele impede que o
   **centro da tela** saia do `bounds` (a extensão inteira da BHO, dos Andes ao Prata — não a
   `moldura`, que é só o contorno do Brasil). Sem ele o mapa é plano infinito e um arrasto
   distraído joga a rede para fora da tela sem deixar pista de para que lado voltar. Quem subir
