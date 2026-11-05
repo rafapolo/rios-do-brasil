@@ -631,7 +631,10 @@
     display: flex; flex-direction: column; gap: 20px;
   }
   .gaveta.on { transform: none; }
-  @media (prefers-reduced-motion: reduce) { .gaveta { transition: none; } }
+  /* Fechada, fica fora da ordem do Tab: sem isto o botão Fechar, fora da tela à
+     direita, recebia o foco. O visibility espera a saída terminar. */
+  .gaveta:not(.on) { visibility: hidden; transition: transform .22s ease, visibility 0s .22s; }
+  @media (prefers-reduced-motion: reduce) { .gaveta, .gaveta:not(.on) { transition: none; } }
   .gaveta-topo { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
   .gaveta-topo h2 { margin: 0; }
   .gaveta .fontes { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
@@ -836,10 +839,12 @@
     .faixa input[type="range"] { height: 44px; }
   }
 </style>
+<noscript><style>#carregandoTxt, .carregando .aro { display: none; } .carregando .sem-js { max-width: 30em; padding: 0 24px; text-align: center; line-height: 1.5; }</style></noscript>
 
 <div class="carregando" id="carregando" role="status" aria-live="polite">
   <div class="aro" aria-hidden="true"></div>
-  <span>carregando o mapa…</span>
+  <span id="carregandoTxt">carregando o mapa…</span>
+  <noscript><span class="sem-js">Este mapa precisa de JavaScript para desenhar os rios. Ative-o no navegador e recarregue a página.</span></noscript>
 </div>
 
 <main class="mapa" id="mapa">
@@ -1213,6 +1218,9 @@
     document.getElementById('vazio').textContent =
       'Este navegador não descomprime os dados do mapa. Tente uma versão mais recente.';
     document.getElementById('vazio').classList.add('on');
+    /* o véu de carregamento ficaria por cima do aviso para sempre */
+    const veuCarga = document.getElementById('carregando');
+    if (veuCarga) veuCarga.remove();
     return;
   }
 
@@ -3578,7 +3586,10 @@
   const buscaCampo = document.getElementById('buscaCampo');
   const buscaLista = document.getElementById('buscaLista');
   const buscaLimpa = document.getElementById('buscaLimpa');
-  const semAcento = s => s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  /* NFKD desfaz ligaduras (ﬁ vira fi) além de separar os acentos; o apóstrofo
+     curvo que o iOS digita (e o texto colado de PDF) vira o reto dos nomes. */
+  const semAcento = s => s.toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[\u2018\u2019\u02bc\u00b4`]/g, "'");
 
   /* Point-in-polygon contra os próprios contornos que o mapa desenha, para dizer
      em que estado o rio corre. O contorno_uf.py joga o nome fora, então os anéis
@@ -3809,7 +3820,14 @@
       return;
     }
     if (ev.key === 'Enter') {
-      if (escolhido >= 0 && itens[escolhido]) { ev.preventDefault(); vaiAoRio(+itens[escolhido].dataset.i); }
+      if (escolhido >= 0 && itens[escolhido]) { ev.preventDefault(); vaiAoRio(+itens[escolhido].dataset.i); return; }
+      /* Enter logo depois de digitar: a lista só sai 120 ms após a última tecla e
+         o Enter era descartado. Busca na hora e abre o primeiro. */
+      const v = buscaCampo.value.trim();
+      if (v.length >= 2) {
+        const achados = buscaRios(v);
+        if (achados.length) { ev.preventDefault(); clearTimeout(tecleiEm); vaiAoRio(achados[0].i); }
+      }
       return;
     }
     if (ev.key !== 'ArrowDown' && ev.key !== 'ArrowUp') return;
