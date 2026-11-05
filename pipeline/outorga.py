@@ -109,6 +109,10 @@ def calcula(geoms, props, jus, ordem_topo, q) -> dict:
     # outra erra a proporção — foi assim que a nota do mapa nasceu dizendo 79%
     # de irrigação onde o número da base casada é outro.
     fin_m3s: dict[str, float] = {}
+    # O que cai em cada trecho, por finalidade, para o gráfico da ficha: a cor
+    # do mapa é o acumulado de montante, mas o leitor que clica num rio quer ver
+    # as tomadas d'água do próprio rio. Chave (trecho, finalidade) -> [n, m³/s].
+    local: dict[tuple[int, str], list] = {}
     for r in df.iter_rows(named=True):
         lat, lon = r["int_nu_latitude"], r["int_nu_longitude"]
         if lat is None or lon is None or (lat == 0 and lon == 0):
@@ -138,7 +142,11 @@ def calcula(geoms, props, jus, ordem_topo, q) -> dict:
         casados += 1
         v = max(r["m3s"], 0.0)
         carga[escolhido] += v
-        fin_m3s[r["tfn_ds"] or "sem finalidade"] = fin_m3s.get(r["tfn_ds"] or "sem finalidade", 0.0) + v
+        fin = r["tfn_ds"] or "sem finalidade"
+        fin_m3s[fin] = fin_m3s.get(fin, 0.0) + v
+        c = local.setdefault((escolhido, fin), [0, 0.0])
+        c[0] += 1
+        c[1] += v
     print(f"  casados a um trecho: {casados} · órfãos: {orfaos}")
     if testados:
         print(f"  confere com o código de ottobacia da fonte: "
@@ -167,7 +175,20 @@ def calcula(geoms, props, jus, ordem_topo, q) -> dict:
     for lim in (0.25, 0.5, 1.0):
         print(f"    acima de {lim * 100:.0f}% da vazão: {int((frac >= lim).sum())} trechos")
 
-    return {"out": codifica([int(round(v * 10000)) for v in frac])}
+    # Bloco esparso do gráfico: quádruplas (salto de trecho, finalidade, número
+    # de outorgas, vazão em L/s), ordenadas por trecho. A finalidade é índice em
+    # `outFin`, já em ordem de volume — a primeira cor vai para quem mais tira.
+    fins = [f for f, _ in sorted(fin_m3s.items(), key=lambda kv: -kv[1])]
+    fins += sorted({f for _, f in local} - set(fins))
+    idx = {f: k for k, f in enumerate(fins)}
+    quad, ant = [], 0
+    for (i, fin), (n, v) in sorted(local.items(), key=lambda kv: (kv[0][0], idx[kv[0][1]])):
+        quad += [i - ant, idx[fin], n, int(round(v * 1000))]
+        ant = i
+    print(f"  bloco local: {len(local)} pares trecho × finalidade em {len({i for i, _ in local})} trechos")
+
+    return {"out": codifica([int(round(v * 10000)) for v in frac]),
+            "outL": codifica(quad), "outFin": fins}
 
 
 def main() -> int:

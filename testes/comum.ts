@@ -158,6 +158,7 @@ const REINICIA = `() => {
     if (b.getAttribute('aria-pressed') === 'true') b.click();
   document.getElementById('btReset').click();
   document.getElementById('gaveta').classList.remove('on');
+  document.getElementById('gavetaProjeto').classList.remove('on');
   document.getElementById('veu').classList.remove('on');
   document.getElementById('sobreCorpo').classList.remove('on');
   // as páginas são reaproveitadas: sem limpar, o teste seguinte herda a lista
@@ -184,11 +185,11 @@ export function copiaSondada(): string {
   const s = texto(INDEX);
   if (s.split(ancora).length !== 2) throw new Error("âncora de injeção sumiu do index.html");
   const sonda =
-    "  window.__testes = { N, q, areas, comps, fEsg, fInd, fOut, semDado, medidos, foraBr,\n" +
+    "  window.__testes = { N, q, areas, comps, fEsg, fInd, fOut, outLoc, OUT_FIN, semDado, medidos, foraBr,\n" +
     "    RES, ETES, D, nomeIdx, bbox, TEND, TEND_OK, CORTES_TEND, LIMIARES_TEND,\n" +
     "    TEND_TR, TEND_PCT, TEND_LISTA, TEND_PISO, ordemTend, KM_TEND,\n" +
     "    LIVRE, LIVRE_BRUTO, BAR_JUS, BAR_MONT, LIVRE_CORTES, ordemLivre, BARR,\n" +
-    "    fichaBarragem: (b) => fichaBarragem(b),\n" +
+    "    fichaBarragem: (b) => fichaBarragem(b), fichaUsina: (u) => fichaUsina(u), fichaEte: (t) => fichaEte(t),\n" +
     "    filtraTend: (c) => filtraTend(c), corTend: (p) => corTend(p),\n" +
     "    fichaTrecho: (i) => fichaTrecho(i), fichaEstacao: (e) => fichaEstacao(e),\n" +
     "    aplicaModo: (m) => aplicaModo(m), vista,\n" +

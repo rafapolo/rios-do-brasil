@@ -270,13 +270,32 @@
     text-wrap: balance;
   }
   .linha {
-    display: flex; justify-content: space-between; gap: 12px;
+    display: flex; justify-content: space-between; align-items: baseline; gap: 12px;
     font-size: 0.79rem; color: var(--ink-2); padding: 1px 0;
   }
+  .linha span { flex: 0 1 auto; min-width: 7em; }
+  /* O valor quebra linha em vez de vazar do cartão: nome de concessionária,
+     corpo receptor e município passam fácil da largura. Número curto não
+     quebra (cabe), e o texto longo alinha à direita, junto da coluna. */
   .linha em {
+    flex: 0 1 auto; min-width: 0; text-align: right; overflow-wrap: anywhere; text-wrap: balance;
     font-style: normal; color: var(--ink); font-weight: 550;
-    font-family: var(--mono); font-variant-numeric: tabular-nums; white-space: nowrap;
+    font-family: var(--mono); font-variant-numeric: tabular-nums;
   }
+  /* O tipo do ponto (reservatório, estação, ETE) vai acima do nome, pequeno,
+     na cor da camada. Como selo no fim ele era a maior coisa do cartão e
+     carregava junto a UF e o período, que não são categoria. */
+  .ficha .tipo {
+    font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase;
+    letter-spacing: 0.09em; color: var(--accent); margin-bottom: 3px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .ficha .tipo::before {
+    content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none;
+  }
+  .ficha .tipo.usina { color: var(--usina); }
+  .ficha .tipo.ete { color: var(--ete); }
+  .ficha .tipo.inativa { color: var(--ink-3); }
   /* Etiqueta com corpo: em cinza claro a 9px o "vazão estimada" sumia ao lado
      do selo laranja de estação, e a diferença entre medido e estimado é
      justamente o que o leitor precisa enxergar. */
@@ -290,6 +309,14 @@
     background: color-mix(in srgb, currentColor 11%, transparent);
   }
   .selo.neutro { color: var(--ink-2); }
+  /* Alerta é frase, não etiqueta: em caixa alta e centralizado ele virava o
+     bloco mais pesado da ficha, duas linhas de grito no meio dos números. */
+  .selo.alerta {
+    width: auto; margin: 6px 0 0; padding: 4px 8px; text-align: left;
+    font-family: inherit; font-size: 0.74rem; text-transform: none; letter-spacing: 0;
+    border: 0; border-left: 2px solid currentColor; border-radius: 0;
+    color: var(--out-5);
+  }
   .selo.usina { color: var(--usina); }
   .selo.ete { color: var(--ete); }
 
@@ -309,6 +336,19 @@
   }
   .mes i { display: block; width: 100%; height: var(--h); background: var(--ramp-3); border-radius: 1px; }
   .regime-nota { text-transform: none; letter-spacing: 0; font-size: 0.66rem; line-height: 1.4; }
+  /* gráfico das outorgas do rio, no modo outorga */
+  .operfil { display: block; width: 100%; height: 44px; margin: 6px 0 2px; }
+  .operfil line { stroke: var(--out-3); stroke-width: 1.2; vector-effect: non-scaling-stroke; }
+  .operfil line.aqui { stroke: var(--out-6); stroke-width: 2.4; }
+  .oeixo { display: flex; justify-content: space-between; margin-bottom: 7px; }
+  .ofin {
+    display: grid; grid-template-columns: 1fr auto; gap: 1px 8px; align-items: center;
+    font-size: 0.7rem; line-height: 1.25; margin: 4px 0; color: var(--ink-2);
+  }
+  .ofin span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .ofin em { font-style: normal; font-family: var(--mono); font-size: 0.62rem; color: var(--ink-3); }
+  .ofin b { grid-column: 1 / -1; display: block; height: 4px; width: var(--w);
+            background: var(--out-4); border-radius: 1px; }
 
   /* ---------- legenda em classes ---------- */
   /* Cada amostra usa a mesma cor e a mesma espessura que o mapa desenha para
@@ -460,8 +500,11 @@
     justify-content: center; min-width: 40px; padding: 9px;
     font-size: 0.88rem; letter-spacing: 0;
   }
-  .abrir {
+  .abrir-par {
     position: fixed; right: 16px; bottom: 16px; z-index: 3;
+    display: flex; gap: 6px; align-items: flex-end;
+  }
+  .abrir {
     font-size: 0.64rem; letter-spacing: 0.06em; padding: 10px 14px; min-height: 40px;
   }
 
@@ -572,6 +615,19 @@
   @media (prefers-reduced-motion: reduce) { .gaveta { transition: none; } }
   .gaveta-topo { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
   .gaveta-topo h2 { margin: 0; }
+  .gaveta .fontes { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+  .gaveta .fontes li { font-size: 0.8rem; line-height: 1.4; color: var(--ink-2); }
+  .gaveta .fontes b { color: var(--ink); font-weight: 600; }
+  .gaveta .fontes code {
+    font-family: var(--mono); font-size: 0.68rem; color: var(--ink-3); overflow-wrap: anywhere;
+  }
+  .gaveta a { color: var(--accent); }
+  .repo {
+    display: flex; align-items: center; gap: 10px; padding: 11px 13px; border: 1px solid var(--rule);
+    border-radius: 4px; text-decoration: none; font-size: 0.84rem; color: var(--ink) !important;
+  }
+  .repo:hover { border-color: var(--accent); }
+  .repo svg { width: 20px; height: 20px; flex: none; fill: currentColor; }
   .fechar { min-height: 34px; padding: 6px 11px; }
 
   .tabela { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
@@ -660,7 +716,9 @@
     
     h1 { font-size: 1.28rem; }
     .zoom { top: auto; bottom: 76px; right: 12px; }
-    .abrir { bottom: auto; top: 12px; right: 12px; }
+    /* Empilhados no canto: lado a lado, os dois botões avançavam sobre a busca,
+       que mora no canto esquerdo do mesmo topo. */
+    .abrir-par { bottom: auto; top: 12px; right: 12px; flex-direction: column; }
     /* O "Tabela e método" ficou com o canto direito, então a busca vai para o
        esquerdo. Fica visível com a gaveta recolhida — é onde ela mais serve. */
     .busca { top: 12px; left: 12px; right: auto; width: min(52vw, 240px); }
@@ -709,7 +767,10 @@
   <button id="btReset" title="Enquadrar o Brasil" aria-label="Enquadrar o Brasil">⤢</button>
 </div>
 
-<button class="abrir" id="btSobre">Tabela e método</button>
+<div class="abrir-par">
+  <button class="abrir" id="btProjeto">Sobre</button>
+  <button class="abrir" id="btSobre">Tabela e método</button>
+</div>
 
 <div class="hud" id="hud">
   <button class="puxador" id="puxador" aria-expanded="true" aria-controls="hud">
@@ -859,7 +920,7 @@
      escrevê-las num comentário cortaria a região no lugar errado.) -->
 <div class="busca" id="busca">
   <input type="search" id="buscaCampo" autocomplete="off" spellcheck="false"
-         placeholder="Buscar um rio" aria-label="Buscar um rio pelo nome"
+         placeholder="Buscar qualquer rio" aria-label="Buscar qualquer rio do Brasil pelo nome"
          role="combobox" aria-expanded="false" aria-controls="buscaLista"
          aria-autocomplete="list">
   <button class="busca-limpa" id="buscaLimpa" hidden aria-label="Limpar a busca">×</button>
@@ -867,6 +928,56 @@
 </div>
 
 <div class="veu" id="veu"></div>
+
+<aside class="gaveta" id="gavetaProjeto" aria-hidden="true" aria-labelledby="tituloProjeto">
+  <div class="gaveta-topo">
+    <h2 id="tituloProjeto">Sobre o projeto</h2>
+    <button class="fechar" data-fechar>Fechar</button>
+  </div>
+
+  <div class="metodo">
+    <p>
+      <strong>Rios do Brasil</strong> desenha os 462 mil trechos da rede hidrográfica oficial pela
+      água que passa em cada um, e cruza essa vazão com o que se tira e se joga no rio: esgoto,
+      efluente industrial, licenças de captação, barragens. Cada modo do mapa responde a uma
+      pergunta — quanto rio há, quanto dele é esgoto, quanto já está prometido em licença, onde
+      ele ainda corre livre.
+    </p>
+    <p>
+      A página é um arquivo só, com os dados embutidos: abre offline, sem servidor e sem
+      biblioteca. Só a imagem de satélite, opcional, vem da rede. A série histórica de cada estação
+      está em <a href="series.html" target="_blank" rel="noopener">series.html</a>.
+    </p>
+  </div>
+
+  <div class="metodo">
+    <h2>Fontes e tabelas</h2>
+    <ul class="fontes">
+      <li><b>Rede hidrográfica</b> — Base Hidrográfica Ottocodificada 2017 (1:5.000), ANA, pelo
+        SNIRH. <code>BHO2017_5K_TRECHODRENAGEM</code></li>
+      <li><b>Vazão medida</b> — estações fluviométricas da ANA (Hidroweb e serviço de telemetria).
+        <code>br_ana_telemetria.series_vazao_mensal_completa</code>,
+        <code>br_ana_telemetria.estacoes_inventario_2023</code></li>
+      <li><b>Reservatórios</b> — Sistema de Acompanhamento de Reservatórios (SAR), ANA.
+        <code>br_ana_reservatorios.sin</code></li>
+      <li><b>Esgoto e ETEs</b> — Atlas Esgotos, ANA.
+        <code>br_ana_atlas_esgotos.municipio</code>, <code>br_geobr_mapas.sede_municipal</code></li>
+      <li><b>Outorgas</b> — captações e lançamentos vigentes no SNIRH (federais e estaduais).
+        <code>br_ana_outorgas.captacoes</code></li>
+      <li><b>Barragens</b> — SNISB, ANA, e empreendimentos hidrelétricos em operação da Aneel.</li>
+      <li><b>Fronteiras</b> — Natural Earth. <b>Satélite</b> — EOxCloudless 2016, EOX, CC BY 4.0.</li>
+    </ul>
+    <p class="nota">
+      As tabelas com nome de banco vêm do <a href="https://rodado.xyz" target="_blank" rel="noopener">rodado</a>,
+      espelho público de dados do governo brasileiro; as demais são baixadas direto da fonte.
+    </p>
+  </div>
+
+  <a class="repo" href="https://github.com/rafapolo/rios-do-brasil" target="_blank" rel="noopener">
+    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+    <span>Código e pipeline no GitHub<br><small>rafapolo/rios-do-brasil · MIT</small></span>
+  </a>
+</aside>
 
 <aside class="gaveta" id="gaveta" aria-hidden="true">
   <div class="gaveta-topo">
@@ -1130,6 +1241,22 @@
      média), porque "mais licença do que rio" é o que a camada existe para
      mostrar, e clipar em 100% apagaria justamente isso. */
   const fOut = D.out ? Float32Array.from(varints(D.out, 0, D.out.length), v => v / 10000) : null;
+  /* O que cai em cada trecho, por finalidade — não acumulado. É o que o gráfico
+     da ficha mostra: as tomadas d'água do próprio rio. Vem em quádruplas
+     (salto de trecho, finalidade, nº de outorgas, L/s); trecho -> [[fin, n, m³/s]]. */
+  const OUT_FIN = D.outFin || [];
+  const outLoc = new Map();
+  if (D.outL) {
+    const v = varints(D.outL, 0, D.outL.length);
+    let t = 0;
+    for (let k = 0; k + 3 < v.length; k += 4) {
+      t += v[k];
+      let l = outLoc.get(t);
+      if (!l) outLoc.set(t, l = []);
+      l.push([v[k + 1], v[k + 2], v[k + 3] / 1000]);
+    }
+  }
+  D.outL = null;
   // Cidades que coletam esgoto e não têm outorga de lançamento nenhuma: o rio
   // delas não está limpo, está sem registro. Sem isso o branco viraria atestado.
   const semDado = D.semDado ? acumula(D.semDado) : new Set();
@@ -1421,7 +1548,7 @@
      Strahler 5 para cima e aproximar mostrava tela vazia. Hoje a rede vai até o
      córrego de cabeceira e o `corteZoom` abre sozinho conforme se aproxima, então
      quem manda no limite é o dado, não o desenho: a malha da BHO vem numa grade
-     de 11 m nos rios de bacia grande e 110 m nos pequenos, e os traços saem
+     de 11 m nos rios de bacia grande e 110 m nos pequenos, e os tracos saem
      simplificados de 20 m (Amazonas) a 350 m (córrego). Em 120× dá ~20 m/px —
      ainda acima da grade fina, e ainda dentro do z14 nativo do Sentinel-2.
      Passar muito disso começa a mostrar o degrau da grade como se fosse curva do
@@ -2301,7 +2428,7 @@
         for (let j = a; j + 3 < b; j += 2) {
           const d = distSeg(wx, wy, coords[j], coords[j + 1], coords[j + 2], coords[j + 3]);
           if (d >= tol) continue;
-          // rio maior ganha o desempate quando dois traços se sobrepõem
+          // rio maior ganha o desempate quando dois tracos se sobrepõem
           const score = d - Math.min(tol * 0.4, tol * 0.12 * Math.log10(1 + q[i]));
           if (score < melhorD) { melhorD = score; melhor = i; }
         }
@@ -2371,6 +2498,7 @@
       (fora ? linha('Território', 'fora do Brasil') : '') +
       efluenteHTML(i) +
       outorgaHTML(i) +
+      outorgasDoRioHTML(i) +
       tendenciaDoTrechoHTML(i) +
       livreDoTrechoHTML(i) +
       '<div class="selo' + (medido ? '' : ' neutro') + '">' +
@@ -2406,7 +2534,64 @@
     const o = fOut[i];
     if (o < OMIN) return '';
     return linha('Outorgado', pct(o) + ' da vazão — ' + vazao(o * q[i])) +
-      (o >= 1 ? '<div class="selo">licença de retirada igual ou maior que a vazão média</div>' : '');
+      (o >= 1 ? '<div class="selo alerta">licença de retirada igual ou maior que a vazão média</div>' : '');
+  }
+
+  /* As outorgas do próprio rio, no modo outorga, quando são muitas (5 ou mais):
+     o número da linha "Outorgado" é o acumulado de montante, afluentes
+     incluídos, e não diz onde estão as tomadas nem para que servem. Duas
+     leituras: o perfil da nascente à foz (cada traço é um trecho com licença,
+     altura pela raiz da vazão, para o pivô pequeno não sumir ao lado da
+     adutora) e a soma por finalidade. Conta só os trechos com o mesmo nome. */
+  const OUT_MIN_GRAF = 5;
+  function outorgasDoRioHTML(i) {
+    if (modo !== 'outorga' || !outLoc.size) return '';
+    const grupo = trechosDoRio(i);
+    let n = 0, tot = 0;
+    const porFin = new Map(), pontos = [];
+    // montante -> jusante pela área de drenagem; a posição é o km acumulado
+    const ord = Array.from(grupo).sort((a, b) => areas[a] - areas[b]);
+    let km = 0;
+    for (const k of ord) {
+      const c = comps ? comps[k] / 10 : 1;
+      const l = outLoc.get(k);
+      if (l) {
+        let v = 0;
+        for (const [f, m, q3] of l) {
+          n += m; v += q3;
+          const a = porFin.get(f) || [0, 0];
+          a[0] += m; a[1] += q3; porFin.set(f, a);
+        }
+        tot += v;
+        pontos.push([km + c / 2, v, k === i]);
+      }
+      km += c;
+    }
+    if (n < OUT_MIN_GRAF) return '';
+    const W = 220, H = 44, vmax = Math.max(...pontos.map(p => p[1]), 1e-9);
+    const tracos = pontos.map(([x, v, aqui]) => {
+      const px = (km > 0 ? x / km : 0.5) * W, h = Math.max(2, (H - 2) * Math.sqrt(v / vmax));
+      return '<line x1="' + px.toFixed(1) + '" x2="' + px.toFixed(1) + '" y1="' + H + '" y2="' +
+        (H - h).toFixed(1) + '"' + (aqui ? ' class="aqui"' : '') + '/>';
+    }).join('');
+    const fins = [...porFin].sort((a, b) => b[1][1] - a[1][1] || b[1][0] - a[1][0]);
+    const topo = fins.slice(0, 4);
+    if (fins.length > 4) {
+      const r = fins.slice(4).reduce((s, [, [m, q3]]) => [s[0] + m, s[1] + q3], [0, 0]);
+      topo.push([-1, r]);
+    }
+    const qmax = Math.max(...topo.map(([, [, q3]]) => q3), 1e-9);
+    const barras = topo.map(([f, [m, q3]]) =>
+      '<div class="ofin"><span>' + (f < 0 ? 'outras finalidades' : OUT_FIN[f] || 'sem finalidade') +
+      '</span><em>' + (q3 > 0 ? vazao(q3) : '—') + ' · ' + fmt(m) + '</em><b style="--w:' +
+      Math.max(1, 100 * q3 / qmax).toFixed(1) + '%"></b></div>').join('');
+    return '<div class="regime outorgas"><div class="regime-titulo">' + fmt(n) +
+      ' outorgas de captação em ' + fmt(km) + ' km de rio · ' + vazao(tot) + '</div>' +
+      '<svg class="operfil" viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" role="img" aria-label="' +
+      'outorgas ao longo do rio, da nascente à foz">' + tracos + '</svg>' +
+      '<div class="regime-nota oeixo"><span>nascente</span><span>foz</span></div>' +
+      barras +
+      '<div class="regime-nota">só os trechos deste rio; o “Outorgado” acima soma também os afluentes</div></div>';
   }
 
   /* De onde veio a cor deste trecho, no modo tendência. O número é da ESTAÇÃO e
@@ -2463,6 +2648,8 @@
     const extras = (e.mede || '').split('').map(c => OUTRAS_MEDIDAS[c]).filter(Boolean);
     fichaEl.className = 'cartao ficha';
     fichaEl.innerHTML =
+      '<div class="tipo' + (e.ativa ? '' : ' inativa') + '">estação ' + e.cod +
+      (e.ativa ? ' · em operação' : ' · desativada') + '</div>' +
       '<div class="nome">' + e.nome + '</div>' +
       (e.mun ? linha('Onde', e.mun + (e.uf ? ' · ' + e.uf : '')) : '') +
       (e.op ? linha('Operada por', e.op) : '') +
@@ -2474,13 +2661,13 @@
       linha('Série', e.ini + '–' + e.fim + ' · ' + e.n + ' meses') +
       tendenciaHTML(e.cod) +
       (extras.length ? linha('Mede também', extras.join(', ')) : '') +
-      regimeHTML(e.regime, 'Vazão média por mês') +
-      '<div class="selo">estação ' + e.cod + (e.ativa ? ' · em operação' : ' · desativada') + '</div>';
+      regimeHTML(e.regime, 'Vazão média por mês');
   }
 
   function fichaUsina(u) {
     fichaEl.className = 'cartao ficha';
     fichaEl.innerHTML =
+      '<div class="tipo usina">reservatório' + (u.uf ? ' · ' + u.uf : '') + '</div>' +
       '<div class="nome">' + u.nome + '</div>' +
       linha('Bacia', u.bacia || '—') +
       (u.turb != null ? linha('Turbinada', fmt(u.turb) + ' m³/s') : '') +
@@ -2490,8 +2677,7 @@
       (u.gwh ? linha('Geração anual', fmt(u.gwh) + ' GWh') : '') +
       (u.mwmed ? linha('Potência média', fmt(u.mwmed) + ' MW') : '') +
       (u.prop ? linha('Concessionária', u.prop) : '') +
-      '<div class="selo usina">reservatório' + (u.uf ? ' · ' + u.uf : '') +
-      (u.ini ? ' · média ' + u.ini + '–' + u.fim : '') + '</div>';
+      (u.ini ? linha('Média do período', u.ini + '–' + u.fim) : '');
   }
 
   /* A remoção de DBO é o número que decide se a ETE resolve: 90% e 30% são
@@ -2500,14 +2686,14 @@
   function fichaEte(t) {
     fichaEl.className = 'cartao ficha';
     fichaEl.innerHTML =
+      '<div class="tipo ete' + (t.status === 'ativa' ? '' : ' inativa') + '">' +
+      (t.status === 'ativa' ? 'estação de tratamento ativa' : 'ETE ' + t.status) + '</div>' +
       '<div class="nome">' + t.nome + '</div>' +
       (t.tipo ? linha('Tipo de tratamento', t.tipo) : '') +
       (t.dbo != null ? linha('Remoção de DBO', t.dbo + '%') : '') +
       (t.corpo ? linha('Corpo receptor', t.corpo) : '') +
       (t.mun > 1 ? linha('Municípios atendidos', String(t.mun)) : '') +
-      (t.ano ? linha('Em operação desde', String(t.ano)) : '') +
-      '<div class="selo ete">' + (t.status === 'ativa' ? 'estação de tratamento ativa'
-                                                       : 'ETE ' + t.status) + '</div>';
+      (t.ano ? linha('Em operação desde', String(t.ano)) : '');
   }
 
   /* A ficha da barragem diz o que ela corta: o pedaço de rio livre acima dela
@@ -2927,13 +3113,21 @@
 
   const gaveta = document.getElementById('gaveta');
   const veu = document.getElementById('veu');
-  const abrirGaveta = on => {
-    gaveta.classList.toggle('on', on);
+  /* Duas gavetas no mesmo lugar: a da tabela e método e a do projeto. Abrir
+     uma fecha a outra; fechar (botão, véu, Esc) fecha as duas. */
+  const gavetaProjeto = document.getElementById('gavetaProjeto');
+  const abrirGaveta = (on, g = gaveta) => {
+    for (const x of [gaveta, gavetaProjeto]) {
+      const liga = on && x === g;
+      x.classList.toggle('on', liga);
+      x.setAttribute('aria-hidden', String(!liga));
+    }
     veu.classList.toggle('on', on);
-    gaveta.setAttribute('aria-hidden', String(!on));
   };
   document.getElementById('btSobre').addEventListener('click', () => abrirGaveta(true));
+  document.getElementById('btProjeto').addEventListener('click', () => abrirGaveta(true, gavetaProjeto));
   document.getElementById('btFechar').addEventListener('click', () => abrirGaveta(false));
+  for (const b of document.querySelectorAll('[data-fechar]')) b.addEventListener('click', () => abrirGaveta(false));
   veu.addEventListener('click', () => abrirGaveta(false));
   document.addEventListener('keydown', e => { if (e.key === 'Escape') abrirGaveta(false); });
 

@@ -374,6 +374,40 @@ describe("ficha", () => {
     expect(Math.max(...chaves)).toBeLessThanOrEqual(12);
   }, LENTO);
 
+  /* O gráfico das outorgas do rio: só no modo outorga, só com 5 ou mais, e o
+     total escrito tem que ser a soma do bloco local dos trechos do rio. */
+  test("a ficha do modo outorga traz o gráfico das outorgas do rio", async () => {
+    const r = await roda(sonda, `() => {
+      const t = window.__testes;
+      // o trecho com mais outorgas locais: o rio dele certamente passa de 5
+      let alvo = -1, max = 0;
+      for (const [k, l] of t.outLoc) { const n = l.reduce((s, x) => s + x[1], 0); if (n > max) { max = n; alvo = k; } }
+      let n = 0;
+      for (const k of t.trechosDoRio(alvo)) for (const x of (t.outLoc.get(k) || [])) n += x[1];
+      t.aplicaModo('vazao'); t.fichaTrecho(alvo);
+      const foraDoModo = !!document.querySelector('#ficha .outorgas');
+      t.aplicaModo('outorga'); t.fichaTrecho(alvo);
+      const g = document.querySelector('#ficha .outorgas');
+      const res = { foraDoModo, n, titulo: g && g.querySelector('.regime-titulo').textContent,
+        tracos: g ? g.querySelectorAll('.operfil line').length : 0,
+        aqui: g ? g.querySelectorAll('.operfil line.aqui').length : 0,
+        fins: g ? g.querySelectorAll('.ofin').length : 0 };
+      // um trecho isolado com uma outorga só não ganha gráfico
+      const so = [...t.outLoc].find(([k, l]) => l.length === 1 && l[0][1] === 1 && t.trechosDoRio(k).length === 1);
+      if (so) { t.fichaTrecho(so[0]); res.poucas = !!document.querySelector('#ficha .outorgas'); }
+      t.aplicaModo('vazao');
+      return res;
+    }`) as Record<string, any>;
+    expect(r.foraDoModo).toBe(false);
+    expect(r.n).toBeGreaterThanOrEqual(5);
+    expect(r.titulo).toContain(r.n.toLocaleString("pt-BR") + " outorgas");
+    expect(r.tracos).toBeGreaterThan(0);
+    expect(r.aqui).toBe(1);
+    expect(r.fins).toBeGreaterThan(0);
+    expect(r.fins).toBeLessThanOrEqual(5);
+    expect(r.poucas).toBe(false);
+  });
+
   /* O aviso existe para o branco do mapa de esgoto não virar atestado de
      limpeza. Fora desses dois modos aparecia sozinho, sem linha nenhuma de
      efluente ao lado a que se referir. */
