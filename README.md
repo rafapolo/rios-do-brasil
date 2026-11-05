@@ -45,6 +45,21 @@ ela vem pronta na topologia da base da ANA.
   550 m de qualquer rio desenhado e não cortam nada — barram córregos que o mapa não mostra,
   ou ficam fora do leito. A ficha da barragem traz uso, fase, altura, reservatório e risco,
   e diz quando o SNISB não a classificou, que é o caso de quase metade
+- **Tour de 2 minutos, com música** — botão "Tour" (na coluna de baixo no desktop, na barra no
+  celular) ou o endereço `/tour/` (`?tour=1` na página do mapa: pede um toque, porque o navegador só
+  libera o som depois de um gesto). Doze cenas em faixas de cinema, cada uma com um fato conferido
+  no banco: o Amazonas leva 85% da água que chega ao litoral, o São Francisco tem cem vezes menos
+  água, Sobradinho quase vazio, 773 mil km de rio sem barragem, o Paranapanema em degraus, o
+  Piranhas-Açu com mais licença que rio, o Taperoá seco em 7 de cada 10 dias, os 26 rios do Oeste
+  da Bahia que perdem água, o Pantanal que encolhe, o Tietê de esgoto, a água que se perde no Acre.
+  O fluxo animado fica ligado em todas as cenas. Esc ou "✕ esc" param e devolvem modo, camadas,
+  câmera e vista 3D como estavam. Os números e frases estão em `design/tour.json` (embutido na
+  página); de onde saiu cada um, com a segunda via que o confirmou, em `design/tour.md`. A música é
+  gerada na hora (Web Audio, sem arquivo de som): correnteza em ruído filtrado cuja força e brilho
+  seguem a vazão do rio mais próximo do centro da tela em escala logarítmica (o Amazonas soa como
+  cascata, com espuma de agudos), gotas, sinos de água numa escala hexatônica sobre mi e um
+  bordão que segue a vazão. O botão ♪ liga e desliga (a escolha fica no navegador).
+  `?rapido=20` acelera o relógio (teste).
 - **Controle de detalhe** para filtrar a rede por vazão mínima
 - Passar o cursor acende o **rio inteiro**, não o trecho de poucos quilômetros
 

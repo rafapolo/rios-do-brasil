@@ -89,11 +89,11 @@ conferência: `processa.py` roda validação cruzada 5-fold contra estações re
 (semiárido caindo, arco de desmatamento subindo). Ao mexer nos números, compare contra o que o
 README afirma — os valores lá são resultado medido, não arredondamento.
 
-**As páginas geradas, sim.** 126 testes em `testes/`, com Bun e Playwright:
+**As páginas geradas, sim.** 133 testes em `testes/`, com Bun e Playwright:
 
 ```bash
 bun install && bun run preparar   # baixa chromium, firefox e webkit (uma vez)
-bun test                          # em série, ~2,5 min, 126 testes nos três motores
+bun test                          # em série, ~2,5 min, 133 testes nos três motores
 bun run test                      # um processo por arquivo, 3 ao mesmo tempo, ~1,5 min (testes/roda.ts)
 ```
 
@@ -147,6 +147,20 @@ Todos os JSON intermediários são gitignored. Os HTML gerados são versionados 
   aberta (um teste confere que desligada ela não pede nada). O fluxo animado e os anéis de realce
   ficam num canvas 2D por cima, reprojetados por `MAT` (a matriz da câmera, `lerCamera()`); todo
   acerto de cursor/toque usa `paraTela`/`paraMundo` e tolera a perspectiva.
+- **O tour** (`pipeline/tour.js`, `pipeline/som_tour.js`, `design/tour.json`) é injetado pelo `monta_pagina.py`
+  nos marcadores `/*__TOUR__*/`, `/*__SOMTOUR__*/` e `/*__ROTEIRO__*/`; o `tour.js` mora **dentro** da IIFE do
+  template (dirige a página por `aplicaModo`, `defineCamada`, `define3D`, `realcar` e a câmera da biblioteca) e o
+  som é um `<script>` à parte (`window.SomRio`, sem acesso ao mapa: o tour lhe passa zoom, inclinação, rumo,
+  velocidade e a proximidade de rio). Abre pelo botão Tour (`#btTour` no desktop, `#btTourBarra` no celular), por
+  `/tour/` (`tour/index.html` só redireciona para `../index.html?tour=1`; o nome do arquivo vai no endereço
+  porque por file:// `../` é pasta) ou por `?tour=1` (convite "Aperte para começar": o AudioContext só nasce
+  dentro do clique). `?rapido=N` divide o relógio por N (a suíte usa 20). **Os números e frases do roteiro foram
+  conferidos no banco (`design/tour.md`): só as câmeras (centro, zoom, pitch, bearing) se ajustam**, olhando
+  prints (`window.tour.mostra(i)` põe a cena i parada, sem relógio). Os zooms são de desktop 1280 × 800 (janela livre
+  de 1280 × 544 entre as faixas) e o tour desconta o que falta em tela menor. O fluxo animado é ligado em todas as
+  cenas. O realce acha o rio pelo nome EXATO perto da cena (curso mais longo; em cena larga, o de maior vazão):
+  há dezenas de "Rio Formoso". O Paranapanema vem em 3 pedaços na BHO e o Taperoá em 1 de 7 km, é assim mesmo.
+  O satélite das cenas Sobradinho e Pantanal pede ladrilhos à rede (opcional, como no resto da página).
 - **A vista 3D é uma camada a pedido** (`#bt3d`, `define3D(on, {animar, manterCamera})`, exposta na
   sonda): desligada, pitch 0, bearing 0 e `dragRotate`, `touchPitch` e a rotação por toque
   desativados; ligada, ~50° (`PITCH_3D`) e os gestos voltam. A URL guarda `?3d=1` e a câmera em
