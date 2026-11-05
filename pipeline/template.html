@@ -926,6 +926,16 @@
   body.touring .credito-sat {
     top: calc(var(--lbt) + 8px); bottom: auto; left: 12px; z-index: 6; opacity: 1 !important; visibility: visible !important;
   }
+  body.touring.tour-painel .hud { visibility: visible !important; pointer-events: none !important; }
+  @media (min-width: 761px) {
+    /* no desktop os painéis descem para a janela livre entre as faixas de cinema */
+    body.touring.tour-painel .hud, body.touring.tour-painel .hud-dir { top: calc(var(--lbt) + 12px); }
+    body.touring.tour-painel .hud, body.touring.tour-painel .hud-dir { max-height: calc(100dvh - var(--lbt) - var(--lbb) - 24px); }
+  }
+  .tour-toque {
+    outline: 3px solid var(--accent) !important; outline-offset: 2px;
+    box-shadow: 0 0 0 8px color-mix(in srgb, var(--accent) 30%, transparent) !important;
+  }
   #btTourBarra { display: none; }
   @media (prefers-reduced-motion: reduce) {
     #tour .faixa-cine, #tour-cap { transition: none; }
@@ -939,6 +949,8 @@
     #tour-fonte { font-size: 0.64rem; }
     #tour-topo .botoes { left: 12px; right: 12px; bottom: 9px; }
     .abrir-par #btTour { display: none; }
+    /* o painel do tour sobe da faixa de legenda, não da barra (que está escondida) */
+    body.touring .hud { bottom: var(--tour-baixo, 0px); max-height: calc(100dvh - var(--lbt) - var(--tour-baixo, 0px) - 12px); }
     #btTourBarra { display: flex; }
     #tour-convite button { font-size: 1.1rem; padding: 12px 24px 12px 20px; max-width: calc(100vw - 32px); }
   }

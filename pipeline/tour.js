@@ -92,6 +92,7 @@
       $('tour-baixo').style.minHeight = alto + 'px';
       kick.textContent = lin.textContent = fon.textContent = '';
       PAD = { top: $('tour-topo').offsetHeight, bottom: Math.max(alto, $('tour-baixo').offsetHeight), left: 0, right: 0 };
+      document.documentElement.style.setProperty('--tour-baixo', PAD.bottom + 'px');
       return PAD;
     }
     /* os zooms do roteiro foram enquadrados num desktop de 1280 × 800 (janela livre de 1280 × 544);
@@ -120,10 +121,40 @@
       }, () => {});
     }
 
+    /* ---- painéis em uso ----
+       Na cena `painel` o tour mostra a hud (no celular sobe o painel de cima da legenda) e aperta os
+       botões de verdade, um a um, com um aro que pisca: "modo:outorga", "camada:estacoes". */
+    const ALVO_PAINEL = { 'modo': v => document.querySelector('.modo[data-modo="' + v + '"]'),
+      'camada': v => document.getElementById(CAMADAS[v]) };
+    function painelAberto(on, nome) {
+      document.body.classList.toggle('tour-painel', on);
+      if (!ehCelular()) return;
+      if (on) abrirPainel(nome || 'modo'); else fecharPainel();
+    }
+    function usaPainel(c, i, dur) {
+      const passos = c.painel;
+      passos.forEach((p, k) => {
+        const [tipo, v] = p.split(':');
+        espera(dur * (k + 1) / (passos.length + 1) - 300 / RAPIDO).then(async () => {
+          if (!ativo || cenaAtual !== i) return;
+          if (ehCelular()) abrirPainel(tipo === 'modo' ? 'modo' : 'camadas');
+          const b = ALVO_PAINEL[tipo](v);
+          if (!b) return;
+          b.classList.add('tour-toque');
+          await espera(600 / RAPIDO);
+          if (!ativo || cenaAtual !== i) { b.classList.remove('tour-toque'); return; }
+          b.click();
+          await espera(500 / RAPIDO);
+          b.classList.remove('tour-toque');
+        }).catch(() => {});
+      });
+    }
+
     /* ---- modo e camadas ---- */
     function aplicaCena(c) {
       if (modo !== c.modo && botoesModo.some(b => b.isConnected && b.dataset.modo === c.modo)) aplicaModo(c.modo);
       // só depois do modo: ele mesmo apaga ou acende Estações e Reservatórios
+      painelAberto(!!c.painel);
       const quer = new Set((c.camadas || []).map(n => CAMADAS[n]));
       for (const id of Object.values(CAMADAS)) defineCamada(id, quer.has(id));
     }
@@ -206,6 +237,7 @@
       salvo = {
         modo, camadas: Object.values(CAMADAS).map(id => [id, { btFluxo: animando, btEst: mostrarEst, btRes: mostrarRes,
           btEtes: mostrarEtes, btSat: mostrarSat }[id]]),
+        hud: [hud.dataset.aberto, hud.classList.contains('recolhido')],
         antes: camadasAntes && [...camadasAntes], em3D, urlPronta, camMexida,
         cam: { center: map.getCenter(), zoom: map.getZoom(), pitch: map.getPitch(), bearing: map.getBearing() },
       };
@@ -236,6 +268,7 @@
           if (rc) realcar(rc.alvo); else realcar(null);
           repintar();
           voo(c, i, dur);
+          if (c.painel) usaPainel(c, i, dur);
           if (som) som.cena(i, { vazao: rc ? vazaoNorm(rc.vazao) : 0.5 });
           // a legenda troca com a câmera já em voo, como num corte de cinema
           await espera(450 / RAPIDO);
@@ -262,6 +295,10 @@
       pendentes.clear();
       if (som) som.parar(natural);
       map.stop();
+      document.body.classList.remove('tour-painel');
+      document.querySelectorAll('.tour-toque').forEach(b => b.classList.remove('tour-toque'));
+      document.documentElement.style.removeProperty('--tour-baixo');
+      hud.dataset.aberto = salvo.hud[0]; hud.classList.toggle('recolhido', salvo.hud[1]); marcarHud();
       // devolve tudo como estava: modo, camadas, 3D, limites e padding da página, câmera, seleção
       if (modo !== salvo.modo) aplicaModo(salvo.modo);
       camadasAntes = salvo.antes;

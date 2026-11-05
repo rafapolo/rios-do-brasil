@@ -1,6 +1,6 @@
 # Tour de 2 minutos: fatos e conferência
 
-Roteiro em `tour.json` (12 cenas, 120 s). Esta nota guarda, para cada número, de onde saiu, qual era a ordem de grandeza esperada e a segunda via que o confirmou. Consultas pelo espelho (DuckDB no beelink, somente leitura); derivados do próprio projeto lidos de `pipeline/` sem escrita (`rede_vazao.json` decodificado, `tendencia.json`, `paineis.json`, `barragens.parquet`, `captacoes.parquet`).
+Roteiro em `tour.json` (14 cenas, 135 s; as cenas 2 e 12, `paineis` e `tiete-prata`, foram pedidas depois). Esta nota guarda, para cada número, de onde saiu, qual era a ordem de grandeza esperada e a segunda via que o confirmou. Consultas pelo espelho (DuckDB no beelink, somente leitura); derivados do próprio projeto lidos de `pipeline/` sem escrita (`rede_vazao.json` decodificado, `tendencia.json`, `paineis.json`, `barragens.parquet`, `captacoes.parquet`).
 
 Convenções: m³/s = vazão média; "trecho" = trecho da BHO; vazão do mapa = estimada/medida do `rede_vazao.json`. Foz = trecho cujo `NUTRJUS` não existe na tabela (1.505, igual ao número documentado na BHO); fora do Brasil = lista `fora` do `rede_vazao.json`.
 
@@ -73,3 +73,10 @@ Convenções: m³/s = vazão média; "trecho" = trecho da BHO; vazão do mapa = 
 - Jaguari (-29,6%/década) e Apodi-Mossoró (-30,2%): há reservatório a montante e a atribuição à seca é ambígua.
 - "530 mil dias secos em 609 estações" do README: só 479 das 609 têm algum dia seco; o total de 529.954 dias bate. Se for usado, trocar o 609.
 - Mediana nacional de perda (29,9%): reproduzi 29,7% com filtro de volume > 0; não vale citar com duas casas. A cena usa o Acre e SP.
+
+## 2. (cena `paineis`) Os painéis em uso
+- Não é um fato do banco: a cena mostra a hud e aperta de verdade Outorga, Rio livre, Estações e Reservatórios, com um aro que pisca em cada botão (`painel` no `tour.json`). A frase só descreve os controles.
+
+## 12. (cena `tiete-prata`) O Tietê chega à Argentina
+- Cálculo: o grupo "Rio Paraná" da rede (95 trechos, PR/MS) desce até 29,6°S, 59,6°O, em território argentino; ali a vazão do mapa é 17.510 m³/s e a fração de esgoto licenciado acumulada a montante (`esg`) é 0,49%, ou seja ~86 m³/s. O Tietê é afluente do Paraná. Ordem de grandeza: o Paraná médio na região é ~17 mil m³/s.
+- Cuidados: a fração é da bacia inteira (inclui todo o esgoto licenciado a montante, não só o do Tietê) e é licença, não medição no rio; por isso a frase diz "o esgoto licenciado da bacia". O mapa só desenha o Paraná até 29,6°S: o Rio da Prata aparece na frase, não na tela. Conferida uma só vez (pelo próprio acúmulo da página); falta uma segunda via independente (por exemplo, somar as outorgas de esgoto da bacia no banco).

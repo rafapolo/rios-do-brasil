@@ -1,7 +1,7 @@
 [
   {
     "id": "brasil",
-    "duracao_ms": 11000,
+    "duracao_ms": 10000,
     "modo": "vazao",
     "camadas": [
       "fluxo"
@@ -18,6 +18,34 @@
     "kicker": "O Brasil em água",
     "frase": "Só o Amazonas leva 198 mil m³/s ao mar: 85% da água que desemboca no litoral brasileiro. Cada traço é um rio; a espessura, a vazão.",
     "fonte": "ANA — Base Hidrográfica e séries de vazão",
+    "realce": "Rio Amazonas"
+  },
+  {
+    "id": "paineis",
+    "duracao_ms": 11000,
+    "modo": "vazao",
+    "camadas": [
+      "fluxo"
+    ],
+    "camera": {
+      "centro": [
+        -53,
+        -13.5
+      ],
+      "zoom": 3.6,
+      "pitch": 0,
+      "bearing": 0
+    },
+    "kicker": "Os painéis",
+    "frase": "Tudo muda nos painéis: o modo troca o que a cor mede, as camadas ligam estações e reservatórios, e a legenda diz como ler.",
+    "fonte": "Rios do Brasil",
+    "painel": [
+      "modo:outorga",
+      "modo:livre",
+      "camada:estacoes",
+      "camada:reservatorios",
+      "modo:vazao"
+    ],
     "realce": "Rio Amazonas"
   },
   {
@@ -44,7 +72,7 @@
   },
   {
     "id": "sobradinho",
-    "duracao_ms": 11000,
+    "duracao_ms": 10000,
     "modo": "vazao",
     "camadas": [
       "fluxo",
@@ -152,7 +180,7 @@
   },
   {
     "id": "oeste-bahia",
-    "duracao_ms": 11000,
+    "duracao_ms": 10000,
     "modo": "tendencia",
     "camadas": [
       "fluxo",
@@ -196,7 +224,7 @@
   },
   {
     "id": "tiete",
-    "duracao_ms": 11000,
+    "duracao_ms": 10000,
     "modo": "esgoto",
     "camadas": [
       "fluxo",
@@ -215,6 +243,28 @@
     "frase": "Em Barueri, o esgoto licenciado soma 41 m³/s: 56% da vazão natural do Tietê. Os pontos são estações de tratamento.",
     "fonte": "ANA — outorgas e Atlas Esgotos",
     "realce": "Rio Tietê"
+  },
+  {
+    "id": "tiete-prata",
+    "duracao_ms": 10000,
+    "modo": "esgoto",
+    "camadas": [
+      "fluxo",
+      "etes"
+    ],
+    "camera": {
+      "centro": [
+        -54.5,
+        -26.5
+      ],
+      "zoom": 4.6,
+      "pitch": 35,
+      "bearing": 0
+    },
+    "kicker": "Rio abaixo",
+    "frase": "O Tietê deságua no Paraná, que atravessa a Argentina até o Rio da Prata. Já em território argentino, o esgoto licenciado da bacia ainda soma 0,5% da vazão do Paraná: 17,5 mil m³/s.",
+    "fonte": "ANA — outorgas e rede hidrográfica",
+    "realce": "Rio Paraná"
   },
   {
     "id": "acre-perda",
@@ -239,7 +289,7 @@
   },
   {
     "id": "sintese",
-    "duracao_ms": 12000,
+    "duracao_ms": 10000,
     "modo": "outorga",
     "camadas": [
       "fluxo",
