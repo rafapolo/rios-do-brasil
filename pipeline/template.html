@@ -1544,7 +1544,7 @@
      conforme se aproxima. Os blocos de uma mesma faixa e linhas vizinhas da grade
      são contíguos, e blocos seguidos viram uma chamada de desenho só. */
   const GC = 40, GC2 = GC * GC;
-  const FAIXAS = [15000, 60000, 150000, N];     // posto em ordem[] em que cada faixa termina
+  const FAIXAS = [3000, 15000, 60000, 150000, N];   // posto em ordem[] em que cada faixa termina
   const NF = FAIXAS.length;
   const faixaDe = new Uint8Array(N);
   { let f = 0; for (let r = 0; r < N; r++) { while (r >= FAIXAS[f]) f++; faixaDe[ordem[r]] = f; } }
@@ -2363,16 +2363,22 @@ void main() {
   }
 
   /* Quantas faixas de vazão a escala pede. É o que o `corteZoom` e o teto de 60 mil
-     trechos faziam: de longe só os maiores (as duas primeiras faixas são os 60
-     mil de antes), e o resto entra conforme se aproxima, porque a vista já cobre
+     trechos faziam: de longe só os maiores (as três primeiras faixas são os 60
+     mil de antes; a primeira, de 3 mil, só serve ao WebGL por software), e o resto entra conforme se aproxima, porque a vista já cobre
      pouco chão. Em WebGL por software tira-se mais uma faixa, e outra enquanto a
      câmera se mexe. */
   function faixaMax() {
     const z = zRel();
-    let f = z < 1.6 ? 1 : z < 3.5 ? 2 : 3;
-    if (POR_SOFTWARE) f = Math.max(0, f - (map.isMoving() ? 2 : 1));
+    let f = z < 1.6 ? 2 : z < 3.5 ? 3 : 4;
+    if (POR_SOFTWARE) f = Math.max(0, f - (map.isMoving() ? 3 : 2));
     return f;
   }
+  /* A faixa que o último quadro desenhou de fato: o que o acerto do cursor, o
+     aviso de "nenhum rio" e a contagem enxergam. Por software, a faixa da escala
+     ainda é cortada por um teto de segmentos (a CPU faz uns 100 mil por segundo):
+     sem ele, aproximar da Amazônia leva um segundo por quadro. */
+  let faixaUsada = 0;
+  const SEG_TETO_SW = 40000;
 
   const RIOS = {
     id: 'rios', type: 'custom', renderingMode: '2d',
@@ -2462,20 +2468,31 @@ void main() {
 
       // os blocos desenhados: faixa a faixa, células vistas, vizinhos fundidos
       cortaCelulas();
-      const fm = faixaMax();
+      const fm0 = faixaMax();
       this.ranges.length = 0;
-      for (let f = 0; f <= fm; f++) {
-        let v0 = -1, v1 = -1;
+      const fimDaFaixa = [], segs = [];
+      for (let f = 0; f <= fm0; f++) {
+        let v0 = -1, v1 = -1, nseg = 0;
         for (let c = 0; c < GC2; c++) {
           if (!celVis[c]) continue;
           const k = f * GC2 + c, a = chVIni[k], b = chVIni[k + 1];
           if (b === a) continue;
+          nseg += b - a;
           if (a === v1) { v1 = b; continue; }
           if (v0 >= 0) this.ranges.push(v0, v1 - v0);
           v0 = a; v1 = b;
         }
         if (v0 >= 0) this.ranges.push(v0, v1 - v0);
+        fimDaFaixa.push(this.ranges.length); segs.push(nseg);
       }
+      let fm = fm0;
+      if (POR_SOFTWARE) {
+        const teto = map.isMoving() ? SEG_TETO_SW / 2 : SEG_TETO_SW;
+        let acc = 0; fm = 0;
+        for (let f = 0; f <= fm0; f++) { acc += segs[f]; if (f > 0 && acc > teto) break; fm = f; }
+        this.ranges.length = fimDaFaixa[fm];
+      }
+      faixaUsada = fm;
 
       gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
       gl.disable(gl.DEPTH_TEST); gl.disable(gl.STENCIL_TEST); gl.disable(gl.CULL_FACE); gl.disable(gl.SCISSOR_TEST);
@@ -2756,7 +2773,7 @@ void main() {
   let visiveisN = 0;
   function atualizaVazio() {
     lerCamera(); cortaCelulas();
-    const z = zRel(), fm = faixaMax();
+    const z = zRel(), fm = faixaUsada;
     let achou = false;
     for (let f = 0; f <= fm && !achou; f++)
       for (let c = 0; c < GC2 && !achou; c++) {
@@ -2775,7 +2792,7 @@ void main() {
 
   /* O trecho está entre os desenhados nesta escala? É a pergunta que o acerto do
      cursor faz: não se acerta o que a tela não mostra. */
-  const desenhado = i => faixaDe[i] <= faixaMax() && q[i] >= qMinUsuario;
+  const desenhado = i => faixaDe[i] <= faixaUsada && q[i] >= qMinUsuario;
 
   function traca(c, i) {
     const a = inicio[i], b = inicio[i + 1], M = MAT, hW = 0.5 * W, hH = 0.5 * H;
