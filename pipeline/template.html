@@ -809,7 +809,15 @@
        quebra em duas linhas e a sugestão passa a ocupar o dobro da altura. Ela
        sobra sobre o mapa, que é espaço livre. */
     .busca-lista { right: auto; width: min(86vw, 360px); }
-    .gaveta { width: 100vw; padding: 18px 18px 40px; }
+    /* `box-sizing: border-box` e `left: 0`: com o padding somado aos 100vw, a
+       gaveta ancorada em `right: 0` passava 36 px da borda esquerda e cortava o
+       começo do texto. O fundo é opaco porque a gaveta cobre a barra de baixo e
+       o vidro deixava os rótulos dela aparecerem por trás do texto; o pé
+       respeita o indicador de início do iPhone. */
+    .gaveta {
+      left: 0; right: 0; width: 100%; box-sizing: border-box; background: var(--panel);
+      padding: 18px 18px calc(28px + env(safe-area-inset-bottom));
+    }
     .vazio { top: 32%; }
     /* O `button` sozinho não alcançava nada: `.chave` e `.modos .modo` fixam
        34 px cada um, e por especificidade venciam a regra de celular — os dez
