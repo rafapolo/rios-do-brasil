@@ -98,21 +98,26 @@ async function navegador(motor: Motor) {
   return abertos.get(motor)!;
 }
 
-type Opcoes = { motor?: Motor; dispositivo?: string; fresco?: boolean; ctx?: object };
+/* `init` roda antes de qualquer script da página (addInitScript); `semEspera` pula
+ * a espera do véu, para os testes em que o véu nunca sai de propósito. */
+type Opcoes = { motor?: Motor; dispositivo?: string; fresco?: boolean; ctx?: object;
+                init?: string; semEspera?: boolean };
 
 /** Devolve { pg, erros }. `erros` acumula pageerror e console.error desde o
  *  carregamento — há teste dedicado conferindo que fica vazio. */
 export async function abrir(url: string, o: Opcoes = {}): Promise<Pagina> {
   const motor = o.motor ?? "chromium";
   const ctx = { ...(o.dispositivo ? devices[o.dispositivo] : {}), ...(o.ctx ?? {}) };
-  const chave = `${motor}|${url}|${JSON.stringify(ctx)}`;
+  const chave = `${motor}|${url}|${JSON.stringify(ctx)}|${o.init ?? ""}`;
   if (!o.fresco && cache.has(chave)) return cache.get(chave)!;
 
   const pg = await (await navegador(motor)).newContext(ctx).then((c) => c.newPage());
+  if (o.init) await pg.addInitScript(o.init);
   const erros: string[] = [];
   pg.on("pageerror", (e) => erros.push(`pageerror: ${e.message}`));
   pg.on("console", (m) => { if (m.type() === "error") erros.push(`console: ${m.text()}`); });
   await pg.goto(url);
+  if (o.semEspera) { const p = { pg, erros }; if (!o.fresco) cache.set(chave, p); return p; }
   /* O mapa tem um véu "carregando" que só sai depois do primeiro desenho; esperar
    * por ele em vez de um tempo fixo corta uns 5 s de cada abertura. O 1,5 s de
    * folga cobre o índice da busca (ocioso, 900 ms) e os primeiros ladrilhos. As
