@@ -1,0 +1,248 @@
+[
+  {
+    "id": "brasil",
+    "duracao_ms": 11000,
+    "modo": "vazao",
+    "camadas": [
+      "fluxo"
+    ],
+    "camera": {
+      "centro": [
+        -52.0,
+        -14.0
+      ],
+      "zoom": 3.7,
+      "pitch": 0,
+      "bearing": 0
+    },
+    "kicker": "O Brasil em água",
+    "frase": "Só o Amazonas leva 198 mil m³/s ao mar: 85% da água que desemboca no litoral brasileiro. Cada traço é um rio; a espessura, a vazão.",
+    "fonte": "ANA — Base Hidrográfica e séries de vazão",
+    "realce": "Rio Amazonas"
+  },
+  {
+    "id": "velho-chico",
+    "duracao_ms": 9000,
+    "modo": "vazao",
+    "camadas": [
+      "estacoes"
+    ],
+    "camera": {
+      "centro": [
+        -39.0,
+        -10.2
+      ],
+      "zoom": 5.6,
+      "pitch": 35,
+      "bearing": -20
+    },
+    "kicker": "Velho Chico, 1%",
+    "frase": "O São Francisco chega ao mar com 1,6 mil m³/s: cem vezes menos água que o Amazonas, num rio que sustenta o Nordeste.",
+    "fonte": "ANA — estações fluviométricas",
+    "realce": "Rio São Francisco"
+  },
+  {
+    "id": "sobradinho",
+    "duracao_ms": 11000,
+    "modo": "vazao",
+    "camadas": [
+      "reservatorios",
+      "satelite"
+    ],
+    "camera": {
+      "centro": [
+        -40.83,
+        -9.42
+      ],
+      "zoom": 7.4,
+      "pitch": 50,
+      "bearing": 30
+    },
+    "kicker": "Lago quase vazio",
+    "frase": "Entre 2015 e 2018, Sobradinho passou 364 dias com menos de 10% do volume útil. A água solta ao rio caiu de 2 mil para 677 m³/s.",
+    "fonte": "ANA — Sistema de Acompanhamento de Reservatórios",
+    "realce": "Sobradinho"
+  },
+  {
+    "id": "amazonia-livre",
+    "duracao_ms": 9000,
+    "modo": "livre",
+    "camadas": [],
+    "camera": {
+      "centro": [
+        -62.0,
+        -3.5
+      ],
+      "zoom": 4.5,
+      "pitch": 30,
+      "bearing": 0
+    },
+    "kicker": "Rio sem muro",
+    "frase": "No Amazonas e afluentes, 773 mil km de rio correm ligados, sem uma barragem no caminho: o maior pedaço contínuo da rede.",
+    "fonte": "ANA (SNISB) e Aneel",
+    "realce": "Rio Amazonas"
+  },
+  {
+    "id": "paranapanema",
+    "duracao_ms": 10000,
+    "modo": "livre",
+    "camadas": [],
+    "camera": {
+      "centro": [
+        -50.6,
+        -22.9
+      ],
+      "zoom": 7.0,
+      "pitch": 50,
+      "bearing": 70
+    },
+    "kicker": "Rio em degraus",
+    "frase": "O Paranapanema tem 11 usinas hidrelétricas em cerca de 900 km: uma barragem a cada 80 km, o rio picado em reservatórios.",
+    "fonte": "Aneel (SIGA) e ANA (SNISB)",
+    "realce": "Rio Paranapanema"
+  },
+  {
+    "id": "piranhas-acu",
+    "duracao_ms": 10000,
+    "modo": "outorga",
+    "camadas": [],
+    "camera": {
+      "centro": [
+        -37.1,
+        -5.9
+      ],
+      "zoom": 8.0,
+      "pitch": 45,
+      "bearing": -30
+    },
+    "kicker": "Mais licença que rio",
+    "frase": "No Piranhas-Açu (RN), as licenças de captação somam 38 m³/s, 2,2 vezes a vazão média do rio: 17 m³/s.",
+    "fonte": "ANA — outorgas (SNIRH)",
+    "realce": "Rio Piranhas ou Açu"
+  },
+  {
+    "id": "taperoa",
+    "duracao_ms": 9000,
+    "modo": "vazao",
+    "camadas": [
+      "estacoes"
+    ],
+    "camera": {
+      "centro": [
+        -36.6,
+        -7.3
+      ],
+      "zoom": 8.0,
+      "pitch": 45,
+      "bearing": 20
+    },
+    "kicker": "Rio de poças",
+    "frase": "No Taperoá, em Poço de Pedras (PB), o leito ficou seco em 7 de cada 10 dias desde 1970. No semiárido, o rio é intermitente.",
+    "fonte": "ANA — estação fluviométrica",
+    "realce": "Rio Taperoá"
+  },
+  {
+    "id": "oeste-bahia",
+    "duracao_ms": 11000,
+    "modo": "tendencia",
+    "camadas": [
+      "estacoes"
+    ],
+    "camera": {
+      "centro": [
+        -44.6,
+        -13.4
+      ],
+      "zoom": 7.2,
+      "pitch": 45,
+      "bearing": 15
+    },
+    "kicker": "26 de 26 caindo",
+    "frase": "No Oeste da Bahia, todos os 26 rios medidos perdem água. O Formoso baixou de 94 para 47 m³/s, da primeira à última década.",
+    "fonte": "ANA — estações fluviométricas",
+    "realce": "Rio Formoso"
+  },
+  {
+    "id": "pantanal",
+    "duracao_ms": 9000,
+    "modo": "vazao",
+    "camadas": [
+      "satelite"
+    ],
+    "camera": {
+      "centro": [
+        -57.6,
+        -19.0
+      ],
+      "zoom": 7.0,
+      "pitch": 40,
+      "bearing": -15
+    },
+    "kicker": "Pantanal encolhe",
+    "frase": "Corumbá perdeu 61% da superfície coberta por água entre 1985–89 e 2017–21, vista de satélite. Os anos 1980 foram de cheia.",
+    "fonte": "MapBiomas — superfície de água",
+    "realce": "Rio Paraguai"
+  },
+  {
+    "id": "tiete",
+    "duracao_ms": 11000,
+    "modo": "esgoto",
+    "camadas": [
+      "etes"
+    ],
+    "camera": {
+      "centro": [
+        -46.75,
+        -23.5
+      ],
+      "zoom": 9.3,
+      "pitch": 50,
+      "bearing": 20
+    },
+    "kicker": "Rio de esgoto",
+    "frase": "Em Barueri, o esgoto licenciado soma 41 m³/s: 56% da vazão natural do Tietê. Os pontos são estações de tratamento.",
+    "fonte": "ANA — outorgas e Atlas Esgotos",
+    "realce": "Rio Tietê"
+  },
+  {
+    "id": "acre-perda",
+    "duracao_ms": 8000,
+    "modo": "vazao",
+    "camadas": [],
+    "camera": {
+      "centro": [
+        -68.5,
+        -9.4
+      ],
+      "zoom": 6.0,
+      "pitch": 30,
+      "bearing": 0
+    },
+    "kicker": "Água que não chega",
+    "frase": "No município típico do Acre, 78 de cada 100 litros tratados se perdem antes da torneira. Em São Paulo, cerca de 24.",
+    "fonte": "SNIS, 2022",
+    "realce": "Rio Acre"
+  },
+  {
+    "id": "sintese",
+    "duracao_ms": 12000,
+    "modo": "outorga",
+    "camadas": [
+      "fluxo",
+      "estacoes",
+      "reservatorios"
+    ],
+    "camera": {
+      "centro": [
+        -52.0,
+        -14.0
+      ],
+      "zoom": 3.9,
+      "pitch": 55,
+      "bearing": -20
+    },
+    "kicker": "Quanto sobra de rio",
+    "frase": "São 462.539 trechos de rio. Em 2.558, a licença de retirada já iguala ou passa a água que corre.",
+    "fonte": "ANA — rede hidrográfica e outorgas"
+  }
+]
