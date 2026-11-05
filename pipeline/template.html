@@ -3644,7 +3644,7 @@ void main() {
       const u = new URL(location.href);
       if (em3D) u.searchParams.set('3d', '1'); else u.searchParams.delete('3d');
       const c = map.getCenter();
-      u.hash = camMexida
+      u.hash = camMexida || em3D
         ? '#' + [arred(map.getZoom(), 2), arred(c.lat, 5), arred(c.lng, 5), Math.round(map.getBearing()),
                  Math.round(map.getPitch())].join('/')
         : '';

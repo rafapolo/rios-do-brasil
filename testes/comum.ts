@@ -198,7 +198,8 @@ export function copiaSondada(): string {
   if (s.split(ancora).length !== 2) throw new Error("âncora de injeção sumiu do index.html");
   const sonda =
     "  window.__testes = { N, q, areas, comps, fEsg, fInd, fOut, outLoc, OUT_FIN, semDado, medidos, foraBr,\n" +
-    "    RES, ETES, D, nomeIdx, bbox, TEND, TEND_OK, CORTES_TEND, LIMIARES_TEND,\n" +
+    "    RES, ETES, D, nomeIdx, bbox, coords, inicio, paraTela: (x, y) => { lerCamera(); return paraTela(x, y); },\n" +
+    "     TEND, TEND_OK, CORTES_TEND, LIMIARES_TEND,\n" +
     "    TEND_TR, TEND_PCT, TEND_LISTA, TEND_PISO, ordemTend, KM_TEND,\n" +
     "    LIVRE, LIVRE_BRUTO, BAR_JUS, BAR_MONT, LIVRE_CORTES, ordemLivre, BARR,\n" +
     "    fichaBarragem: (b) => fichaBarragem(b), fichaUsina: (u) => fichaUsina(u), fichaEte: (t) => fichaEte(t),\n" +
@@ -215,3 +216,20 @@ export function copiaSondada(): string {
   writeFileSync(destino, s.replace(ancora, sonda + ancora), "utf8");
   return urlDe(destino);
 }
+
+/** Quantos tons distintos há no canvas do mapa (WebGL: copiado para um canvas 2D
+ *  para ler os pixels). Passa de ~20 quando a rede foi desenhada, e fica em 1-3
+ *  quando só há o fundo. */
+export const TINTA = `() => {
+  const c = document.getElementById('cv');
+  const t = document.createElement('canvas'); t.width = c.width; t.height = c.height;
+  const x = t.getContext('2d'); x.drawImage(c, 0, 0);
+  const d = x.getImageData(0, 0, c.width, c.height).data;
+  const s = new Set();
+  for (let i = 0; i < d.length; i += 4 * 977) s.add(d[i] + ',' + d[i+1] + ',' + d[i+2]);
+  return s.size;
+}`;
+
+/** Os argumentos de GL do chromium da suíte (Metal no Mac), para os testes que
+ *  abrem um navegador próprio. */
+export const argsGl = (motor: Motor) => ARGS[motor] ?? [];
