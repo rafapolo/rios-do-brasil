@@ -383,6 +383,17 @@
     font-size: 0.7rem; color: var(--ink-3);
   }
   .nota { font-size: 0.72rem; color: var(--ink-3); margin: 8px 0 0; line-height: 1.5; }
+  .nota-modo { margin-top: 8px; }
+  .nota-modo summary {
+    cursor: pointer; list-style: none; display: flex; align-items: center; gap: 6px;
+    font-family: var(--mono); font-size: 0.6rem; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--ink-3); padding: 3px 0;
+  }
+  .nota-modo summary::-webkit-details-marker { display: none; }
+  .nota-modo summary::after { content: '▾'; font-size: 0.7rem; }
+  .nota-modo[open] summary::after { content: '▴'; }
+  .nota-modo summary:hover { color: var(--ink-2); }
+  .nota-modo .nota { margin-top: 4px; }
 
   /* ---------- seletor do que a cor mostra ---------- */
   .modos { display: grid; grid-template-columns: repeat(2, 1fr); gap: 4px; }
@@ -848,7 +859,13 @@
                aria-label="Queda mínima da vazão, em % por década">
         <span class="faixa-texto" id="rgTendTexto"></span>
       </label>
-      <p class="nota" id="notaModo"></p>
+      <!-- A nota explica como ler o modo e chega a cinco linhas: aberta, empurrava
+           a legenda e a ficha para baixo a cada troca. Fechada por padrão; o
+           <details> nativo dá teclado e leitor de tela sem JS. -->
+      <details class="nota-modo" id="notaModoCx">
+        <summary>Como ler este modo</summary>
+        <p class="nota" id="notaModo"></p>
+      </details>
     </div>
 
     <div class="cartao" id="cartaoRede">
@@ -3071,6 +3088,7 @@
     document.getElementById('puxadorRotulo').textContent = titulo;
     document.title = titulo;
     notaModo.innerHTML = NOTA_MODO[novo] || '';
+    document.getElementById('notaModoCx').hidden = !NOTA_MODO[novo];
     montaLegenda();
     if (selecao) aplicar(selecao);   // a ficha aberta reescreve com a leitura do modo
     agendar(false);
