@@ -5,14 +5,14 @@
  * WebKit faz as vezes do Safari do iOS: não tem teclado de verdade nem safe-area,
  * então o que depende disso é simulado onde o teste diz.
  *
- * Ficaram de fora os de WebGL (sem WebGL, WebGL por software, perda de contexto):
- * esta página é Canvas 2D e eles entram na migração para o MapLibre. */
+ * Os três de WebGL (sem WebGL, WebGL por software, perda de contexto) entraram
+ * com a migração para o MapLibre, no fim do arquivo. */
 import { afterAll, describe, expect, test } from "bun:test";
-import type { Page } from "playwright";
+import { chromium, firefox, type Page } from "playwright";
 import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { INDEX, LENTO, abrir, copiaSondada, fecharTudo, roda, texto, urlDe } from "./comum";
+import { INDEX, LENTO, TINTA, abrir, argsGl, copiaSondada, fecharTudo, roda, texto, urlDe } from "./comum";
 
 afterAll(fecharTudo);
 
@@ -348,5 +348,72 @@ describe("larguras", () => {
     expect(l.esq).toBeGreaterThanOrEqual(-0.5);
     expect(l.dir).toBeLessThanOrEqual(l.jan + 0.5);
     await fecha();
+  }, LENTO);
+});
+
+describe("WebGL: sem ele, por software e depois de perdê-lo", () => {
+  test("sem WebGL a página diz o que falta, em vez de ficar no véu para sempre", async () => {
+    /* cantography `test_no_webgl_says_so`: sem WebGL 2 (Tor "mais seguro", GPU na lista
+       de bloqueio) a página ficava em "carregando" eternamente. Aqui o aviso ocupa o
+       lugar do véu e cita o WebGL. */
+    const b = await firefox.launch({ firefoxUserPrefs: { "webgl.disabled": true } });
+    try {
+      const pg = await (await b.newContext()).newPage();
+      const erros: string[] = [];
+      pg.on("pageerror", (e) => erros.push(e.message));
+      await pg.goto(urlDe(INDEX));
+      await pg.waitForFunction("document.getElementById('vazio').textContent.includes('WebGL')", undefined, { timeout: 20_000 });
+      expect(await pg.isVisible("#vazio")).toBe(true);
+      expect(await pg.$("#carregando"), "o véu de carregamento ficou por cima do aviso").toBeNull();
+      expect(erros).toEqual([]);
+    } finally { await b.close(); }
+  }, LENTO);
+
+  test("WebGL por software avisa, abre plano e mantém o interruptor do 3D à mão", async () => {
+    /* cantography `test_software_webgl_says_so`: numa VM ou GPU bloqueada
+       (SwiftShader) a linha do tempo levava 8,7 s por quadro. Aqui o mapa abre do
+       mesmo jeito — com menos faixas de vazão por quadro —, avisa, começa plano
+       mesmo que o link peça 3D, e o interruptor continua disponível. */
+    const b = await chromium.launch({ args: ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
+    try {
+      const pg = await (await b.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
+      const erros: string[] = [];
+      pg.on("pageerror", (e) => erros.push(e.message));
+      await pg.goto(urlDe(INDEX) + "?3d=1");
+      await pg.waitForSelector("#carregando", { state: "detached", timeout: 90_000 });
+      expect(await pg.isVisible("#avisoSw"), "faltou o aviso de WebGL por software").toBe(true);
+      expect(await pg.textContent("#avisoSw")).toContain("por software");
+      expect(await pg.getAttribute("#bt3d", "aria-pressed"), "por software o mapa devia abrir plano").toBe("false");
+      expect(await pg.isEnabled("#bt3d")).toBe(true);
+      await pg.waitForTimeout(2500);
+      expect(await roda<number>(pg, TINTA), "o mapa por software não desenhou a rede").toBeGreaterThan(20);
+      expect(erros).toEqual([]);
+    } finally { await b.close(); }
+  }, 150_000);
+
+  test("o WebGL perdido e devolvido (aba em segundo plano no iOS) volta a desenhar a rede", async () => {
+    /* cantography `test_lamps_come_back_after_context_loss`: o iOS descarta o WebGL
+       de uma aba em segundo plano e as lâmpadas nunca mais eram desenhadas. Aqui as
+       duas camadas próprias recriam shaders, buffers e texturas dos mesmos dados. */
+    const b = await chromium.launch({ args: argsGl("chromium") });
+    try {
+      const pg = await (await b.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
+      const erros: string[] = [];
+      pg.on("pageerror", (e) => erros.push(e.message));
+      await pg.goto(urlDe(INDEX));
+      await pg.waitForSelector("#carregando", { state: "detached", timeout: 60_000 });
+      await pg.waitForTimeout(800);
+      expect(await roda<number>(pg, TINTA)).toBeGreaterThan(20);
+      await pg.evaluate(`window.__x = document.getElementById('cv').getContext('webgl2').getExtension('WEBGL_lose_context'); __x.loseContext()`);
+      await pg.waitForTimeout(800);
+      await pg.evaluate("__x.restoreContext()");
+      await pg.waitForFunction("!document.getElementById('cv').getContext('webgl2').isContextLost()", undefined, { timeout: 10_000 });
+      await pg.waitForTimeout(1500);
+      // o clique de zoom força um quadro novo, e os tons voltam ao canvas
+      await pg.click("#btMais");
+      await pg.waitForTimeout(1200);
+      expect(await roda<number>(pg, TINTA), "a rede não voltou depois do contexto restaurado").toBeGreaterThan(20);
+      expect(erros).toEqual([]);
+    } finally { await b.close(); }
   }, LENTO);
 });
