@@ -208,11 +208,12 @@ describe("mudanças recentes, nos dois arquivos", () => {
   test("as camadas nascem desligadas no html e no script", () => {
     for (const [nome, p] of DOIS) {
       const s = texto(p);
-      expect(s, nome).toContain("let mostrarEst = false, mostrarRes = false;");
       /* a de satélite é a única que sai à rede: nascer ligada quebraria o
-         requisito de abrir por file:// sem internet */
-      expect(s, nome).toContain("let mostrarSat = false;");
-      for (const bt of ["btEst", "btRes", "btEtes", "btFluxo", "btSat"]) {
+         requisito de abrir por file:// sem internet. A vista 3D também nasce
+         desligada: o mapa abre plano, com o norte para cima. */
+      expect(s, nome).toContain("let mostrarEst = false, mostrarRes = false, mostrarSat = false;");
+      expect(s, nome).toContain("let em3D = false;");
+      for (const bt of ["btEst", "btRes", "btEtes", "btFluxo", "bt3d", "btSat"]) {
         expect(s, `${nome}/${bt}`).toContain(`<button id="${bt}" class="chave" aria-pressed="false">`);
       }
     }

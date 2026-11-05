@@ -93,8 +93,15 @@ export type Pagina = { pg: Page; erros: string[] };
 export const roda = <T,>(pg: Page, fn: string, ...args: unknown[]) =>
   pg.evaluate(`(${fn})(...${JSON.stringify(args)})`) as Promise<T>;
 
+/* O mapa é WebGL. O chromium embutido do Playwright cai em SwiftShader (CPU) se
+ * ninguém pedir a placa, e aí cada quadro de 460 mil trechos leva segundos: no Mac
+ * a suíte liga o Metal (o que um leitor tem). Em outras máquinas segue o padrão, e
+ * o corte por bloco da página (POR_SOFTWARE) mantém o quadro viável. */
+const ARGS: Partial<Record<Motor, string[]>> = process.platform === "darwin" && !process.env.TESTES_SW
+  ? { chromium: ["--use-angle=metal", "--enable-gpu"] } : {};
+
 async function navegador(motor: Motor) {
-  if (!abertos.has(motor)) abertos.set(motor, await motores[motor].launch());
+  if (!abertos.has(motor)) abertos.set(motor, await motores[motor].launch({ args: ARGS[motor] }));
   return abertos.get(motor)!;
 }
 
@@ -197,9 +204,8 @@ export function copiaSondada(): string {
     "    fichaBarragem: (b) => fichaBarragem(b), fichaUsina: (u) => fichaUsina(u), fichaEte: (t) => fichaEte(t),\n" +
     "    filtraTend: (c) => filtraTend(c), corTend: (p) => corTend(p),\n" +
     "    fichaTrecho: (i) => fichaTrecho(i), fichaEstacao: (e) => fichaEstacao(e),\n" +
-    "    aplicaModo: (m) => aplicaModo(m), vista,\n" +
-    "    camera: (lon, lat, z) => { const k = kBase() * z; vista.k = k; vista.x = W / 2 - projX(lon) * k;\n" +
-    "      vista.y = H / 2 - merc(lat) * k; agendar(false); },\n" +
+    "    aplicaModo: (m) => aplicaModo(m), vista, map, define3D: (on, o) => define3D(on, o), em3D: () => em3D,\n" +
+    "    camera: (lon, lat, z) => { map.jumpTo({ center: [lon, lat], zoom: zBase() + Math.log2(z), bearing: 0, pitch: 0 }); },\n" +
     "    montaBusca: () => { montaBusca(); return BUSCA.repr.length; },\n" +
     "    buscaRios: (s) => buscaRios(s).map(r => ({ nome: D.nomes[nomeIdx[r.i]],\n" +
     "      uf: ufDoRio(r.i), q: r.q, peso: r.peso, i: r.i })),\n" +

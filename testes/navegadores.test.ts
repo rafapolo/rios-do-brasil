@@ -21,7 +21,7 @@ const SUPORTE = `() => ({
 
 const TINTA = `() => {
   const c = document.getElementById('cv');
-  const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+  const d = (() => { const t = document.createElement('canvas'); t.width = c.width; t.height = c.height; const x = t.getContext('2d'); x.drawImage(c, 0, 0); return x.getImageData(0, 0, c.width, c.height).data; })();
   const s = new Set();
   for (let i = 0; i < d.length; i += 4 * 977) s.add(d[i] + ',' + d[i+1] + ',' + d[i+2]);
   return s.size;

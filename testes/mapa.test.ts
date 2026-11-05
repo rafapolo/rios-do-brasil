@@ -22,11 +22,10 @@ const modoAtivo = (p: Page) =>
   p.$$eval(".modo", (e) =>
     (e.find((b) => b.getAttribute("aria-pressed") === "true") as HTMLElement | undefined)?.dataset.modo);
 
-// quantos pixels do canvas do fundo não são a cor de fundo
+// quantos tons há no canvas do mapa (WebGL: copiado para um 2D para ler os pixels)
 const TINTA = `() => {
   const c = document.getElementById('cv');
-  const g = c.getContext('2d');
-  const d = g.getImageData(0, 0, c.width, c.height).data;
+  const d = (() => { const t = document.createElement('canvas'); t.width = c.width; t.height = c.height; const x = t.getContext('2d'); x.drawImage(c, 0, 0); return x.getImageData(0, 0, c.width, c.height).data; })();
   const set = new Set();
   for (let i = 0; i < d.length; i += 4 * 977) set.add(d[i] + ',' + d[i+1] + ',' + d[i+2]);
   return set.size;
@@ -240,7 +239,7 @@ describe("camadas", () => {
      sob o véu, e sem ela é o chapado de terra — os dois não se confundem */
   const FUNDO = `() => {
     const c = document.getElementById('cv');
-    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    const d = (() => { const t = document.createElement('canvas'); t.width = c.width; t.height = c.height; const x = t.getContext('2d'); x.drawImage(c, 0, 0); return x.getImageData(0, 0, c.width, c.height).data; })();
     const conta = new Map();
     for (let i = 0; i < d.length; i += 4 * 997) {
       const k = d[i] + ',' + d[i + 1] + ',' + d[i + 2];

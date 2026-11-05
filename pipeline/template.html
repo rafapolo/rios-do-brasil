@@ -175,6 +175,7 @@
   .maplibregl-canvas-container, .maplibregl-canvas { touch-action: none !important; }
   .maplibregl-canvas { outline: none; }
   .zoom button[hidden] { display: none; }
+  button.chave .rotulo .dica3d { font-family: var(--mono); font-size: 0.7rem; color: var(--ink-2); }
   .aviso-sw {
     position: fixed; left: 50%; top: 64px; transform: translateX(-50%); z-index: 5;
     max-width: min(560px, calc(100vw - 32px)); padding: 10px 14px; border-radius: 6px;
@@ -1022,7 +1023,7 @@
       </button>
       <button id="bt3d" class="chave" aria-pressed="false">
         <span class="icone d3">◢</span>
-        <span class="rotulo">Vista 3D <b>inclinar e girar</b></span>
+        <span class="rotulo">Vista 3D <span class="dica3d">inclinar e girar</span></span>
         <span class="switch"></span>
       </button>
       <button id="btSat" class="chave" aria-pressed="false">
@@ -1671,7 +1672,7 @@
      estações e reservatórios somam quase dois mil marcadores por cima do traço,
      e as ETEs outros 3,6 mil — quem abre o mapa veio ver o rio. Os pontos
      entram por escolha, e o cartão Camadas já traz a contagem de cada um. */
-  let mostrarEst = false, mostrarRes = false;
+  let mostrarEst = false, mostrarRes = false, mostrarSat = false;
   /* Modo tendência. Os dois testes que o ranking do series.html faz antes de
      chamar uma estação de rio secando — significância a 5% com FDR, e fora de
      barragem, onde o degrau é da obra e não do rio — são fixos e valem sempre
