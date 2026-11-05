@@ -499,7 +499,6 @@
   }
   .credito-sat.on { display: block; }
   .credito-sat a { color: inherit; }
-  @media (max-width: 760px) { .credito-sat { bottom: 72px; } }
 
   .zoom {
     position: fixed; right: 16px; top: auto; bottom: 68px; z-index: 3;
@@ -689,50 +688,81 @@
   }
   .veu.on { opacity: 1; pointer-events: auto; }
 
-  /* ---------- mobile: o HUD vira faixa inferior recolhível ---------- */
-  .puxador { display: none; }
+  /* ---------- mobile: barra fixa embaixo alterna os painéis ---------- */
+  /* Fora do celular a barra não existe e os ícones dos botões de cima ficam
+     escondidos: o desktop segue com a coluna de cartões e os dois botões de texto. */
+  .barra-baixo { display: none; }
+  .abrir .ico-abrir { display: none; }
   @media (max-width: 760px) {
+    :root { --barra: 58px; }
+    /* A barra é o único chrome fixo da base. Cinco botões de painel; tocar de
+       novo no ativo fecha. O `env()` soma a faixa do indicador de início do
+       iPhone, para os botões não ficarem debaixo dela. */
+    .barra-baixo {
+      position: fixed; left: 0; right: 0; bottom: 0; z-index: 4;
+      display: flex; align-items: stretch; gap: 2px;
+      padding: 4px 6px calc(4px + env(safe-area-inset-bottom));
+      background: var(--realce), var(--vidro);
+      backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+      border-top: 1px solid var(--rule); box-shadow: var(--sombra);
+    }
+    .barra-baixo button {
+      flex: 1 1 0; min-width: 0; min-height: 50px; padding: 4px 2px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+      border: 0; border-radius: 6px; background: none; box-shadow: none;
+      color: var(--ink-2); font-family: var(--sans); font-size: 0.64rem; font-weight: 600;
+      letter-spacing: 0; text-transform: none; line-height: 1;
+    }
+    .barra-baixo svg {
+      width: 22px; height: 22px; fill: none; stroke: currentColor;
+      stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;
+    }
+    .barra-baixo button[aria-expanded="true"] { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+    .barra-baixo button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+    /* O #hud vira o painel que sobe de cima da barra. Um painel por vez: cada
+       cartão leva `data-p` e só o do `data-aberto` fica. `.recolhido` = nenhum. */
     .hud {
-      top: auto; left: 0; right: 0; bottom: 0; width: auto; max-width: none;
-      max-height: 78dvh; padding: 0 10px 10px; gap: 8px;
-      transition: transform .24s ease;
+      top: auto; left: 0; right: 0; bottom: calc(var(--barra) + env(safe-area-inset-bottom));
+      z-index: 4; 
+      width: auto; max-width: none; max-height: min(62dvh, calc(100dvh - 140px));
+      padding: 0 10px 8px; gap: 8px;
+      transition: transform .22s ease, visibility 0s;
     }
     @media (prefers-reduced-motion: reduce) { .hud { transition: none; } }
-    .hud.recolhido { transform: translateY(calc(100% - 56px)); }
-    .cartao { border-radius: 6px; padding: 13px 15px; }
-    /* A coluna da direita se desfaz: os cartões voltam a ser filhos-flex da
-       gaveta, e o `order` recoloca "O que ver" logo antes do título (order 9). */
-    .hud-dir { display: contents; }
-    #cartaoModo { order: 8; }
-    /* No desktop a ficha desceu para o fim do #hud, mas no celular ela é o que
-       responde ao toque no rio: sem estes dois `order` negativos ela cairia no
-       fim da gaveta e o leitor tocaria num rio sem ver resposta. O puxador vem
-       antes de tudo porque é ele que reabre a gaveta. */
-    .puxador { order: -2; }
-    #ficha { order: -1; }
-    /* O puxador é o primeiro filho de um container que rola. Sem `sticky` ele
-       some ao rolar — e a faixa de 56 px do estado recolhido passava a mostrar o
-       meio de um cartão, em vez do botão que reabre a gaveta. */
-    .puxador {
-      position: sticky; top: 0; z-index: 2;
-      display: flex; align-items: center; justify-content: space-between; gap: 10px;
-      width: 100%; pointer-events: auto; text-transform: none; font-size: 0.75rem;
-      background: var(--realce), var(--vidro);
-      backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid var(--rule); border-radius: 6px;
-      box-shadow: var(--sombra); padding: 11px 15px; min-height: 46px;
-      font-family: var(--sans); font-weight: 600; letter-spacing: 0;
+    .hud.recolhido {
+      transform: translateY(calc(100% + 24px)); visibility: hidden;
+      transition: transform .22s ease, visibility 0s .22s;
     }
-    .titulo-cartao { order: 9; }
+    .hud:not([data-aberto="modo"]) [data-p="modo"],
+    .hud:not([data-aberto="camadas"]) [data-p="camadas"],
+    .hud:not([data-aberto="legenda"]) [data-p="legenda"],
+    .hud:not([data-aberto="dados"]) [data-p="dados"],
+    .hud:not([data-aberto="ficha"]) [data-p="ficha"] { display: none; }
+    .cartao { border-radius: 6px; padding: 13px 15px; }
+    /* A coluna da direita se desfaz: os cartões voltam a ser filhos-flex do painel. */
+    .hud-dir { display: contents; }
     .titulo-cartao .eyebrow, .titulo-cartao h1 { display: none; }
-    
+    .titulo-cartao { order: 9; }
+    .titulo-cartao .ir-series { margin: 0; padding-top: 0; border-top: 0; }
+
     h1 { font-size: 1.28rem; }
-    .zoom { top: auto; bottom: 76px; right: 12px; }
-    /* Empilhados no canto: lado a lado, os dois botões avançavam sobre a busca,
-       que mora no canto esquerdo do mesmo topo. */
-    .abrir-par { bottom: auto; top: 12px; right: 12px; flex-direction: column; }
-    /* O "Tabela e método" ficou com o canto direito, então a busca vai para o
-       esquerdo. Fica visível com a gaveta recolhida — é onde ela mais serve. */
-    .busca { top: 12px; left: 12px; right: auto; width: min(52vw, 240px); }
+    .zoom { top: auto; bottom: calc(var(--barra) + 12px + env(safe-area-inset-bottom)); right: 12px; }
+    .credito-sat { bottom: calc(var(--barra) + 8px + env(safe-area-inset-bottom)); }
+    /* Topo: a busca ocupa o que sobra e, à direita, dois botões de ícone lado a
+       lado (Sobre, Tabela e método) no lugar dos dois de texto empilhados. */
+    .abrir-par { bottom: auto; top: 12px; right: 12px; flex-direction: row; gap: 6px; }
+    .abrir { width: 44px; padding: 0; display: flex; align-items: center; justify-content: center; }
+    .abrir .ico-abrir {
+      display: block; width: 22px; height: 22px; fill: none; stroke: currentColor;
+      stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;
+    }
+    .abrir .rot-abrir {
+      position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%);
+      white-space: nowrap;
+    }
+    /* 12 + 44 + 6 + 44 + 12 de folga entre o campo e os botões */
+    .busca { top: 12px; left: 12px; right: auto; width: calc(100vw - 24px - 94px - 8px); max-width: none; }
     .busca input { min-height: 44px; }
     /* A lista não cabe na largura do campo: "PA/MT · 9.010 m³/s · 1.893,3 km"
        quebra em duas linhas e a sugestão passa a ocupar o dobro da altura. Ela
@@ -779,17 +809,18 @@
 </div>
 
 <div class="abrir-par">
-  <button class="abrir" id="btProjeto">Sobre</button>
-  <button class="abrir" id="btSobre">Tabela e método</button>
+  <button class="abrir" id="btProjeto" title="Sobre o projeto" aria-label="Sobre o projeto">
+    <svg class="ico-abrir" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v5.5"/><circle cx="12" cy="7.8" r=".6" fill="currentColor"/></svg>
+    <span class="rot-abrir">Sobre</span>
+  </button>
+  <button class="abrir" id="btSobre" title="Tabela e método" aria-label="Tabela e método">
+    <svg class="ico-abrir" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M3.5 9.5h17M3.5 14.5h17M9.5 9.5v10"/></svg>
+    <span class="rot-abrir">Tabela e método</span>
+  </button>
 </div>
 
 <div class="hud" id="hud">
-  <button class="puxador" id="puxador" aria-expanded="true" aria-controls="hud">
-    <span id="puxadorRotulo">Os rios do Brasil, por vazão</span>
-    <span class="estado" id="puxadorSeta">▾</span>
-  </button>
-
-  <div class="cartao titulo-cartao">
+  <div class="cartao titulo-cartao" data-p="dados">
     <p class="eyebrow">Rede de drenagem · Agência Nacional de Águas</p>
     <h1 id="titulo">Os rios do Brasil, por vazão</h1>
     
@@ -799,7 +830,7 @@
   <!-- No desktop estes dois viram a coluna da direita; no celular o embrulho é
        `display: contents` e eles voltam a ser cartões da gaveta. -->
   <div class="hud-dir" id="hudDir">
-    <div class="cartao" id="cartaoModo">
+    <div class="cartao" id="cartaoModo" data-p="modo">
       <h2>O que ver</h2>
       <div class="modos" role="group" aria-label="O que a cor mostra">
         <!-- Cada ícone diz o que a cor passa a medir. A vazão são três ondas que
@@ -868,7 +899,7 @@
       </details>
     </div>
 
-    <div class="cartao" id="cartaoRede">
+    <div class="cartao" id="cartaoRede" data-p="modo">
       <h2>Detalhe da rede</h2>
       <label class="faixa">
         <input type="range" id="rgOrdem" min="0" max="6" step="1" value="0"
@@ -881,7 +912,7 @@
          canto: é leitura de apoio, e no topo competia com o cartão de modo pela
          primeira olhada. No celular a coluna vira `display: contents` e ele
          entra na gaveta como mais um cartão. -->
-    <div class="sobre" id="sobre">
+    <div class="sobre" id="sobre" data-p="dados">
       <button class="sobre-topo" id="btSobreNums" aria-expanded="false">
         <span>Sobre os dados</span><span class="estado" id="sobreSeta">▾</span>
       </button>
@@ -889,7 +920,7 @@
     </div>
   </div>
 
-  <div class="cartao">
+  <div class="cartao" data-p="camadas">
     <h2>Camadas</h2>
     <div class="controles">
       <button id="btEst" class="chave" aria-pressed="false">
@@ -920,15 +951,40 @@
     </div>
   </div>
 
-  <div class="cartao">
+  <div class="cartao" data-p="legenda">
     <h2 id="tituloLegenda">Vazão média (m³/s)</h2>
     <div class="classes cunha" id="classes"></div>
   </div>
 
-  <div class="cartao ficha vazia" id="ficha">
+  <div class="cartao ficha vazia" id="ficha" data-p="ficha">
     Selecione um rio para ver os detalhes
   </div>
 </div>
+
+<!-- Só no celular (no desktop é display:none). Fica fora do #hud: o painel sobe de
+     cima dela, e ela precisa continuar à vista com o painel recolhido. -->
+<nav class="barra-baixo" id="barraBaixo" aria-label="Painéis do mapa">
+  <button type="button" data-painel="modo" aria-expanded="false" aria-controls="hud" id="btPModo">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8q2.25-2.2 4.5 0t4.5 0t4.5 0t4.5 0"/><path d="M3 13q2.25-2.2 4.5 0t4.5 0t4.5 0t4.5 0" stroke-width="2.2"/><path d="M3 18q2.25-2.2 4.5 0t4.5 0t4.5 0t4.5 0" stroke-width="3"/></svg>
+    <span>Modo</span>
+  </button>
+  <button type="button" data-painel="camadas" aria-expanded="false" aria-controls="hud">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5l9 4.8-9 4.8-9-4.8z"/><path d="M3 12.4l9 4.8 9-4.8"/><path d="M3 16.4l9 4.8 9-4.8"/></svg>
+    <span>Camadas</span>
+  </button>
+  <button type="button" data-painel="legenda" aria-expanded="false" aria-controls="hud">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="9" width="17" height="6" rx="1"/><path d="M9.2 9v6M14.8 9v6M3.5 19.5h17"/></svg>
+    <span>Legenda</span>
+  </button>
+  <button type="button" data-painel="dados" aria-expanded="false" aria-controls="hud">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V12M10 20V6M15 20v-9M20 20V9"/><path d="M3 20.5h18"/></svg>
+    <span>Dados</span>
+  </button>
+  <button type="button" data-painel="ficha" aria-expanded="false" aria-controls="hud" id="btPFicha">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5c3 3.8 5.2 6.6 5.2 9.6a5.2 5.2 0 0 1-10.4 0c0-3 2.2-5.8 5.2-9.6z"/></svg>
+    <span>Ficha</span>
+  </button>
+</nav>
 
 <!-- Irmã do #hud, não filha: ver o comentário do `.busca` no <style>. Fica logo
      antes do véu de propósito: o teste que compara o hud do template com o do
@@ -3085,7 +3141,7 @@
     for (const b of botoesModo) b.setAttribute('aria-pressed', String(b.dataset.modo === novo));
     const titulo = TITULO_MODO[novo] || TITULO_MODO.vazao;
     document.getElementById('titulo').textContent = titulo;
-    document.getElementById('puxadorRotulo').textContent = titulo;
+    document.getElementById('btPModo').title = titulo;
     document.title = titulo;
     notaModo.innerHTML = NOTA_MODO[novo] || '';
     document.getElementById('notaModoCx').hidden = !NOTA_MODO[novo];
@@ -3134,6 +3190,7 @@
   /* Duas gavetas no mesmo lugar: a da tabela e método e a do projeto. Abrir
      uma fecha a outra; fechar (botão, véu, Esc) fecha as duas. */
   const gavetaProjeto = document.getElementById('gavetaProjeto');
+  let gavetaEstavaAberta = false;
   const abrirGaveta = (on, g = gaveta) => {
     for (const x of [gaveta, gavetaProjeto]) {
       const liga = on && x === g;
@@ -3147,41 +3204,61 @@
   document.getElementById('btFechar').addEventListener('click', () => abrirGaveta(false));
   for (const b of document.querySelectorAll('[data-fechar]')) b.addEventListener('click', () => abrirGaveta(false));
   veu.addEventListener('click', () => abrirGaveta(false));
-  document.addEventListener('keydown', e => { if (e.key === 'Escape') abrirGaveta(false); });
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    // o Esc do painel do celular (mais abaixo) precisa saber se este Esc já tinha
+    // uma gaveta para fechar: quem fecha a gaveta não fecha o painel junto
+    gavetaEstavaAberta = gaveta.classList.contains('on') || gavetaProjeto.classList.contains('on');
+    abrirGaveta(false);
+  });
 
-  // no mobile o HUD recolhe para uma faixa, deixando o mapa inteiro à vista
+  /* No celular o #hud é o painel que sobe de cima da barra fixa de baixo: um
+     painel por vez (`data-aberto`), tocar de novo no botão ativo fecha. */
   const hud = document.getElementById('hud');
-  const puxador = document.getElementById('puxador');
-  const seta = document.getElementById('puxadorSeta');
-  /* Recolhido, os cartões saem da tela mas seguiam focáveis: dez controles que o
-     teclado alcançava e o leitor de tela anunciava sem que nada estivesse à
-     vista, e sem jeito de rolar até eles — quem rola é a gaveta fechada. `inert`
-     tira os três de uma vez (foco, toque e árvore de acessibilidade), e o
-     puxador, que é irmão dos cartões e não filho, continua alcançável.
-     Só no celular: a classe .recolhido sobrevive a um giro para o desktop, onde
-     a media query já não esconde nada. */
-  const inertarCartoes = () => {
-    const escondido = hud.classList.contains('recolhido') &&
-      window.matchMedia('(max-width: 760px)').matches;
-    for (const c of hud.querySelectorAll('.cartao')) c.inert = escondido;
-  };
+  const botoesPainel = [...document.querySelectorAll('#barraBaixo [data-painel]')];
+  const ehCelular = () => window.matchMedia('(max-width: 760px)').matches;
+  /* Painel fechado fica fora da tela mas seguiria focável, e `display:none` só
+     cobre os cartões de outros painéis: `inert` tira da árvore de acessibilidade
+     e do foco o #hud inteiro quando nada está aberto, e cada cartão que não é o
+     do painel atual. Só no celular: a classe .recolhido sobrevive a um giro para
+     o desktop, onde a media query já não esconde nada. */
   const marcarHud = () => {
+    const cel = ehCelular();
+    const aberto = hud.dataset.aberto || '';
     const recolhido = hud.classList.contains('recolhido');
-    puxador.setAttribute('aria-expanded', String(!recolhido));
-    seta.textContent = recolhido ? '▴' : '▾';
-    inertarCartoes();
-    // a gaveta rola: reabrir no ponto onde o leitor parou esconde a ficha, que é
-    // justamente o que ele foi ver ao tocar num rio
+    for (const b of botoesPainel)
+      b.setAttribute('aria-expanded', String(!recolhido && b.dataset.painel === aberto));
+    hud.inert = cel && recolhido;
+    for (const c of hud.querySelectorAll('[data-p]'))
+      c.inert = cel && (recolhido || c.dataset.p !== aberto);
+    // a gaveta rola: reabrir no ponto onde o leitor parou esconde o começo do painel
     hud.scrollTop = 0;
   };
-  const abrirHud = () => { hud.classList.remove('recolhido'); marcarHud(); };
-  puxador.addEventListener('click', () => { hud.classList.toggle('recolhido'); marcarHud(); });
-  // girar o aparelho troca o lado da media query, e o inert tem que ir junto
-  window.addEventListener('resize', inertarCartoes);
-  if (window.matchMedia('(max-width: 760px)').matches) {
-    hud.classList.add('recolhido');
+  const abrirPainel = nome => {
+    hud.dataset.aberto = nome;
+    hud.classList.remove('recolhido');
     marcarHud();
-  }
+  };
+  const fecharPainel = () => { hud.classList.add('recolhido'); marcarHud(); };
+  const abrirHud = () => abrirPainel('ficha');   // o toque num rio abre a ficha
+  for (const b of botoesPainel) b.addEventListener('click', () => {
+    const ativo = !hud.classList.contains('recolhido') && hud.dataset.aberto === b.dataset.painel;
+    if (ativo) fecharPainel(); else abrirPainel(b.dataset.painel);
+  });
+  /* Esc: a gaveta de tabela/projeto tem a vez; sem ela aberta, fecha o painel
+     e devolve o foco ao botão que o abriu. */
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape' || !ehCelular() || hud.classList.contains('recolhido')) return;
+    if (gavetaEstavaAberta || e.target.closest('.busca')) return;
+    const b = botoesPainel.find(x => x.dataset.painel === hud.dataset.aberto);
+    fecharPainel();
+    if (b) b.focus();
+  });
+  // girar o aparelho troca o lado da media query, e o inert tem que ir junto
+  window.addEventListener('resize', marcarHud);
+  hud.dataset.aberto = 'modo';
+  if (ehCelular()) hud.classList.add('recolhido');
+  marcarHud();
 
   /* ---------- números e tabela ---------- */
   const val = D.validacao || {};
