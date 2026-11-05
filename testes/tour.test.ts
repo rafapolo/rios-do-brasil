@@ -77,12 +77,14 @@ describe("tour", () => {
     expect(antes.camadas.split(",")[0], "o fluxo deste teste começa ligado").toBe("true");
     // amostra, a cada quadro, a cena, o fluxo, a 3D e os pixels do canvas do fluxo
     await roda(pg, `() => {
-      window.__v = { cenas: new Set(), fluxo: new Set(), d3: new Set(), tinta: 0, legendas: new Set(), ativoVisto: false };
+      window.__v = { cenas: new Set(), fluxo: new Set(), d3: new Set(), tinta: 0, legendas: new Set(), ativoVisto: false, hudNaCena1: new Set(), hudFora: new Set() };
       const t = () => {
         const T = window.tour; if (T.ativo()) {
           const v = window.__v; v.ativoVisto = true; v.cenas.add(T.cena());
           v.fluxo.add(document.getElementById('btFluxo').getAttribute('aria-pressed'));
           v.d3.add(document.getElementById('bt3d').getAttribute('aria-pressed'));
+          const hv = getComputedStyle(document.getElementById('hud')).visibility;
+          if (T.cena() === 1) v.hudNaCena1.add(hv); else if (T.cena() > 1) v.hudFora.add(hv);
           v.legendas.add(document.getElementById('tour-line').textContent);
           const c = document.getElementById('cvFluxo'), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
           let n = 0; for (let i = 3; i < d.length; i += 4 * 7) if (d[i]) n++; if (n > 0) v.tinta++;
@@ -101,10 +103,12 @@ describe("tour", () => {
     expect(await pg.locator("#tour-som").isVisible()).toBe(true);
     await espera(pg, `!window.tour.ativo()`);
     const v = await roda<any>(pg, `() => ({ cenas: [...window.__v.cenas], fluxo: [...window.__v.fluxo], d3: [...window.__v.d3],
-      tinta: window.__v.tinta, legendas: window.__v.legendas.size, total: window.tour.total() })`);
+      tinta: window.__v.tinta, hudNaCena1: [...window.__v.hudNaCena1], hudFora: [...window.__v.hudFora], legendas: window.__v.legendas.size, total: window.tour.total() })`);
     expect(v.cenas.length, "todas as cenas passaram").toBe(v.total);
-    expect(v.total).toBe(12);
-    expect(v.legendas, "uma legenda por cena").toBeGreaterThanOrEqual(11);
+    expect(v.total).toBe(14);
+    expect(v.legendas, "uma legenda por cena").toBeGreaterThanOrEqual(13);
+    expect(v.hudNaCena1, "na cena dos painéis a hud aparece").toContain("visible");
+    expect(v.hudFora, "nas outras cenas a hud some").toEqual(["hidden"]);
     expect(v.fluxo, "o fluxo animado fica ligado em TODAS as cenas").toEqual(["true"]);
     expect(v.d3, "a vista 3D liga com o tour").toEqual(["true"]);
     expect(v.tinta, "partículas do fluxo no canvas durante o tour").toBeGreaterThan(10);
@@ -195,9 +199,9 @@ describe("tour", () => {
     expect(await pg.locator("#tour-convite").isVisible()).toBe(false);
     expect(await roda(pg, `() => window.__audios`)).toBe(0);
     await pg.click("#btTour");
-    await espera(pg, `window.tour.cena() >= 1`);
+    await espera(pg, `window.tour.cena() >= 2`);
     await pg.waitForTimeout(150);
-    // a câmera já está na cena (a cena 1 é a do São Francisco: zoom 5,6, inclinação 35), sem animação a caminho
+    // a câmera já está na cena (a cena 2 é a do São Francisco: zoom 5,6, inclinação 35), sem animação a caminho
     const c = await roda<any>(pg, `() => { const m = window.__testes.map; return { z: m.getZoom(), p: m.getPitch(), mov: m.isMoving() }; }`);
     expect(c.p).toBeCloseTo(35, 0);
     expect(c.mov, "com movimento reduzido não há voo").toBe(false);
@@ -222,11 +226,17 @@ describe("tour", () => {
     for (const c of r) {
       expect(c.fluxo, `cena ${c.i}: fluxo ligado`).toBe("true");
       expect(c.px, `cena ${c.i} (${c.nome}): partículas do fluxo`).toBeGreaterThan(40);
-      if (c.i < 11) expect(c.nome, `cena ${c.i}: o rio do realce foi achado`).toBeTruthy();
+      if (c.i < 13) expect(c.nome, `cena ${c.i}: o rio do realce foi achado`).toBeTruthy();
     }
     // os rios certos: Formoso é o da Bahia, e Piranhas-Açu o do Rio Grande do Norte/Paraíba
     const achados = await roda<any>(pg, `() => ({ f: window.tour.acha('Rio Formoso', [-45, -14], 7), p: window.tour.acha('Rio Piranhas ou Açu', [-37.4, -6.2], 7) })`);
     expect(achados.f.uf).toBe("BA");
+    // a cena do Tietê para a Argentina: o Paraná do mapa desce abaixo de 29°S, com vazão de rio grande
+    const pr = await roda<any>(pg, `() => { const T = window.__testes, a = window.tour.acha('Rio Paraná', [-54.5, -26.5], 4.5);
+      let sul = 0; for (const t of T.trechosDoRio(a.i)) sul = Math.max(sul, T.bbox[t * 4 + 3]);
+      return { q: a.q, lat: 360 / Math.PI * Math.atan(Math.exp(Math.PI * (1 - 2 * sul))) - 90 }; }`);
+    expect(pr.lat, "o Paraná do mapa chega à Argentina").toBeLessThan(-29);
+    expect(pr.q).toBeGreaterThan(15000);
     expect(achados.p.uf).toMatch(/RN|PB/);
     await fecha();
   }, LENTO);
@@ -235,8 +245,14 @@ describe("tour", () => {
     const { pg, fecha } = await abre(copiaSondada() + "?tour=1&rapido=3", { ctx: { ...devices["iPhone 13"] } });
     await pg.locator("#tour-convite").waitFor({ state: "visible" });
     await pg.tap("#tour-convite button");
-    await espera(pg, `window.tour.cena() >= 1`);
+    await espera(pg, `window.tour.cena() === 1`);
     await pg.waitForTimeout(1200);
+    // cena dos painéis: o painel sobe de cima da legenda, sem cobri-la
+    expect(await pg.locator("#hud").isVisible()).toBe(true);
+    const hb = await roda<any>(pg, `() => ({ h: document.getElementById('hud').getBoundingClientRect().bottom, l: document.getElementById('tour-baixo').getBoundingClientRect().top })`);
+    expect(hb.h).toBeLessThanOrEqual(hb.l + 1);
+    await espera(pg, `window.tour.cena() >= 3`);
+    await pg.waitForTimeout(900);
     expect(await pg.locator("#barraBaixo").isVisible()).toBe(false);
     expect(await pg.locator("#hud").isVisible()).toBe(false);
     expect(await pg.locator(".busca").isVisible()).toBe(false);

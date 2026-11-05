@@ -47,11 +47,11 @@ ela vem pronta na topologia da base da ANA.
   e diz quando o SNISB não a classificou, que é o caso de quase metade
 - **Tour de 2 minutos, com música** — botão "Tour" (na coluna de baixo no desktop, na barra no
   celular) ou o endereço `/tour/` (`?tour=1` na página do mapa: pede um toque, porque o navegador só
-  libera o som depois de um gesto). Doze cenas em faixas de cinema, cada uma com um fato conferido
+  libera o som depois de um gesto). Quatorze cenas em faixas (uma delas mostra os painéis em uso) de cinema, cada uma com um fato conferido
   no banco: o Amazonas leva 85% da água que chega ao litoral, o São Francisco tem cem vezes menos
   água, Sobradinho quase vazio, 773 mil km de rio sem barragem, o Paranapanema em degraus, o
   Piranhas-Açu com mais licença que rio, o Taperoá seco em 7 de cada 10 dias, os 26 rios do Oeste
-  da Bahia que perdem água, o Pantanal que encolhe, o Tietê de esgoto, a água que se perde no Acre.
+  da Bahia que perdem água, o Pantanal que encolhe, o Tietê de esgoto e o rio abaixo até a Argentina, a água que se perde no Acre.
   O fluxo animado fica ligado em todas as cenas. Esc ou "✕ esc" param e devolvem modo, camadas,
   câmera e vista 3D como estavam. Os números e frases estão em `design/tour.json` (embutido na
   página); de onde saiu cada um, com a segunda via que o confirmou, em `design/tour.md`. A música é
