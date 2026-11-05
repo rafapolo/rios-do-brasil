@@ -312,6 +312,12 @@
     background: color-mix(in srgb, currentColor 11%, transparent);
   }
   .selo.neutro { color: var(--ink-2); }
+  /* A marca de vazão medida/estimada mora na linha "Vazão aqui", sem caixa. */
+  .marca-vazao { color: var(--accent); }
+  .marca-rot {
+    font-family: var(--sans); font-size: 0.64rem; font-weight: 400; color: var(--ink-3);
+    margin-left: 2px;
+  }
   /* Alerta é frase, não etiqueta: em caixa alta e centralizado ele virava o
      bloco mais pesado da ficha, duas linhas de grito no meio dos números. */
   .selo.alerta {
@@ -2815,7 +2821,7 @@
     fichaEl.innerHTML =
       '<div class="nome">' + (nome || 'Curso d’água sem nome na base') + '</div>' +
       (bacia ? linha('Bacia', bacia) : '') +
-      linha('Vazão aqui', vazao(q[i])) +
+      linhaVazao(i, medido) +
       (foz !== i ? linha('Na foz', vazao(q[foz])) : '') +
       linha('Área de drenagem', fmt(areas[i]) + ' km²') +
       (comps && grupo.length > 1
@@ -2829,9 +2835,18 @@
       outorgaHTML(i) +
       outorgasDoRioHTML(i) +
       tendenciaDoTrechoHTML(i) +
-      livreDoTrechoHTML(i) +
-      '<div class="selo' + (medido ? '' : ' neutro') + '">' +
-      (medido ? 'vazão medida em estação' : 'vazão estimada') + '</div>';
+      livreDoTrechoHTML(i);
+  }
+
+  /* Se o número foi medido numa estação ou interpolado vai dentro da própria
+     linha, em vez de uma etiqueta em caixa no fim da ficha, que pesava mais que
+     a informação: ● cheio para medida, ○ vazado para estimada, e a palavra
+     pequena em cinza ao lado. A explicação fica em title e aria-label. */
+  function linhaVazao(i, medido) {
+    const ajuda = medido ? 'medida numa estação neste trecho' : 'interpolada das estações vizinhas';
+    return '<div class="linha"><span>Vazão aqui</span><em class="vazao-aqui" title="' + ajuda + '">' +
+      '<span class="marca-vazao" role="img" aria-label="' + ajuda + '">' + (medido ? '●' : '○') + '</span> ' +
+      vazao(q[i]) + ' <small class="marca-rot">' + (medido ? 'medida' : 'estimada') + '</small></em></div>';
   }
 
   /* Quanto do que passa aqui é efluente lançado rio acima. A vazão de efluente

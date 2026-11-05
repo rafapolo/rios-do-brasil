@@ -370,8 +370,9 @@ describe("ficha", () => {
       return h;
     }`) as Record<string, number>;
     const chaves = Object.keys(hist).map(Number);
-    expect(Math.min(...chaves)).toBeGreaterThanOrEqual(5);
-    expect(Math.max(...chaves)).toBeLessThanOrEqual(12);
+    /* sem o selo de vazão no fim, a faixa desce um: de 5–12 para 4–11 */
+    expect(Math.min(...chaves)).toBeGreaterThanOrEqual(4);
+    expect(Math.max(...chaves)).toBeLessThanOrEqual(11);
   }, LENTO);
 
   /* O gráfico das outorgas do rio: só no modo outorga, só com 5 ou mais, e o
@@ -428,28 +429,47 @@ describe("ficha", () => {
     for (const m of ["esgoto", "industria"]) {
       for (const s of r.out[m]) expect(s).toContain("não tem outorga de lançamento");
     }
+    /* nos outros modos não há selo neutro nenhum: a marca de vazão estimada
+       deixou de ser selo e mora na linha "Vazão aqui" */
     for (const m of ["vazao", "outorga"]) {
-      for (const s of r.out[m]) expect(s).toBe("vazão estimada");
+      for (const s of r.out[m]) expect(s).toBeNull();
     }
   });
 
-  /* Esse selo é outro, e continua em todos os modos: ele diz se o número da
-     ficha foi medido numa estação ou interpolado. */
-  test("o selo de vazão medida ou estimada aparece em todos os modos", async () => {
+  /* A marca da linha "Vazão aqui" diz se o número da ficha foi medido numa
+     estação ou interpolado, e continua em todos os modos. Não é mais um selo. */
+  test("a marca de vazão medida ou estimada aparece em todos os modos", async () => {
     const r = await roda(sonda, `() => {
       const t = window.__testes, out = [];
       const medido = [...t.medidos][0], estimado = [...Array(t.N).keys()].find(i => !t.medidos.has(i));
       for (const m of ['vazao', 'esgoto', 'industria', 'outorga'])
         for (const i of [medido, estimado]) {
           t.aplicaModo(m); t.fichaTrecho(i);
-          out.push(document.querySelector('#ficha .selo:last-child').textContent);
+          const em = document.querySelector('#ficha .vazao-aqui');
+          const marca = em.querySelector('.marca-vazao');
+          out.push({ simbolo: marca.textContent, rot: em.querySelector('.marca-rot').textContent,
+            title: em.title, aria: marca.getAttribute('aria-label'),
+            rotulo: em.parentElement.querySelector('span').textContent,
+            selo: !![...document.querySelectorAll('#ficha .selo')].find(x => /vazão (medida|estimada)/.test(x.textContent)) });
         }
       t.aplicaModo('vazao');
       return out;
-    }`) as string[];
+    }`) as any[];
     expect(r).toHaveLength(8);
-    expect(r.filter((s) => s === "vazão medida em estação")).toHaveLength(4);
-    expect(r.filter((s) => s === "vazão estimada")).toHaveLength(4);
+    const med = r.filter((x) => x.simbolo === "●"), est = r.filter((x) => x.simbolo === "○");
+    expect(med).toHaveLength(4);
+    expect(est).toHaveLength(4);
+    for (const x of med) {
+      expect(x.rot).toBe("medida");
+      expect(x.title).toBe("medida numa estação neste trecho");
+      expect(x.aria).toBe(x.title);
+    }
+    for (const x of est) {
+      expect(x.rot).toBe("estimada");
+      expect(x.title).toBe("interpolada das estações vizinhas");
+      expect(x.aria).toBe(x.title);
+    }
+    for (const x of r) { expect(x.rotulo).toBe("Vazão aqui"); expect(x.selo, "a etiqueta em caixa saiu").toBe(false); }
   });
 
   test("5.873 trechos têm metade da vazão ou mais já licenciada", async () => {
