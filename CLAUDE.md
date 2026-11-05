@@ -89,11 +89,11 @@ conferência: `processa.py` roda validação cruzada 5-fold contra estações re
 (semiárido caindo, arco de desmatamento subindo). Ao mexer nos números, compare contra o que o
 README afirma — os valores lá são resultado medido, não arredondamento.
 
-**As páginas geradas, sim.** 103 testes em `testes/`, com Bun e Playwright:
+**As páginas geradas, sim.** 115 testes em `testes/`, com Bun e Playwright:
 
 ```bash
 bun install && bun run preparar   # baixa chromium, firefox e webkit (uma vez)
-bun test                          # em série, ~2,5 min, 103 testes nos três motores
+bun test                          # em série, ~2,5 min, 115 testes nos três motores
 bun run test                      # um processo por arquivo, 3 ao mesmo tempo, ~1,5 min (testes/roda.ts)
 ```
 
@@ -111,7 +111,7 @@ Três coisas ao mexer na suíte:
   com `window.__testes` injetado antes do marcador `/* ---------- início ---------- */` — o
   produto não ganha porta de depuração por causa do teste.
 - Abrir o `index.html` custa ~4 s (17 MB, gzip, 462 mil trechos): `abrir()` espera o véu `#carregando` sair, não um tempo fixo. Cada par (motor, URL) é aberto
-  uma vez e reaproveitado; quem mexe no estado da página chama `reinicia()` antes. Página aberta com `fresco: true` e que não vai mais ser usada deve ser fechada (`p.context().close()`): cada uma guarda 462 mil trechos. O teto é 3 min por rodada: a busca de rio tem arquivo próprio (`busca.test.ts`) para a rodada paralela se repartir bem; se o `mapa.test.ts` voltar a passar de ~2 min, parta-o de novo em vez de aumentar o teto.
+  uma vez e reaproveitado; quem mexe no estado da página chama `reinicia()` antes. Página aberta com `fresco: true` e que não vai mais ser usada deve ser fechada (`p.context().close()`): cada uma guarda 462 mil trechos. O teto é 3 min por rodada: os bugs de plataforma (celular, Tab, notch, sem JS) portados do cantography moram em `plataformas.test.ts`; a busca de rio tem arquivo próprio (`busca.test.ts`) para a rodada paralela se repartir bem; se o `mapa.test.ts` voltar a passar de ~2 min, parta-o de novo em vez de aumentar o teto.
 
 ## Como uma página é montada
 
@@ -132,7 +132,7 @@ Todos os JSON intermediários são gitignored. Os HTML gerados são versionados 
 - **Português** em nomes, comentários e commits (`type: descrição em minúscula`). Os scripts do
   `../rodado` são em inglês; os daqui não.
 - **Os limites da câmera do mapa moram em dois lugares só, e nenhum deles é literal solto.**
-  O teto de zoom é `ZOOM_MAX` (hoje 120 × o enquadramento nacional, ~20 m/px), lido pelos três
+  O teto de zoom é `ZOOM_MAX` (hoje 180 × o enquadramento nacional, ~13 m/px; a 240 o córrego pequeno vira escada), lido pelos três
   pontos que travam escala — botão, roda/pinça e os dois voos de enquadramento. O limite de
   arrasto é `prender()`, chamado no fim do `pointermove` e do `aplicarZoom()`: ele impede que o
   **centro da tela** saia do `bounds` (a extensão inteira da BHO, dos Andes ao Prata — não a
@@ -140,7 +140,7 @@ Todos os JSON intermediários são gitignored. Os HTML gerados são versionados 
   distraído joga a rede para fora da tela sem deixar pista de para que lado voltar. Quem subir
   o `ZOOM_MAX` precisa reconferir duas coisas que não são cobertas por teste: o degrau da grade
   da BHO (11 m nas bacias grandes, 110 m nas pequenas) e a camada de fluxo, calibrada até
-  `ZOOM_MAX` = 120 (estilo de perto, `FP` no template; `testes/fluxo.test.ts` percorre as escalas).
+  `ZOOM_MAX` = 180 (conferida a 240 também) (estilo de perto, `FP` no template; `testes/fluxo.test.ts` percorre as escalas).
 - **`<meta name="viewport">` é obrigatório** e as duas páginas ficaram sem ele por muito tempo.
   Sem a tag, o celular adota um viewport de 980 px e reduz tudo por zoom: o texto sai minúsculo
   e **nenhuma media query de `max-width` dispara**, então todo o CSS de celular vira letra

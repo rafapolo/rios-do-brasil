@@ -54,7 +54,7 @@ describe("fluxo animado", () => {
   test("a mistura de longe para perto não deixa buraco: toda escala desenha", async () => {
     await reinicia(sonda);
     await liga(sonda);
-    for (const z of [1, 7, 12, 16, 20, 26, 40, 120]) {
+    for (const z of [1, 7, 12, 16, 20, 26, 40, 120, 180]) {
       await vai(sonda, z);
       await sonda.waitForTimeout(500);
       expect((await foto(sonda)).tinta, `z=${z}`).toBeGreaterThan(100);

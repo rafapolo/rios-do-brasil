@@ -1685,11 +1685,12 @@
      córrego de cabeceira e o `corteZoom` abre sozinho conforme se aproxima, então
      quem manda no limite é o dado, não o desenho: a malha da BHO vem numa grade
      de 11 m nos rios de bacia grande e 110 m nos pequenos, e os tracos saem
-     simplificados de 20 m (Amazonas) a 350 m (córrego). Em 120× dá ~20 m/px —
-     ainda acima da grade fina, e ainda dentro do z14 nativo do Sentinel-2.
-     Passar muito disso começa a mostrar o degrau da grade como se fosse curva do
-     rio. */
-  const ZOOM_MAX = 120;
+     simplificados de 20 m (Amazonas) a 350 m (córrego). Em 180× dá ~13 m/px.
+     Medido em 240× (~10 m/px): o córrego de bacia pequena vira escada de degraus
+     de 10 a 20 px, e a grade de 110 m passa a parecer curva do rio. 180 é o
+     maior valor em que o degrau ainda se lê como traço. O fluxo, de longe e de
+     perto, segue a 120 quadros/s em 240× (headless), então o teto é do dado. */
+  const ZOOM_MAX = 180;
   function enquadrar() {
     vista.k = kBase();
     vista.x = W / 2 - (moldura.minx + molduraX / 2) * vista.k;
