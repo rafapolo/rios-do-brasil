@@ -18,7 +18,7 @@ const arquivos = readdirSync(import.meta.dir)
   .sort((a, b) => PESO(b) - PESO(a));
 
 function PESO(f: string) {
-  return f.startsWith("mapa") ? 3 : f.startsWith("navegadores") ? 2 : f.startsWith("celular") ? 1 : 0;
+  return f.startsWith("mapa") || f.startsWith("tour") ? 3 : f.startsWith("navegadores") ? 2 : f.startsWith("celular") ? 1 : 0;
 }
 
 const t0 = Date.now();

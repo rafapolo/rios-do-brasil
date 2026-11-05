@@ -69,7 +69,8 @@ export function servidor() {
     port: 0,
     fetch(req) {
       const p = new URL(req.url).pathname;
-      return new Response(Bun.file(join(RAIZ, p === "/" ? "index.html" : p)));
+      // pasta pede o index.html dela, como o servidor do site (/tour/ → tour/index.html)
+      return new Response(Bun.file(join(RAIZ, p.endsWith("/") ? p + "index.html" : p)));
     },
   });
   return { base: `http://127.0.0.1:${srv.port}`, parar: () => srv.stop(true) };
