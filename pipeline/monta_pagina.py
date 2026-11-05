@@ -17,8 +17,21 @@ def embutir(nome):
     return b64
 
 
+def embutir_texto(nome):
+    """Como embutir(), para um arquivo de texto que não é JSON (a biblioteca e o CSS dela)."""
+    cru = (S / nome).read_bytes()
+    gz = gzip.compress(cru, 9)
+    b64 = base64.b64encode(gz).decode()
+    print(f"  {nome}: {len(cru) / 1e3:.0f} kB -> gz {len(gz) / 1e3:.0f} -> base64 {len(b64) / 1e3:.0f}")
+    return b64
+
+
 tpl = (S / "template.html").read_text()
 pagina = tpl.replace("/*__FONTE__*/", (S / "fonte_mono.txt").read_text().strip())
+# MapLibre GL JS 4.7.1 (BSD-3-Clause), embutida como o resto: a página abre por file://, offline.
+# O .js e o .css ficam em vendor/ com a licença; vão gzip + base64 e a página os descomprime na carga.
+pagina = pagina.replace("/*__MAPLIBRE__*/", embutir_texto("vendor/maplibre-gl-4.7.1.js"))
+pagina = pagina.replace("/*__MAPLIBRECSS__*/", embutir_texto("vendor/maplibre-gl-4.7.1.css"))
 pagina = pagina.replace("/*__RESERV__*/", embutir("reservatorios.json"))
 # Opcional: quem não rodou o baixa_etes.py monta a página sem a camada, e o
 # template esconde o interruptor sozinho em vez de quebrar.

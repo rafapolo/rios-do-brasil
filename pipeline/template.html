@@ -169,9 +169,20 @@
 
   /* ---------- o mapa é a página ---------- */
   .mapa { position: fixed; inset: 0; background: var(--leito); touch-action: none; }
-  canvas { display: block; width: 100%; height: 100%; cursor: grab; }
-  #cvFluxo { position: absolute; inset: 0; pointer-events: none; }
-  canvas.arrastando { cursor: grabbing; }
+  #mapaGl { position: absolute; inset: 0; }
+  #cvFluxo { position: absolute; inset: 0; width: 100%; height: 100%; display: block; pointer-events: none; }
+  /* a página decide os gestos; a folha de estilo da biblioteca deixaria o navegador roubar o toque */
+  .maplibregl-canvas-container, .maplibregl-canvas { touch-action: none !important; }
+  .maplibregl-canvas { outline: none; }
+  .zoom button[hidden] { display: none; }
+  .aviso-sw {
+    position: fixed; left: 50%; top: 64px; transform: translateX(-50%); z-index: 5;
+    max-width: min(560px, calc(100vw - 32px)); padding: 10px 14px; border-radius: 6px;
+    font-size: 0.74rem; line-height: 1.4; color: var(--ink); background: var(--vidro);
+    box-shadow: var(--sombra); border: 1px solid var(--rule);
+  }
+  .aviso-sw[hidden] { display: none; }
+  .aviso-sw button { margin-left: 8px; font: inherit; cursor: pointer; }
 
   /* Os 11 MB de dados vêm embutidos no próprio HTML — não tem requisição de
      rede separada para mostrar progresso, só o download do arquivo inteiro.
@@ -848,13 +859,16 @@
 </div>
 
 <main class="mapa" id="mapa">
-  <canvas id="cv"></canvas>
+  <div id="mapaGl"></div>
   <canvas id="cvFluxo"></canvas>
 </main>
 
 <p class="vazio" id="vazio">Nenhum rio de porte por aqui — a rede desenhada começa
   nos cursos que drenam algumas centenas de km².</p>
 <div class="tip" id="tip"></div>
+
+<div class="aviso-sw" id="avisoSw" role="note" hidden>O navegador está desenhando o mapa por software, sem placa de vídeo: a rede aparece com menos detalhe e a vista 3D pode ficar lenta. Ative a aceleração por hardware nas configurações do navegador.
+  <button type="button" id="avisoSwFecha">Entendi</button></div>
 
 <div class="credito-sat" id="creditoSat">
   Imagem: <a href="https://cloudless.eox.at" target="_blank" rel="noopener">EOxCloudless</a>
@@ -866,6 +880,9 @@
   <button id="btMais" title="Aproximar" aria-label="Aproximar">+</button>
   <button id="btMenos" title="Afastar" aria-label="Afastar">−</button>
   <button id="btReset" title="Enquadrar o Brasil" aria-label="Enquadrar o Brasil">⤢</button>
+  <button id="btNorte" title="Voltar ao norte" aria-label="Voltar ao norte" hidden>
+    <svg id="icoNorte" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M8 1.5l3 6.5H5z" fill="currentColor"/><path d="M8 14.5l3-6.5H5z" fill="none" stroke="currentColor" stroke-width="1.1"/></svg>
+  </button>
 </div>
 
 <div class="abrir-par">
@@ -1001,6 +1018,11 @@
       <button id="btFluxo" class="chave" aria-pressed="false">
         <span class="icone flu">≈</span>
         <span class="rotulo">Fluxo animado <b id="nFluxo"></b></span>
+        <span class="switch"></span>
+      </button>
+      <button id="bt3d" class="chave" aria-pressed="false">
+        <span class="icone d3">◢</span>
+        <span class="rotulo">Vista 3D <b>inclinar e girar</b></span>
         <span class="switch"></span>
       </button>
       <button id="btSat" class="chave" aria-pressed="false">
@@ -1195,6 +1217,8 @@
   <footer id="rodape"></footer>
 </aside>
 
+<script id="maplibre" type="text/plain">/*__MAPLIBRE__*/</script>
+<script id="maplibreCss" type="text/plain">/*__MAPLIBRECSS__*/</script>
 <script id="dados" type="text/plain">/*__DADOS__*/</script>
 <script id="usinas" type="text/plain">/*__RESERV__*/</script>
 <script id="etes" type="text/plain">/*__ETES__*/</script>
@@ -1205,23 +1229,72 @@
   /* Os dados vão embutidos em gzip+base64 e são descomprimidos aqui. O ganho é
      modesto — o varint da geometria já deixou os bytes com pouca redundância —
      mas tira ~2 MB da página e mantém o arquivo pequeno no repositório. */
-  async function carrega(id) {
+  async function descomprime(id) {
     const b64 = document.getElementById(id).textContent.trim();
     const s = atob(b64);
     const bin = new Uint8Array(s.length);
     for (let i = 0; i < s.length; i++) bin[i] = s.charCodeAt(i);
     const fluxo = new Blob([bin]).stream().pipeThrough(new DecompressionStream('gzip'));
-    return JSON.parse(new TextDecoder().decode(await new Response(fluxo).arrayBuffer()));
+    return new TextDecoder().decode(await new Response(fluxo).arrayBuffer());
   }
+  const carrega = async id => JSON.parse(await descomprime(id));
 
-  if (typeof DecompressionStream === 'undefined') {
-    document.getElementById('vazio').textContent =
-      'Este navegador não descomprime os dados do mapa. Tente uma versão mais recente.';
-    document.getElementById('vazio').classList.add('on');
+  /* A página não abre sem uma razão que o leitor possa agir sobre: dizer o que
+     falta no lugar do véu de "carregando" que não sai nunca. */
+  function falha(msg) {
+    const v = document.getElementById('vazio');
+    v.textContent = msg;
+    v.classList.add('on');
     /* o véu de carregamento ficaria por cima do aviso para sempre */
     const veuCarga = document.getElementById('carregando');
     if (veuCarga) veuCarga.remove();
+  }
+
+  if (typeof DecompressionStream === 'undefined') {
+    falha('Este navegador não descomprime os dados do mapa. Tente uma versão mais recente.');
     return;
+  }
+
+  /* O mapa é WebGL 2: a inclinação e o giro vêm da placa de vídeo. Sem ela
+     (Tor "mais seguro", GPU na lista de bloqueio, aceleração desligada) o véu
+     ficaria no ar para sempre; aqui a página diz o que falta. E quando o WebGL
+     existe mas é por software (SwiftShader, llvmpipe, máquina virtual), o mapa
+     abre do mesmo jeito, com menos trechos por quadro e um aviso: tirar o leitor
+     da página por causa disso seria pior do que deixá-lo girar devagar. */
+  const infoGL = (() => {
+    try {
+      const c = document.createElement('canvas');
+      const g = c.getContext('webgl2');
+      if (!g) return null;
+      const e = g.getExtension('WEBGL_debug_renderer_info');
+      const render = e ? String(g.getParameter(e.UNMASKED_RENDERER_WEBGL)) : '';
+      const x = g.getExtension('WEBGL_lose_context');
+      if (x) x.loseContext();
+      return { render };
+    } catch (e) { return null; }
+  })();
+  if (!infoGL) {
+    falha('Este navegador não oferece WebGL 2, que o mapa usa para inclinar e girar a vista. ' +
+      'Ative a aceleração por hardware nas configurações do navegador, ou abra a página em outro.');
+    return;
+  }
+  const POR_SOFTWARE = /swiftshader|llvmpipe|softpipe|software|basic render|microsoft basic/i.test(infoGL.render);
+  if (POR_SOFTWARE) {
+    const av = document.getElementById('avisoSw');
+    if (av) av.hidden = false;
+  }
+
+  /* A MapLibre GL JS vai embutida como os dados (gzip + base64) e entra na página
+     por <script>/<style> criados aqui: nada de CDN, a página abre por file://. */
+  async function carregaMaplibre() {
+    const [js, css] = await Promise.all([descomprime('maplibre'), descomprime('maplibreCss')]);
+    const st = document.createElement('style');
+    st.textContent = css;
+    document.head.appendChild(st);
+    const sc = document.createElement('script');
+    sc.textContent = js;
+    document.head.appendChild(sc);
+    sc.remove();
   }
 
   /* As ETEs são a única camada opcional na montagem: quem roda o pipeline sem
@@ -1235,7 +1308,8 @@
   };
   const [D, RES, ETES, TENDBRUTA, BARRB] = await Promise.all([
     carrega('dados'), carrega('usinas'), opcional('etes'), opcional('tendencia'),
-    opcional('barragens')]);
+    opcional('barragens'), carregaMaplibre()]);
+  if (!window.maplibregl) { falha('Não foi possível iniciar o mapa neste navegador.'); return; }
   /* A tendência por estação, do mesmo cálculo que alimenta o series.html:
      Theil-Sen em % da média da própria estação, por década. Camada opcional
      como as ETEs — quem não rodou o tendencia_mapa.py fica sem a linha na ficha
@@ -1456,6 +1530,72 @@
     }
   }
 
+  /* ---------- índice de desenho: trechos em blocos ----------
+     A placa de vídeo desenha os 462 mil trechos sem esforço, mas o vertex shader
+     passa por TODOS os segmentos de um bloco desenhado, vistos ou não. Em CPU
+     (SwiftShader) 2,2 milhões de segmentos levam 18 s por quadro, e num celular
+     modesto não é muito melhor — por isso os trechos ficam agrupados em blocos
+     (faixa de vazão × célula de uma grade de 40×40 sobre o `bounds`), contíguos
+     no buffer, e a cada quadro só os blocos que cruzam a tela são desenhados.
+
+     A faixa de vazão é o que o `corteZoom` e o teto de 60 mil trechos por quadro
+     faziam no Canvas 2D: de longe só os maiores, e as faixas menores entram
+     conforme se aproxima. Os blocos de uma mesma faixa e linhas vizinhas da grade
+     são contíguos, e blocos seguidos viram uma chamada de desenho só. */
+  const GC = 40, GC2 = GC * GC;
+  const FAIXAS = [15000, 60000, 150000, N];     // posto em ordem[] em que cada faixa termina
+  const NF = FAIXAS.length;
+  const faixaDe = new Uint8Array(N);
+  { let f = 0; for (let r = 0; r < N; r++) { while (r >= FAIXAS[f]) f++; faixaDe[ordem[r]] = f; } }
+  const celDe = new Int32Array(N);
+  const celExt = new Float32Array(GC2);          // maior meia-extensão de trecho em cada célula
+  const celTem = new Uint8Array(GC2);
+  const chTrIni = new Int32Array(NF * GC2 + 1);  // trechos por bloco (contagem, depois deslocamento)
+  const chTr = new Int32Array(N);                // trechos na ordem dos blocos
+  const chVIni = new Int32Array(NF * GC2 + 1);   // vértices: onde cada bloco começa no buffer
+  {
+    for (let i = 0; i < N; i++) {
+      const cx = Math.min(GC - 1, Math.max(0, Math.floor(((bbox[i * 4] + bbox[i * 4 + 2]) / 2 - bounds.minx) / spanX * GC)));
+      const cy = Math.min(GC - 1, Math.max(0, Math.floor(((bbox[i * 4 + 1] + bbox[i * 4 + 3]) / 2 - bounds.miny) / spanY * GC)));
+      const c = cy * GC + cx;
+      celDe[i] = c; celTem[c] = 1;
+      const e = Math.max(bbox[i * 4 + 2] - bbox[i * 4], bbox[i * 4 + 3] - bbox[i * 4 + 1]) / 2;
+      if (e > celExt[c]) celExt[c] = e;
+      chTrIni[faixaDe[i] * GC2 + c + 1]++;
+    }
+    for (let k = 0; k < NF * GC2; k++) chTrIni[k + 1] += chTrIni[k];
+    const cur = chTrIni.slice(0, NF * GC2);
+    for (let i = 0; i < N; i++) chTr[cur[faixaDe[i] * GC2 + celDe[i]]++] = i;
+    for (let k = 0; k < NF * GC2; k++) {
+      let nv = 0;
+      for (let e = chTrIni[k]; e < chTrIni[k + 1]; e++) nv += (inicio[chTr[e] + 1] - inicio[chTr[e]]) >> 1;
+      chVIni[k + 1] = chVIni[k] + nv;
+    }
+  }
+
+  /* Os vértices na ordem dos blocos, intercalados (x, y, id do trecho, arco). O
+     segmento n liga o vértice n ao n+1; quando os ids diferem é a emenda entre
+     dois trechos e o shader o descarta — assim o buffer não precisa de índice. O
+     arco (comprimento desde a nascente, em unidades de mundo) só serve ao
+     tracejado do "sem outorga". Sobra um vértice no fim, de id -1, para o último
+     segmento ler um vizinho que existe. */
+  function montaVertices() {
+    const nv = coords.length >> 1;
+    const buf = new Float32Array((nv + 2) * 4);
+    let o = 0;
+    for (let e = 0; e < N; e++) {
+      const i = chTr[e], a = inicio[i], b = inicio[i + 1];
+      let arco = 0;
+      for (let j = a; j < b; j += 2) {
+        const x = coords[j], y = coords[j + 1];
+        if (j > a) arco += Math.hypot(x - coords[j - 2], y - coords[j - 1]);
+        buf[o++] = x; buf[o++] = y; buf[o++] = i; buf[o++] = arco;
+      }
+    }
+    buf[o + 2] = -1; buf[o + 6] = -1;
+    return buf;
+  }
+
   /* ---------- escalas ---------- */
   const QMIN = 0.5, QMAX = 120000;
   const L0 = Math.log10(QMIN), L1 = Math.log10(QMAX);
@@ -1517,12 +1657,8 @@
   const largura = (v, z) => (0.35 + 3.4 * Math.pow(t01(v), 2.1)) * (1 + 0.5 * Math.log2(z));
 
   /* ---------- estado ---------- */
-  const cv = document.getElementById('cv');
-  const ctx = cv.getContext('2d');
-  // A rede inteira vai para um canvas fora de tela e só é redesenhada quando a
-  // vista muda; cada quadro da animação repinta apenas a camada de fluxo.
-  const off = document.createElement('canvas');
-  const octx = off.getContext('2d');
+  // O mapa é WebGL (mais abaixo); este canvas 2D fica por cima dele e leva o fluxo
+  // animado e os anéis de realce, reprojetados pela matriz da câmera.
   const cvF = document.getElementById('cvFluxo');
   const fctx = cvF.getContext('2d');
   const caixa = document.getElementById('mapa');
@@ -1530,7 +1666,6 @@
   const fichaEl = document.getElementById('ficha');
   const vazioEl = document.getElementById('vazio');
   let W = 0, H = 0, dpr = 1;
-  const vista = { x: 0, y: 0, k: 1 };
   const semMovimento = window.matchMedia('(prefers-reduced-motion: reduce)');
   /* Todas as camadas nascem desligadas. A primeira tela é a rede e mais nada:
      estações e reservatórios somam quase dois mil marcadores por cima do traço,
@@ -1671,7 +1806,6 @@
   }
   const tabB = (col, k) => { const v = BARRB[col][k]; return v >= 0 ? BARRB[col + 'Tab'][v] : null; };
   let animando = false;
-  let estaticoSujo = true;
   let realce = -1, estRealce = null, resRealce = null, eteRealce = null, barRealce = null, fixado = false, selecao = null;
 
   // no mobile a faixa recolhida come o rodapé da tela: o enquadramento
@@ -1691,11 +1825,26 @@
      maior valor em que o degrau ainda se lê como traço. O fluxo, de longe e de
      perto, segue a 120 quadros/s em 240× (headless), então o teto é do dado. */
   const ZOOM_MAX = 180;
-  function enquadrar() {
-    vista.k = kBase();
-    vista.x = W / 2 - (moldura.minx + molduraX / 2) * vista.k;
-    vista.y = (H - rodapeHud()) / 2 - (moldura.miny + molduraY / 2) * vista.k;
-  }
+  /* ---------- câmera: MapLibre GL ----------
+     A coordenada de mundo desta página já era o Mercator normalizado em [0,1]
+     (`projX`/`merc`), que é exatamente o espaço em que a MapLibre desenha: o
+     mundo inteiro tem 512 px em zoom 0 e dobra a cada nível. `vista.k` (px por
+     unidade de mundo) virou, portanto, `512 · 2^zoom`, e tudo o que era escrito
+     em múltiplos do enquadramento nacional (`ZOOM_MAX`, `kBase`) continua
+     valendo: só passa a ser traduzido para o zoom da biblioteca.
+
+     A biblioteca cuida do arrasto, da pinça, do giro (botão direito ou Ctrl, e
+     dois dedos no celular), da inclinação e da roda. O que ela não sabe é o
+     contrato desta página, e três coisas continuam nossas: o teto de zoom, o
+     centro preso ao `bounds` e o enquadramento do Brasil. */
+  const TAM = 512;
+  const zDeK = k => Math.log2(k / TAM);
+  const kDeZ = z => TAM * Math.pow(2, z);
+  const lonDeX = x => x * 360 - 180;
+  const latDeY = y => 360 / Math.PI * Math.atan(Math.exp(Math.PI * (1 - 2 * y))) - 90;
+  const zBase = () => zDeK(kBase());
+  const zRel = () => Math.pow(2, map.getZoom() - zBase());   // era vista.k / kBase()
+  const PITCH_MAX = 60;
 
   /* Trava do arrasto: o CENTRO da tela não sai da extensão dos dados. Sem isto o
      mapa é plano infinito — um arrasto distraído joga a rede para fora da tela e
@@ -1703,31 +1852,98 @@
      virando a única saída. A caixa é o `bounds`, extensão inteira da BHO (que vai
      dos Andes ao Prata), e não a `moldura` do contorno do Brasil: dá para chegar
      à costa e ao vizinho, não ao Atlântico vazio. Prender o centro, e não a
-     borda, é o que mantém a regra a mesma em qualquer zoom. */
-  function prender() {
-    const meio = (H - rodapeHud()) / 2;
-    const cx = (W / 2 - vista.x) / vista.k, cy = (meio - vista.y) / vista.k;
-    const px = Math.min(bounds.maxx, Math.max(bounds.minx, cx));
-    const py = Math.min(bounds.maxy, Math.max(bounds.miny, cy));
-    if (px !== cx) vista.x = W / 2 - px * vista.k;
-    if (py !== cy) vista.y = meio - py * vista.k;
+     borda, é o que mantém a regra a mesma em qualquer zoom — e com a vista
+     inclinada o `maxBounds` da biblioteca, que prende a BORDA da tela, deixaria
+     de fazer sentido. Roda em `transformCameraUpdate`, antes de cada movimento. */
+  const prender = next => {
+    const x = projX(next.center.lng), y = merc(next.center.lat);
+    const px = Math.min(bounds.maxx, Math.max(bounds.minx, x));
+    const py = Math.min(bounds.maxy, Math.max(bounds.miny, y));
+    if (px === x && py === y) return {};
+    return { center: new maplibregl.LngLat(lonDeX(px), latDeY(py)) };
+  };
+
+  const mapaGl = document.getElementById('mapaGl');
+  const map = new maplibregl.Map({
+    container: mapaGl,
+    /* Sem `glyphs` nem `sprite` de propósito: nenhuma camada desta página tem
+       texto, e as duas URLs seriam as únicas requisições da página aberta. */
+    style: { version: 8, sources: {}, layers: [
+      { id: 'fundo', type: 'background', paint: { 'background-color': css('--leito') || '#e2e8ea' } }] },
+    center: [-54, -14], zoom: 3.5, minZoom: 0, maxZoom: 14,
+    maxPitch: PITCH_MAX, pitch: 0, bearing: 0,
+    renderWorldCopies: false, attributionControl: false, fadeDuration: 0,
+    pixelRatio: Math.min(window.devicePixelRatio || 1, 2),
+    /* A suíte lê o canvas depois do quadro; sem isto o WebGL o entrega vazio. O
+       custo é uma cópia de quadro no compositor. */
+    preserveDrawingBuffer: true,
+    /* O teclado da biblioteca põe um tabindex no mapa, e a página já tem a ordem
+       de Tab que quer: controles, busca, painéis. */
+    keyboard: false,
+    clickTolerance: 3, dragRotate: false, touchPitch: false, pitchWithRotate: true,
+    transformCameraUpdate: prender,
+  });
+  const canvasMapa = map.getCanvas();
+  canvasMapa.id = 'cv';
+  canvasMapa.setAttribute('aria-label', 'Mapa dos rios do Brasil');
+
+  /* `vista` era o estado da câmera; hoje é só uma leitura dela, no mesmo contrato
+     de antes (k em px por unidade de mundo, x e y o deslocamento da origem). */
+  const vista = {
+    get k() { return kDeZ(map.getZoom()); },
+    get x() { return W / 2 - projX(map.getCenter().lng) * this.k; },
+    get y() { return (H - rodapeHud()) / 2 - merc(map.getCenter().lat) * this.k; },
+  };
+
+  function limitesDeZoom() {
+    map.setMinZoom(zBase() + Math.log2(0.9));
+    map.setMaxZoom(zBase() + Math.log2(ZOOM_MAX));
+    map.setPadding({ top: 0, left: 0, right: 0, bottom: rodapeHud() });
+  }
+  function enquadrar() {
+    map.stop();
+    map.jumpTo({ center: [lonDeX(moldura.minx + molduraX / 2), latDeY(moldura.miny + molduraY / 2)],
+                 zoom: zBase(), bearing: 0, pitch: 0 });
   }
 
   function redimensionar() {
     dpr = Math.min(window.devicePixelRatio || 1, 2);
     const r = caixa.getBoundingClientRect();
     W = r.width; H = r.height;
-    cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    off.width = cv.width; off.height = cv.height;
-    octx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    cvF.width = cv.width; cvF.height = cv.height;
+    cvF.width = Math.round(W * dpr); cvF.height = Math.round(H * dpr);
     fctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    estaticoSujo = true;
+    map.resize();
+    limitesDeZoom();
   }
 
-  const paraTela = (wx, wy) => [wx * vista.k + vista.x, wy * vista.k + vista.y];
-  const paraMundo = (sx, sy) => [(sx - vista.x) / vista.k, (sy - vista.y) / vista.k];
+  /* A matriz que leva o mundo [0,1] ao espaço de recorte, a mesma com que a
+     biblioteca desenha. É o que reprojeta o resto da página (acerto, marcadores,
+     fluxo) com a vista inclinada: `map.project` por vértice custaria uma alocação
+     cada, e o fluxo projeta dezenas de milhares por quadro. `CENTRO_W` é o w no
+     centro da tela — a referência da perspectiva: o traço de um ponto mais longe
+     que o centro afina, e o de um mais perto engrossa. */
+  let MAT = map.transform.customLayerMatrix(), CENTRO_W = 1;
+  function lerCamera() {
+    MAT = map.transform.customLayerMatrix();
+    const c = map.getCenter();
+    CENTRO_W = MAT[3] * projX(c.lng) + MAT[7] * merc(c.lat) + MAT[15];
+  }
+  const paraTela = (wx, wy) => {
+    const w = MAT[3] * wx + MAT[7] * wy + MAT[15];
+    if (!(w > 1)) return [NaN, NaN];
+    return [(MAT[0] * wx + MAT[4] * wy + MAT[12]) / w * 0.5 * W + 0.5 * W,
+            (1 - (MAT[1] * wx + MAT[5] * wy + MAT[13]) / w) * 0.5 * H];
+  };
+  /* O ponto do chão sob um pixel. Com a vista inclinada o pixel acima do
+     horizonte não toca o chão; a biblioteca devolve um valor finito qualquer, e o
+     acerto o ignora por não achar trecho ali. */
+  const paraMundo = (sx, sy) => {
+    const p = map.unproject([sx, sy]);
+    return [projX(p.lng), merc(p.lat)];
+  };
+  const escPersp = w => Math.max(0.4, Math.min(1.6, CENTRO_W / w));
+  // o 3D é uma camada a pedido: nasce plano, e `define3D` (mais abaixo) liga os gestos
+  map.touchZoomRotate.disableRotation();
 
   // contagem em cada controle
   // A legenda sai das mesmas funções que desenham o mapa
@@ -1956,56 +2172,553 @@
     livre: 'Os rios do Brasil, por rio livre de barragem',
   };
 
-  /* Triângulo, não círculo nem quadrado: com estação (círculo laranja) e
-     reservatório (quadrado âmbar) já na tela, a terceira camada precisa se
-     separar pela FORMA também, senão quem não distingue os matizes vê três
-     nuvens de pontos iguais. Vazado = a ETE não está ativa. */
-  function desenhaEtes(cx, z) {
-    if (!mostrarEtes || !ETES.length) return;
-    /* São 3,6 mil marcadores contra 1,8 mil estações, e concentrados: no
-       Sudeste eles se encostam. Em escala nacional o triângulo fica pequeno e
-       sem contorno -- o traço claro em volta engorda cada marca em 2 px e é o
-       que fazia a mancha fechar sobre os rios. O contorno volta a partir do
-       zoom em que os pontos já se separam sozinhos. */
-    const l = Math.min(8.5, 2.9 + 1.15 * z);
-    const contorna = z > 2.6;
-    cx.lineWidth = 1.1;
-    cx.globalAlpha = z > 4 ? 0.9 : 0.62;
-    for (const e of ETES) {
-      const [sx, sy] = paraTela(projX(e.lon), merc(e.lat));
-      if (sx < -12 || sy < -12 || sx > W + 12 || sy > H + 12) continue;
-      cx.beginPath();
-      cx.moveTo(sx, sy - l * 0.62);
-      cx.lineTo(sx + l * 0.55, sy + l * 0.38);
-      cx.lineTo(sx - l * 0.55, sy + l * 0.38);
-      cx.closePath();
-      if (e.status === 'ativa') {
-        cx.fillStyle = COR_ETE; cx.fill();
-        if (contorna) { cx.strokeStyle = COR_LEITO; cx.stroke(); }
-      } else {
-        cx.strokeStyle = COR_ETE; cx.stroke();
+  /* ---------- desenho: a rede, em WebGL ----------
+     Uma camada própria da MapLibre (`type: 'custom'`) desenha os 462 mil trechos
+     direto dos buffers que a página já decodificou — nada de montar GeoJSON, que
+     custava 1,5 GB de memória (notas/spike-maplibre.md). Cada segmento é um quad
+     instanciado, estendido no vertex shader em pixels de tela (largura em px, como
+     o Canvas 2D desenhava) e afinado pela perspectiva quando a vista inclina.
+
+     O que muda de modo para modo não é a geometria, é a cor e a espessura de cada
+     TRECHO: ficam em texturas de N × 4 bytes indexadas pelo número do trecho, e
+     trocar de modo, mexer na faixa de detalhe ou de tendência é regravar uma
+     textura — milissegundos, sem tocar nos 42 MB de vértices. */
+  const TEX_W = 1024, TEX_H = Math.ceil(N / TEX_W);
+  const texBase = new Uint8Array(TEX_W * TEX_H * 4);   // o cinza da rede por baixo dos modos coloridos
+  const texSem = new Uint8Array(TEX_W * TEX_H * 4);    // "sem outorga", tracejado
+  const texCor = new Uint8Array(TEX_W * TEX_H * 4);    // a cor do modo
+  const texLar = new Uint8Array(TEX_W * TEX_H);        // largura-base em 4/255 px
+  let texSujo = true;
+  for (let i = 0; i < N; i++) texLar[i] = Math.round((0.35 + 3.4 * Math.pow(t01(q[i]), 2.1)) / 4 * 255);
+  const foraArr = new Uint8Array(N);
+  for (const i of foraBr) foraArr[i] = 1;
+
+  const rgbaCache = new Map();
+  const cor1 = document.createElement('canvas');
+  cor1.width = cor1.height = 1;
+  const c1 = cor1.getContext('2d', { willReadFrequently: true });
+  /* qualquer cor CSS vira [r, g, b, a] em bytes — as cores moram nas variáveis
+     CSS, e o tema muda em tempo de execução */
+  function rgba(txt) {
+    let v = rgbaCache.get(txt);
+    if (v) return v;
+    c1.clearRect(0, 0, 1, 1);
+    c1.fillStyle = '#000'; c1.fillStyle = txt;
+    c1.fillRect(0, 0, 1, 1);
+    const d = c1.getImageData(0, 0, 1, 1).data;
+    v = [d[0], d[1], d[2], d[3]];
+    rgbaCache.set(txt, v);
+    return v;
+  }
+  const poe = (tex, i, c, a) => { const o = 4 * i; tex[o] = c[0]; tex[o + 1] = c[1]; tex[o + 2] = c[2]; tex[o + 3] = a; };
+
+  /* As mesmas regras de cor do desenho antigo, trecho a trecho. Alfa 0 é "não
+     desenhar": é por ele que o filtro de detalhe (`qMinUsuario`), a faixa da
+     tendência e os pisos de cada modo atuam, sem filtro nenhum no shader. */
+  function preencheTexturas() {
+    texCor.fill(0); texBase.fill(0); texSem.fill(0);
+    const qmin = qMinUsuario;
+    if (modo === 'vazao') {
+      // fora do Brasil vai esmaecido: bacia compartilhada de verdade, mas sem posto brasileiro medindo
+      for (let i = 0; i < N; i++)
+        if (q[i] >= qmin) poe(texCor, i, rgba(cor(q[i])), foraArr[i] ? 87 : 255);
+    } else {
+      /* A rede inteira primeiro em cinza — a geografia do rio não muda com o modo —
+         e por cima só quem tem número. A largura continua saindo da vazão, nunca
+         do que a cor mede. */
+      const fria = rgba(COR_FRIA);
+      for (let i = 0; i < N; i++) if (q[i] >= qmin) poe(texBase, i, fria, 128);
+      if (modo === 'tendencia' && TEND_TR) {
+        for (const i of ordemTend) {
+          if (q[i] < qmin) continue;
+          const p = TEND_PCT[TEND_TR[i] - 1];
+          if (!(p <= corteTend)) continue;       // `<=` para que Infinity deixe passar os que enchem
+          poe(texCor, i, rgba(corTend(p)), 255);
+        }
+      } else if (modo === 'livre' && ordemLivre) {
+        for (const i of ordemLivre) if (q[i] >= qmin) poe(texCor, i, rgba(LIV[classeLivre(LIVRE[i])]), 255);
+      } else if (modo === 'esgoto' || modo === 'industria' || modo === 'outorga') {
+        if (semDado.size && modo !== 'outorga') {
+          const sem = rgba(COR_SEM);
+          for (const i of semDado) if (q[i] >= qmin) poe(texSem, i, sem, 255);
+        }
+        const piso = modo === 'outorga' ? OMIN : PMIN;
+        for (const i of (ordemPol[modo] || [])) {
+          if (q[i] < qmin) continue;
+          const f = fracDe(i);
+          if (f < piso) continue;
+          if (modo === 'industria') poe(texCor, i, rgba(COR_IND), Math.round((2 + Math.round(p01(f) * 6)) / 8 * 255));
+          else poe(texCor, i, rgba(modo === 'outorga' ? corOut(f) : corPol(f)), 255);
+        }
       }
     }
-    cx.globalAlpha = 1;
+    texSujo = true;
   }
 
-  /* Barragens só no modo delas, e como traço curto na cor da tinta: são 17 mil,
-     e um disco por barragem fecharia o Sudeste numa mancha. A marca cresce com
-     o zoom, quando elas já se separam. */
-  function desenhaBarragens(cx, z) {
-    if (modo !== 'livre' || !BARR.length) return;
-    // Em escala nacional são poeira: um pixel e meio, translúcidos. Com o
-    // marcador de 2 px o Rio Grande do Sul virava uma mancha preta e a cor dos
-    // rios, que é o dado do modo, sumia embaixo.
-    const l = Math.min(6, 0.9 + 0.55 * z);
-    cx.fillStyle = COR_BARR;
-    cx.globalAlpha = z > 4 ? 0.9 : z > 2 ? 0.6 : 0.35;
-    for (const b of BARR) {
-      const [sx, sy] = paraTela(projX(b.lon), merc(b.lat));
-      if (sx < -8 || sy < -8 || sx > W + 8 || sy > H + 8) continue;
-      cx.fillRect(sx - l / 2, sy - l / 2, l, l);
+  /* As passadas de cada modo. `alfa` 1 desenha só o que é opaco, 2 só o translúcido
+     (0 = tudo); `cap` estende o traço além do vértice para fechar as emendas, o
+     que só se pode fazer no opaco — no translúcido a sobreposição das pontas
+     escureceria cada emenda. Quem é translúcido vai sem tampa, e cada trecho
+     seguinte começa onde o anterior termina. */
+  const PASSOS = {
+    vazao: [{ t: 'cor', alfa: 2, cap: 0 }, { t: 'cor', alfa: 1, cap: 1 }],
+    base: { t: 'base', alfa: 0, cap: 0 },
+    sem: { t: 'sem', alfa: 0, cap: 1, traco: 1, minW: 1.2 },
+    cor: [{ t: 'cor', alfa: 2, cap: 0 }, { t: 'cor', alfa: 1, cap: 1 }],
+  };
+  const passosDoModo = () => modo === 'vazao' ? PASSOS.vazao
+    : [PASSOS.base, ...((modo === 'esgoto' || modo === 'industria') && semDado.size ? [PASSOS.sem] : []),
+       ...PASSOS.cor.map(p => modo === 'livre' ? { ...p, minW: 1 } : p)];
+
+  const VS_REDE = `#version 300 es
+precision highp float;
+uniform mat4 uM; uniform vec2 uVp;
+uniform float uZf, uRef, uMinW, uExtra, uCap, uAlfa;
+uniform vec4 uUni;
+uniform highp sampler2D uCor; uniform highp sampler2D uLar;
+in vec2 aA; in vec2 aB; in float aIa; in float aIb; in float aCa; in float aCb; in vec2 aQ;
+out vec4 vCor; out float vLado; out float vHw; out float vAl; out float vCum;
+void main() {
+  gl_Position = vec4(2., 2., 2., 1.);
+  if (aIa != aIb) return;
+  int id = int(aIa);
+  ivec2 uv = ivec2(id & 1023, id >> 10);
+  vec4 c = uUni.a > 0. ? uUni : texelFetch(uCor, uv, 0);
+  if (c.a <= 0.) return;
+  if (uAlfa == 1. && c.a < .99) return;
+  if (uAlfa == 2. && c.a >= .99) return;
+  float w = texelFetch(uLar, uv, 0).r * 4. * uZf + uExtra;
+  w = max(w, uMinW);
+  vec4 pa = uM * vec4(aA, 0., 1.), pb = uM * vec4(aB, 0., 1.);
+  const float E = 1.;
+  if (pa.w < E && pb.w < E) return;
+  float ta = 0., tb = 1., dw = pb.w - pa.w;
+  if (pa.w < E) ta = (E - pa.w) / dw;
+  if (pb.w < E) tb = (E - pa.w) / dw;
+  vec4 qa = mix(pa, pb, ta), qb = mix(pa, pb, tb);
+  vec2 sa = qa.xy / qa.w * uVp * .5, sb = qb.xy / qb.w * uVp * .5;
+  vec2 d = sb - sa;
+  float L = length(d);
+  d = L > 1e-4 ? d / L : vec2(1., 0.);
+  float t = aQ.x;
+  w *= clamp(uRef / mix(qa.w, qb.w, t), .4, 1.6);
+  float hw = max(w, 1.) * .5;
+  float ext = hw + 1.;
+  vec2 p = mix(sa, sb, t) + d * (t * 2. - 1.) * (uCap > .5 ? hw : 0.) + vec2(-d.y, d.x) * aQ.y * ext;
+  gl_Position = vec4(p / (uVp * .5), 0., 1.);
+  vCor = c; vLado = aQ.y * ext; vHw = hw; vAl = min(w, 1.);
+  vCum = mix(aCa, aCb, mix(ta, tb, t));
+}`;
+  const FS_REDE = `#version 300 es
+precision highp float;
+uniform float uTraco, uK, uPx;
+in vec4 vCor; in float vLado; in float vHw; in float vAl; in float vCum;
+out vec4 o;
+void main() {
+  float a = clamp(vHw + .5 - abs(vLado), 0., 1.) * vAl * vCor.a;
+  if (uTraco > 0. && mod(vCum * uK, 7. * uPx) > 3. * uPx) discard;
+  if (a <= .003) discard;
+  o = vec4(vCor.rgb * a, a);
+}`;
+
+  function compila(gl, vs, fs) {
+    const sh = (t, s) => {
+      const o = gl.createShader(t);
+      gl.shaderSource(o, s); gl.compileShader(o);
+      if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(o));
+      return o;
+    };
+    const p = gl.createProgram();
+    gl.attachShader(p, sh(gl.VERTEX_SHADER, vs));
+    gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs));
+    gl.linkProgram(p);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p));
+    return p;
+  }
+
+  /* Quais células a vista toca. O retângulo de cada célula, alargado pela maior
+     meia-extensão dos trechos dela, vai por quatro cantos ao espaço de recorte, e
+     só sai se os quatro caírem do mesmo lado de um plano. Canto atrás da câmera
+     (w ≤ 0) conta como dentro: com a vista inclinada o chão a sul do centro pode
+     passar da câmera, e errar para dentro só custa desenhar um bloco a mais. */
+  const celVis = new Uint8Array(GC2);
+  function cortaCelulas() {
+    const M = MAT, sx = spanX / GC, sy = spanY / GC;
+    for (let c = 0; c < GC2; c++) {
+      if (!celTem[c]) { celVis[c] = 0; continue; }
+      const e = celExt[c];
+      const x0 = bounds.minx + (c % GC) * sx - e, x1 = x0 + sx + 2 * e;
+      const y0 = bounds.miny + Math.floor(c / GC) * sy - e, y1 = y0 + sy + 2 * e;
+      let fora = 15, atras = false;
+      for (let k = 0; k < 4; k++) {
+        const x = k & 1 ? x1 : x0, y = k & 2 ? y1 : y0;
+        const w = M[3] * x + M[7] * y + M[15];
+        if (w <= 0) { atras = true; break; }
+        const px = M[0] * x + M[4] * y + M[12], py = M[1] * x + M[5] * y + M[13];
+        fora &= (px < -w ? 1 : 0) | (px > w ? 2 : 0) | (py < -w ? 4 : 0) | (py > w ? 8 : 0);
+      }
+      celVis[c] = atras || fora === 0 ? 1 : 0;
     }
-    cx.globalAlpha = 1;
+  }
+
+  /* Quantas faixas de vazão a escala pede. É o que o `corteZoom` e o teto de 60 mil
+     trechos faziam: de longe só os maiores (as duas primeiras faixas são os 60
+     mil de antes), e o resto entra conforme se aproxima, porque a vista já cobre
+     pouco chão. Em WebGL por software tira-se mais uma faixa, e outra enquanto a
+     câmera se mexe. */
+  function faixaMax() {
+    const z = zRel();
+    let f = z < 1.6 ? 1 : z < 3.5 ? 2 : 3;
+    if (POR_SOFTWARE) f = Math.max(0, f - (map.isMoving() ? 2 : 1));
+    return f;
+  }
+
+  const RIOS = {
+    id: 'rios', type: 'custom', renderingMode: '2d',
+    gl: null, perdido: false, desenhou: 0,
+    ranges: [],
+    onAdd(_m, gl) { this.inicia(gl); },
+    inicia(gl) {
+      this.gl = gl; this.perdido = false;
+      const p = this.p = compila(gl, VS_REDE, FS_REDE);
+      this.u = {}; this.a = {};
+      for (const n of ['uM', 'uVp', 'uZf', 'uRef', 'uMinW', 'uExtra', 'uCap', 'uAlfa', 'uUni', 'uCor', 'uLar', 'uTraco', 'uK', 'uPx'])
+        this.u[n] = gl.getUniformLocation(p, n);
+      for (const n of ['aA', 'aB', 'aIa', 'aIb', 'aCa', 'aCb', 'aQ']) this.a[n] = gl.getAttribLocation(p, n);
+      this.bufV = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.bufV);
+      gl.bufferData(gl.ARRAY_BUFFER, montaVertices(), gl.STATIC_DRAW);   // 42 MB, e o array de JS vai embora
+      this.bufRealce = gl.createBuffer();
+      this.nRealce = 0; this.realceGL = null;
+      this.bufQ = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.bufQ);
+      gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([0, -1, 0, 1, 1, -1, 1, 1]), gl.STATIC_DRAW);
+      this.vao = gl.createVertexArray();
+      gl.bindVertexArray(this.vao);
+      const a = this.a;
+      for (const n of ['aA', 'aB', 'aIa', 'aIb', 'aCa', 'aCb']) { gl.enableVertexAttribArray(a[n]); gl.vertexAttribDivisor(a[n], 1); }
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.bufQ);
+      gl.enableVertexAttribArray(a.aQ); gl.vertexAttribPointer(a.aQ, 2, gl.FLOAT, false, 0, 0);
+      gl.bindVertexArray(null);
+      const tex = (ifmt, fmt, dados) => {
+        const t = gl.createTexture();
+        gl.bindTexture(gl.TEXTURE_2D, t);
+        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+        gl.texImage2D(gl.TEXTURE_2D, 0, ifmt, TEX_W, TEX_H, 0, fmt, gl.UNSIGNED_BYTE, dados);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+        return t;
+      };
+      this.tex = { base: tex(gl.RGBA8, gl.RGBA, texBase), sem: tex(gl.RGBA8, gl.RGBA, texSem),
+                   cor: tex(gl.RGBA8, gl.RGBA, texCor), lar: tex(gl.R8, gl.RED, texLar) };
+      texSujo = false;
+    },
+    sobeTexturas(gl) {
+      gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+      for (const [k, dados] of [['base', texBase], ['sem', texSem], ['cor', texCor]]) {
+        gl.bindTexture(gl.TEXTURE_2D, this.tex[k]);
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, TEX_W, TEX_H, gl.RGBA, gl.UNSIGNED_BYTE, dados);
+      }
+      texSujo = false;
+    },
+    /* o rio inteiro sob o cursor, em traço largo e na cor de destaque, desenhado
+       por cima e sem passar pelas texturas */
+    montaRealce(gl, i) {
+      this.realceGL = i;
+      if (i < 0) { this.nRealce = 0; return; }
+      const lista = trechosDoRio(i);
+      let nv = 0;
+      for (const t of lista) nv += (inicio[t + 1] - inicio[t]) >> 1;
+      const buf = new Float32Array((nv + 2) * 4);
+      let o = 0;
+      for (const t of lista)
+        for (let j = inicio[t]; j < inicio[t + 1]; j += 2) {
+          buf[o++] = coords[j]; buf[o++] = coords[j + 1]; buf[o++] = t; buf[o++] = 0;
+        }
+      buf[o + 2] = -1; buf[o + 6] = -1;
+      gl.bindBuffer(gl.ARRAY_BUFFER, this.bufRealce);
+      gl.bufferData(gl.ARRAY_BUFFER, buf, gl.DYNAMIC_DRAW);
+      this.nRealce = nv;
+    },
+    aponta(gl, buf, v0) {
+      const a = this.a;
+      gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+      gl.vertexAttribPointer(a.aA, 2, gl.FLOAT, false, 16, v0 * 16);
+      gl.vertexAttribPointer(a.aB, 2, gl.FLOAT, false, 16, (v0 + 1) * 16);
+      gl.vertexAttribPointer(a.aIa, 1, gl.FLOAT, false, 16, v0 * 16 + 8);
+      gl.vertexAttribPointer(a.aCa, 1, gl.FLOAT, false, 16, v0 * 16 + 12);
+      gl.vertexAttribPointer(a.aIb, 1, gl.FLOAT, false, 16, (v0 + 1) * 16 + 8);
+      gl.vertexAttribPointer(a.aCb, 1, gl.FLOAT, false, 16, (v0 + 1) * 16 + 12);
+    },
+    render(gl, matriz) {
+      if (this.perdido || !this.p) return;
+      const u = this.u, dpx = gl.drawingBufferWidth / (canvasMapa.clientWidth || 1);
+      lerCamera();
+      if (texSujo) this.sobeTexturas(gl);
+      if (this.realceGL !== realce) this.montaRealce(gl, realce);
+
+      // os blocos desenhados: faixa a faixa, células vistas, vizinhos fundidos
+      cortaCelulas();
+      const fm = faixaMax();
+      this.ranges.length = 0;
+      for (let f = 0; f <= fm; f++) {
+        let v0 = -1, v1 = -1;
+        for (let c = 0; c < GC2; c++) {
+          if (!celVis[c]) continue;
+          const k = f * GC2 + c, a = chVIni[k], b = chVIni[k + 1];
+          if (b === a) continue;
+          if (a === v1) { v1 = b; continue; }
+          if (v0 >= 0) this.ranges.push(v0, v1 - v0);
+          v0 = a; v1 = b;
+        }
+        if (v0 >= 0) this.ranges.push(v0, v1 - v0);
+      }
+
+      gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+      gl.disable(gl.DEPTH_TEST); gl.disable(gl.STENCIL_TEST); gl.disable(gl.CULL_FACE); gl.disable(gl.SCISSOR_TEST);
+      gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+      gl.useProgram(this.p);
+      gl.bindVertexArray(this.vao);
+      gl.uniformMatrix4fv(u.uM, false, matriz);
+      gl.uniform2f(u.uVp, gl.drawingBufferWidth, gl.drawingBufferHeight);
+      gl.uniform1f(u.uZf, dpx * (1 + 0.5 * Math.log2(zRel())));
+      gl.uniform1f(u.uRef, CENTRO_W);
+      gl.uniform1f(u.uPx, dpx);
+      gl.uniform1f(u.uK, kDeZ(map.getZoom()) * dpx);
+      gl.uniform1i(u.uCor, 0); gl.uniform1i(u.uLar, 1);
+      gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, this.tex.lar);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.uniform4f(u.uUni, 0, 0, 0, 0);
+      gl.uniform1f(u.uExtra, 0);
+      for (const ps of passosDoModo()) {
+        gl.bindTexture(gl.TEXTURE_2D, this.tex[ps.t]);
+        gl.uniform1f(u.uAlfa, ps.alfa); gl.uniform1f(u.uCap, ps.cap);
+        gl.uniform1f(u.uMinW, (ps.minW || 0) * dpx); gl.uniform1f(u.uTraco, ps.traco || 0);
+        for (let r = 0; r < this.ranges.length; r += 2) {
+          this.aponta(gl, this.bufV, this.ranges[r]);
+          gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.ranges[r + 1]);
+        }
+      }
+      if (this.nRealce) {
+        const c = rgba(COR_ACC);
+        gl.uniform4f(u.uUni, c[0] / 255, c[1] / 255, c[2] / 255, 1);
+        gl.uniform1f(u.uAlfa, 0); gl.uniform1f(u.uCap, 1); gl.uniform1f(u.uMinW, 0); gl.uniform1f(u.uTraco, 0);
+        gl.uniform1f(u.uExtra, 2.4 * dpx);
+        this.aponta(gl, this.bufRealce, 0);
+        gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.nRealce);
+      }
+      gl.bindVertexArray(null);
+      this.desenhou++;
+    },
+    onRemove() {},
+  };
+
+  /* ---------- desenho: estações, reservatórios, ETEs e barragens ----------
+     Uma segunda camada própria, de marcadores: cada ponto é um quad instanciado e
+     a forma (círculo, quadrado, triângulo), o contorno e o vazado saem de uma
+     função de distância no fragment shader. Nenhuma camada de texto nem ícone da
+     biblioteca — nada pede glyph ou sprite à rede, e as cores seguem as variáveis
+     CSS sem regerar imagem a cada troca de tema. O tamanho é em pixels de tela. */
+  const VS_PONTOS = `#version 300 es
+precision highp float;
+uniform mat4 uM; uniform vec2 uVp; uniform float uEsc, uMarg;
+in vec2 aPos; in vec2 aTam; in vec4 aCor;
+out vec2 vLoc; out vec4 vCor; out float vOco; out float vTam;
+void main() {
+  gl_Position = vec4(2., 2., 2., 1.);
+  vec4 p = uM * vec4(aPos, 0., 1.);
+  if (p.w < 1.) return;
+  float tam = aTam.x * uEsc;
+  float meia = tam * .5 + uMarg;
+  vec2 c = vec2(float(gl_VertexID & 1), float((gl_VertexID >> 1) & 1)) * 2. - 1.;
+  vec2 sc = p.xy / p.w * uVp * .5;
+  gl_Position = vec4((sc + c * meia) / (uVp * .5), 0., 1.);
+  vLoc = c * meia; vCor = aCor; vOco = aTam.y; vTam = tam;
+}`;
+  const FS_PONTOS = `#version 300 es
+precision highp float;
+uniform int uForma; uniform vec4 uLinha; uniform float uLw, uAlfa;
+in vec2 vLoc; in vec4 vCor; in float vOco; in float vTam;
+out vec4 o;
+void main() {
+  float r = vTam * .5, d;
+  if (uForma == 0) d = length(vLoc) - r;
+  else if (uForma == 1) d = max(abs(vLoc.x), abs(vLoc.y)) - r;
+  else {
+    float l = vTam;
+    vec2 A = vec2(0., -.62 * l), nR = normalize(vec2(1., -.55)), nL = vec2(-nR.x, nR.y);
+    d = max(vLoc.y - .38 * l, max(dot(vLoc - A, nR), dot(vLoc - A, nL)));
+  }
+  float dentro = clamp(.5 - d, 0., 1.);
+  float anel = dentro * clamp(d + uLw + .5, 0., 1.);
+  vec4 fill = vec4(vCor.rgb * vCor.a, vCor.a) * dentro * (vOco > .5 ? 0. : 1.);
+  vec4 ca = vOco > .5 ? vCor : uLinha;
+  vec4 ring = vec4(ca.rgb * ca.a, ca.a) * anel * ((vOco > .5 || uLw > 0.) ? 1. : 0.);
+  o = (ring + fill * (1. - ring.a)) * uAlfa;
+}`;
+
+  /* Um conjunto de pontos por camada: x, y de mundo, tamanho-base e se é vazado; a
+     cor vai em bytes ao lado, porque na tendência cada estação tem a sua. */
+  const CONJ = { est: null, res: null, ete: null, bar: null };
+  const sujoPontos = { est: true, res: true, ete: true, bar: true };
+  function dadosPontos(lista, tamDe, corDe, ocoDe) {
+    const f = new Float32Array(lista.length * 4), c = new Uint8Array(lista.length * 4);
+    lista.forEach((o, k) => {
+      f[4 * k] = projX(o.lon); f[4 * k + 1] = merc(o.lat);
+      f[4 * k + 2] = tamDe(o); f[4 * k + 3] = ocoDe(o) ? 1 : 0;
+      const cc = corDe(o);
+      c[4 * k] = cc[0]; c[4 * k + 1] = cc[1]; c[4 * k + 2] = cc[2]; c[4 * k + 3] = cc[3];
+    });
+    return { f, c, n: lista.length };
+  }
+  const montaConjunto = k => {
+    if (k === 'est') {
+      const tend = modo === 'tendencia';
+      return dadosPontos(EST_VIS, () => 1, e => rgba(tend ? corTend(TEND[e.cod][0]) : COR_ACC), () => false);
+    }
+    if (k === 'res') return dadosPontos(RES, u => 2.6 + 4 * t01(u.turb || 1), () => rgba(COR_USINA), () => false);
+    if (k === 'ete') return dadosPontos(ETES, () => 1, () => rgba(COR_ETE), t => t.status !== 'ativa');
+    return dadosPontos(BARR, () => 1, () => rgba(COR_BARR), () => false);
+  };
+
+  const PONTOS = {
+    id: 'pontos', type: 'custom', renderingMode: '2d', perdido: false, p: null,
+    onAdd(_m, gl) { this.inicia(gl); },
+    inicia(gl) {
+      this.perdido = false;
+      const p = this.p = compila(gl, VS_PONTOS, FS_PONTOS);
+      this.u = {}; this.a = {};
+      for (const n of ['uM', 'uVp', 'uEsc', 'uMarg', 'uForma', 'uLinha', 'uLw', 'uAlfa']) this.u[n] = gl.getUniformLocation(p, n);
+      for (const n of ['aPos', 'aTam', 'aCor']) this.a[n] = gl.getAttribLocation(p, n);
+      this.b = {};
+      for (const k of Object.keys(CONJ)) { this.b[k] = { f: gl.createBuffer(), c: gl.createBuffer(), n: 0 }; sujoPontos[k] = true; }
+      this.vao = gl.createVertexArray();
+    },
+    sobe(gl, k) {
+      const d = montaConjunto(k), b = this.b[k];
+      gl.bindBuffer(gl.ARRAY_BUFFER, b.f); gl.bufferData(gl.ARRAY_BUFFER, d.f, gl.STATIC_DRAW);
+      gl.bindBuffer(gl.ARRAY_BUFFER, b.c); gl.bufferData(gl.ARRAY_BUFFER, d.c, gl.STATIC_DRAW);
+      b.n = d.n; sujoPontos[k] = false;
+    },
+    render(gl, matriz) {
+      if (this.perdido || !this.p) return;
+      const quais = [['est', mostrarEst], ['res', mostrarRes], ['ete', mostrarEtes], ['bar', modo === 'livre' && BARR.length > 0]];
+      if (!quais.some(([, on]) => on)) return;
+      const u = this.u, a = this.a, dpx = gl.drawingBufferWidth / (canvasMapa.clientWidth || 1), z = zRel();
+      gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+      gl.disable(gl.DEPTH_TEST); gl.disable(gl.STENCIL_TEST); gl.disable(gl.CULL_FACE); gl.disable(gl.SCISSOR_TEST);
+      gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+      gl.useProgram(this.p);
+      gl.bindVertexArray(this.vao);
+      gl.uniformMatrix4fv(u.uM, false, matriz);
+      gl.uniform2f(u.uVp, gl.drawingBufferWidth, gl.drawingBufferHeight);
+      const leito = rgba(COR_LEITO);
+      gl.uniform4f(u.uLinha, leito[0] / 255, leito[1] / 255, leito[2] / 255, 1);
+      for (const [k, on] of quais) {
+        if (!on) continue;
+        if (sujoPontos[k]) this.sobe(gl, k);
+        const b = this.b[k];
+        if (!b.n) continue;
+        let forma = 0, esc = 1, lw = 1, alfa = 1;
+        if (k === 'est') { forma = 0; esc = 2 * (modo === 'tendencia' ? Math.min(5, 2.4 + 0.8 * z) : Math.min(4.2, 1.6 + 0.8 * z)); alfa = 0.82; }
+        else if (k === 'res') { forma = 1; esc = 1 + 0.18 * Math.log2(Math.max(1, z)); alfa = 0.88; }
+        else if (k === 'ete') { forma = 2; esc = Math.min(8.5, 2.9 + 1.15 * z); lw = 1.1; alfa = z > 4 ? 0.9 : 0.62; }
+        else { forma = 1; esc = Math.min(6, 0.9 + 0.55 * z); lw = 0; alfa = z > 4 ? 0.9 : z > 2 ? 0.6 : 0.35; }
+        gl.uniform1i(u.uForma, forma); gl.uniform1f(u.uEsc, esc * dpx); gl.uniform1f(u.uMarg, 1.5 * dpx);
+        gl.uniform1f(u.uLw, lw * dpx); gl.uniform1f(u.uAlfa, alfa);
+        // o contorno claro das ETEs só volta quando os pontos já se separam sozinhos
+        if (k === 'ete' && z <= 2.6) gl.uniform1f(u.uLw, 0);
+        gl.bindBuffer(gl.ARRAY_BUFFER, b.f);
+        gl.enableVertexAttribArray(a.aPos); gl.vertexAttribPointer(a.aPos, 2, gl.FLOAT, false, 16, 0); gl.vertexAttribDivisor(a.aPos, 1);
+        gl.enableVertexAttribArray(a.aTam); gl.vertexAttribPointer(a.aTam, 2, gl.FLOAT, false, 16, 8); gl.vertexAttribDivisor(a.aTam, 1);
+        gl.bindBuffer(gl.ARRAY_BUFFER, b.c);
+        gl.enableVertexAttribArray(a.aCor); gl.vertexAttribPointer(a.aCor, 4, gl.UNSIGNED_BYTE, true, 0, 0); gl.vertexAttribDivisor(a.aCor, 1);
+        gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, b.n);
+      }
+      gl.bindVertexArray(null);
+    },
+    onRemove() {},
+  };
+
+  /* ---------- camadas de fundo: terra, divisas, estados, satélite ----------
+     Poucos vértices (algumas centenas de anéis): vão como GeoJSON para as camadas
+     nativas da biblioteca. O Canvas 2D preenchia a terra com `evenodd`; aqui o
+     aninhamento dos anéis vira polígono com buraco. */
+  const geoAnel = p => {
+    const r = [];
+    for (let j = 0; j < p.length; j += 2) r.push([lonDeX(p[j]), latDeY(p[j + 1])]);
+    r.push(r[0]);
+    return r;
+  };
+  function geoTerra() {
+    const caixas = terra.map(p => {
+      let a = 1, b = 1, c = 0, d = 0;
+      for (let j = 0; j < p.length; j += 2) {
+        if (p[j] < a) a = p[j]; if (p[j] > c) c = p[j];
+        if (p[j + 1] < b) b = p[j + 1]; if (p[j + 1] > d) d = p[j + 1];
+      }
+      return [a, b, c, d];
+    });
+    const pais = terra.map((p, r) => {
+      const cont = [];
+      for (let k = 0; k < terra.length; k++) {
+        const c = caixas[k];
+        if (k === r || p[0] < c[0] || p[0] > c[2] || p[1] < c[1] || p[1] > c[3]) continue;
+        if (noAnel(terra[k], p[0], p[1])) cont.push(k);
+      }
+      return cont;
+    });
+    const polis = new Map();
+    terra.forEach((p, r) => { if (pais[r].length % 2 === 0) polis.set(r, [geoAnel(p)]); });
+    terra.forEach((p, r) => {
+      if (pais[r].length % 2 === 0) return;
+      const pai = pais[r].reduce((m, k) => (pais[k].length > pais[m].length ? k : m));
+      if (polis.has(pai)) polis.get(pai).push(geoAnel(p));
+    });
+    return { type: 'Feature', properties: {}, geometry: { type: 'MultiPolygon', coordinates: [...polis.values()] } };
+  }
+  const geoLinhas = (lista, fecha) => ({ type: 'Feature', properties: {}, geometry: { type: 'MultiLineString',
+    coordinates: lista.map(p => (fecha ? geoAnel(p) : geoAnel(p).slice(0, -1))) } });
+
+  function montaFundo() {
+    map.addSource('terra', { type: 'geojson', data: geoTerra(), maxzoom: 9, tolerance: 0.5 });
+    map.addLayer({ id: 'terra', type: 'fill', source: 'terra', paint: { 'fill-color': COR_TERRA, 'fill-antialias': true } });
+    /* o véu por cima da imagem: a rampa é sequencial azul e o pé dela desaparece
+       sobre água e mata escura; sem isto a metade fina da rede some */
+    map.addLayer({ id: 'veu-sat', type: 'background', layout: { visibility: 'none' },
+                   paint: { 'background-color': COR_TERRA, 'background-opacity': 0.38 } });
+    map.addSource('divisas', { type: 'geojson', data: geoLinhas(divisas, false), maxzoom: 9, tolerance: 0.5 });
+    map.addLayer({ id: 'divisas', type: 'line', source: 'divisas', paint: { 'line-color': COR_DIVISA, 'line-width': 1 } });
+    map.addSource('ufs', { type: 'geojson', data: geoLinhas(contornos, true), maxzoom: 9, tolerance: 0.5 });
+    map.addLayer({ id: 'ufs', type: 'line', source: 'ufs', paint: { 'line-color': COR_UF, 'line-width': 1 } });
+    map.addLayer(RIOS);
+    map.addLayer(PONTOS);
+  }
+  function coresDoMapa() {
+    if (!map.getLayer('terra')) return;
+    map.setPaintProperty('fundo', 'background-color', css('--leito'));
+    map.setPaintProperty('terra', 'fill-color', COR_TERRA);
+    map.setPaintProperty('veu-sat', 'background-color', COR_TERRA);
+    map.setPaintProperty('divisas', 'line-color', COR_DIVISA);
+    map.setPaintProperty('ufs', 'line-color', COR_UF);
+  }
+
+  /* Satélite: a imagem é uma fonte raster que só existe enquanto a camada está
+     ligada. Desligar remove a fonte, e com ela os ladrilhos em voo — sem isto
+     continuariam baixando para uma camada que ninguém vê. O ano é 2016 por causa
+     da licença (CC BY 4.0 só nele no WMTS da EOX). */
+  const SAT_URL = 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/GoogleMapsCompatible/';
+  const SAT_ZMAX = 14;
+  function defineSatelite(on) {
+    if (!map.getLayer('terra')) return;
+    if (on && !map.getSource('sat')) {
+      map.addSource('sat', { type: 'raster', tiles: [SAT_URL + '{z}/{y}/{x}.jpg'], tileSize: 256, maxzoom: SAT_ZMAX });
+      map.addLayer({ id: 'sat', type: 'raster', source: 'sat' }, 'veu-sat');   // atenção: {y} antes de {x}
+    }
+    if (!on && map.getSource('sat')) { map.removeLayer('sat'); map.removeSource('sat'); }
+    map.setLayoutProperty('veu-sat', 'visibility', on ? 'visible' : 'none');
   }
 
   const contadores = () => {
@@ -2013,409 +2726,101 @@
     document.getElementById('nRes').textContent = '(' + RES.length + ')';
     document.getElementById('nEtes').textContent = '(' + ETES.length + ')';
     // conta com o mesmo corte da camada de fluxo, sobre o que está de fato à vista
-    const corte = Math.max(5, 240 / Math.pow(zAtual, 1.35));
-    let n = 0;
-    for (const i of visiveis) if (q[i] >= corte) n++;
+    lerCamera();
+    const corte = Math.max(5, 240 / Math.pow(zRel(), 1.35));
+    const n = candidatosFluxo(corte).length;
     document.getElementById('nFluxo').textContent = '(' + n + ')';
   };
 
-  let rapido = false, timerQualidade = null, pedido = null;
+  let timerContadores = null;
+  /* O mapa se redesenha sozinho quando a câmera mexe; o que esta página agenda é
+     o que não é câmera: os contadores ao lado de cada camada, o aviso de "nenhum
+     rio por aqui" e o fluxo. */
   function quadroUnico() {
-    if (!pedido) pedido = requestAnimationFrame(() => { pedido = null; desenhar(); contadores(); });
+    map.triggerRepaint();
+    clearTimeout(timerContadores);
+    timerContadores = setTimeout(() => { contadores(); atualizaVazio(); }, 60);
   }
-  function agendar(modoRapido) {          // a vista mudou
-    rapido = modoRapido;
-    estaticoSujo = true;
-    if (animando) tocar(); else quadroUnico();
-    if (modoRapido) {
-      clearTimeout(timerQualidade);
-      timerQualidade = setTimeout(() => {
-        rapido = false; estaticoSujo = true;
-        quadroUnico();
-      }, 130);
-    }
+  function agendar() { quadroUnico(); desenhaSobre(); }   // a vista ou o filtro mudou
+  function repintar() { map.triggerRepaint(); desenhaSobre(); }   // mudou só o realce
+  function repintarFundo() {                            // mudou uma camada
+    texSujo = true;
+    for (const k of Object.keys(sujoPontos)) sujoPontos[k] = true;
+    quadroUnico(); desenhaSobre();
   }
-  function repintar() {                   // mudou só o realce
-    if (animando) tocar(); else quadroUnico();
-  }
-  function repintarFundo() {              // mudou uma camada do fundo
-    estaticoSujo = true;
-    if (animando) tocar(); else quadroUnico();
+  function refazModo() { preencheTexturas(); for (const k of Object.keys(sujoPontos)) sujoPontos[k] = true; }
+
+  /* "Nenhum rio de porte por aqui": a vista chegou perto e não há trecho desenhado
+     nela. Procura só nas células à vista, e para no primeiro que cai na tela. */
+  let visiveisN = 0;
+  function atualizaVazio() {
+    lerCamera(); cortaCelulas();
+    const z = zRel(), fm = faixaMax();
+    let achou = false;
+    for (let f = 0; f <= fm && !achou; f++)
+      for (let c = 0; c < GC2 && !achou; c++) {
+        if (!celVis[c]) continue;
+        const k = f * GC2 + c;
+        for (let e = chTrIni[k]; e < chTrIni[k + 1]; e++) {
+          const i = chTr[e];
+          if (q[i] < qMinUsuario) continue;
+          const [sx, sy] = paraTela((bbox[i * 4] + bbox[i * 4 + 2]) / 2, (bbox[i * 4 + 1] + bbox[i * 4 + 3]) / 2);
+          if (sx >= -60 && sx <= W + 60 && sy >= -60 && sy <= H + 60) { achou = true; break; }
+        }
+      }
+    visiveisN = achou ? 1 : 0;
+    vazioEl.classList.toggle('on', !achou && z > 2);
   }
 
-  /* ---------- camada estática: contorno dos estados + rede ---------- */
-  let visiveis = [], visiveisSet = new Set(), zAtual = 1;
+  /* O trecho está entre os desenhados nesta escala? É a pergunta que o acerto do
+     cursor faz: não se acerta o que a tela não mostra. */
+  const desenhado = i => faixaDe[i] <= faixaMax() && q[i] >= qMinUsuario;
 
   function traca(c, i) {
-    const a = inicio[i], b = inicio[i + 1];
-    c.moveTo(coords[a] * vista.k + vista.x, coords[a + 1] * vista.k + vista.y);
-    for (let j = a + 2; j < b; j += 2)
-      c.lineTo(coords[j] * vista.k + vista.x, coords[j + 1] * vista.k + vista.y);
-  }
-  /* ---------- base de satélite (opcional, e só ela sai à rede) ----------
-     A coordenada de mundo desta página já é Mercator normalizado em [0,1]
-     (projX/merc lá em cima), que é exatamente o espaço dos ladrilhos XYZ: o
-     ladrilho (z,x,y) ocupa [x/2^z,(x+1)/2^z] x [y/2^z,(y+1)/2^z]. Por isso a
-     camada é um drawImage na mesma câmera, sem reprojeção e sem biblioteca.
-
-     É a ÚNICA parte da página que depende da rede. Nasce desligada e cai calada
-     para a base vetorial se o ladrilho não vier — abrir por file:// sem internet
-     tem que continuar funcionando, que é requisito, não conveniência.
-
-     O ano é 2016 por causa da licença, não da estética: no WMTS da EOX só a
-     camada sem sufixo (o mosaico de 2016) é CC BY 4.0; de 2017 em diante é
-     CC BY-NC-SA, e o ShareAlike não cabe no MIT deste repositório. */
-  let mostrarSat = false;
-  const SAT_URL = 'https://tiles.maps.eox.at/wmts/1.0.0/s2cloudless_3857/default/GoogleMapsCompatible/';
-  const SAT_ZMAX = 14;          // o Sentinel-2 é de 10 m; acima disso o servidor só interpola
-  const satCache = new Map();
-  let satTimer = null;
-
-  /* Um ladrilho que chega não pode repintar a rede inteira na hora: numa tela
-     nacional são ~130 ladrilhos, e cada repinte estático redesenha dezenas de
-     milhares de trechos. Junta tudo numa passada por vez. */
-  function pedeRepinteSat() {
-    if (satTimer) return;
-    satTimer = setTimeout(() => { satTimer = null; repintarFundo(); }, 120);
-  }
-
-  /* Desligar corta o que está em voo. Sem isto, os ladrilhos que a última vista
-     pediu continuam baixando contra uma camada que ninguém mais vê, e cada um
-     que chega dispara um repinte dos 462 mil trechos. Some da memória junto:
-     ladrilho pela metade não serve de cache, e volta a ser pedido se ligar de
-     novo. */
-  function paraSatelite() {
-    if (satTimer) { clearTimeout(satTimer); satTimer = null; }
-    for (const [chave, img] of satCache)
-      if (!img.complete) {
-        img.onload = img.onerror = null;
-        img.src = '';
-        satCache.delete(chave);
-      }
-  }
-
-  /* O Map itera na ordem de inserção, então reinserir no uso transforma o
-     descarte de "o mais antigo que entrou" em "o mais antigo que serviu". Sem
-     isto o primeiro a sair seria o nível nacional — que é raro de pedir e é
-     exatamente o pai de que desenhaAncestral() vive. */
-  function usa(chave, img) {
-    satCache.delete(chave);
-    satCache.set(chave, img);
-    return img;
-  }
-
-  function satTile(z, x, y) {
-    const chave = z + '/' + x + '/' + y;
-    const achado = satCache.get(chave);
-    if (achado) return usa(chave, achado);
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => { if (mostrarSat) pedeRepinteSat(); };
-    img.onerror = () => { img.ruim = true; };
-    img.src = SAT_URL + z + '/' + y + '/' + x + '.jpg';   // atenção: y antes de x
-    satCache.set(chave, img);
-    if (satCache.size > 500) satCache.delete(satCache.keys().next().value);
-    return img;
-  }
-
-  const pronto = img => img && !img.ruim && img.complete && img.naturalWidth;
-
-  /* O nível que acabou de ser pedido demora; o de cima já está no cache e cobre
-     exatamente o mesmo chão, com menos detalhe. Sem isto, cada passo de zoom
-     começa do chapado de terra e a imagem volta em retalhos — o que se lê como
-     falha, não como espera. Aqui o pai entra borrado e é substituído pelo nítido
-     quando ele chega. Só se aproveita o que JÁ está no cache: nada disto pede um
-     ladrilho a mais à rede. Vale também para o ladrilho que não veio: buraco
-     vira borrão, que é bem menos mentiroso sobre o que há no chão. */
-  function desenhaAncestral(z, x, y, px, py, pw, ph) {
-    for (let d = 1; d <= 5 && z - d >= 0; d++) {
-      const k = (z - d) + '/' + (x >> d) + '/' + (y >> d), p = satCache.get(k);
-      if (!pronto(p)) continue;
-      usa(k, p);
-      /* O quadrante deste ladrilho dentro do pai. A conta é fracionária de
-         propósito: `naturalWidth >> d` zera em imagem pequena e o recorte sai
-         fora dos limites, e aí o drawImage não desenha nada — calado. */
-      const m = (1 << d) - 1, sw = p.naturalWidth / (1 << d), sh = p.naturalHeight / (1 << d);
-      octx.drawImage(p, (x & m) * sw, (y & m) * sh, sw, sh, px, py, pw, ph);
-      return;
+    const a = inicio[i], b = inicio[i + 1], M = MAT, hW = 0.5 * W, hH = 0.5 * H;
+    let pen = false;
+    for (let j = a; j < b; j += 2) {
+      const wx = coords[j], wy = coords[j + 1];
+      const w = M[3] * wx + M[7] * wy + M[15];
+      if (!(w > 1)) { pen = false; continue; }
+      const sx = (M[0] * wx + M[4] * wy + M[12]) / w * hW + hW, sy = (1 - (M[1] * wx + M[5] * wy + M[13]) / w) * hH;
+      if (pen) c.lineTo(sx, sy); else { c.moveTo(sx, sy); pen = true; }
     }
   }
-
-  function desenhaSatelite() {
-    const z = Math.max(0, Math.min(SAT_ZMAX, Math.round(Math.log2(vista.k * dpr / 256))));
-    const n = 2 ** z, lado = vista.k / n;
-    const [w0x, w0y] = paraMundo(0, 0), [w1x, w1y] = paraMundo(W, H);
-    const y0 = Math.max(0, Math.floor(w0y * n)), y1 = Math.min(n - 1, Math.floor(w1y * n));
-    for (let x = Math.floor(w0x * n); x <= Math.floor(w1x * n); x++)
-      for (let y = y0; y <= y1; y++) {
-        const xn = ((x % n) + n) % n;
-        const img = satTile(z, xn, y);
-        /* Arredondar as duas BORDAS e usar a diferença como largura. Arredondar
-           a largura deixa fio de 1 px entre ladrilhos em escala fracionária. */
-        const px = Math.round(x * lado + vista.x), py = Math.round(y * lado + vista.y);
-        const pw = Math.round((x + 1) * lado + vista.x) - px;
-        const ph = Math.round((y + 1) * lado + vista.y) - py;
-        if (pronto(img)) octx.drawImage(img, px, py, pw, ph);
-        else desenhaAncestral(z, xn, y, px, py, pw, ph);
-      }
+  /* A perspectiva de um trecho: pelo primeiro vértice, o suficiente para afinar o
+     traço do que está longe e engrossar o do que está perto. Em degraus, para os
+     trechos de mesma largura seguirem num stroke() só. */
+  const DEGRAUS_PERSP = [0.4, 0.55, 0.7, 0.85, 1, 1.2, 1.5];
+  function perspDe(i) {
+    const j = inicio[i], w = MAT[3] * coords[j] + MAT[7] * coords[j + 1] + MAT[15];
+    if (!(w > 1)) return 0;
+    const s = escPersp(w);
+    let m = DEGRAUS_PERSP[0];
+    for (const d of DEGRAUS_PERSP) if (Math.abs(d - s) < Math.abs(m - s)) m = d;
+    return m;
   }
 
-  function desenharEstatico() {
-    const z = zAtual = vista.k / kBase();
-    octx.clearRect(0, 0, W, H);
-    // o corte é o mais restritivo entre o pedido do usuário e o do zoom
-    const corteZoom = rapido ? 60 / Math.pow(z, 1.5) : 1.2 / Math.pow(z, 1.6);
-    const corteQ = Math.max(qMinUsuario, corteZoom * 0.02);
-    const [w0x, w0y] = paraMundo(0, 0), [w1x, w1y] = paraMundo(W, H);
-
-    octx.lineCap = 'round'; octx.lineJoin = 'round';
-
-    // massa de terra por baixo de tudo — ou a imagem, quando a camada está ligada
-    if (mostrarSat) {
-      desenhaSatelite();
-      /* Véu por cima da imagem: a rampa é sequencial azul e o pé dela
-         (--ramp-0..2) desaparece sobre água e mata escura. Sem isto a metade
-         fina da rede some justamente onde o leitor foi conferir o rio. */
-      octx.fillStyle = COR_TERRA; octx.globalAlpha = 0.38;
-      octx.fillRect(0, 0, W, H);
-      octx.globalAlpha = 1;
-    } else {
-      octx.beginPath();
-      octx.fillStyle = COR_TERRA;
-      for (const p of terra) {
-        octx.moveTo(p[0] * vista.k + vista.x, p[1] * vista.k + vista.y);
-        for (let j = 2; j < p.length; j += 2)
-          octx.lineTo(p[j] * vista.k + vista.x, p[j + 1] * vista.k + vista.y);
-        octx.closePath();
+  /* Os trechos de porte (q ≥ corte) das células à vista, do maior para o menor —
+     é a ordem em que o teto de cabeças do fluxo os gasta. Em cache enquanto a
+     câmera e o corte não mudam. */
+  let candChave = '', candLista = [];
+  const faixaQmax = FAIXAS.map((_, f) => q[ordem[f === 0 ? 0 : FAIXAS[f - 1]]]);
+  function candidatosFluxo(corte) {
+    const chave = MAT.join(',') + '|' + corte;
+    if (chave === candChave) return candLista;
+    candChave = chave;
+    cortaCelulas();
+    const lista = [];
+    for (let f = 0; f < NF; f++) {
+      if (faixaQmax[f] < corte) continue;
+      for (let c = 0; c < GC2; c++) {
+        if (!celVis[c]) continue;
+        const k = f * GC2 + c;
+        for (let e = chTrIni[k]; e < chTrIni[k + 1]; e++) if (q[chTr[e]] >= corte) lista.push(chTr[e]);
       }
-      octx.fill('evenodd');
     }
-
-    // divisa dos países um pouco mais forte que a das UFs
-    octx.beginPath();
-    octx.strokeStyle = COR_DIVISA; octx.lineWidth = 1;
-    for (const p of divisas) {
-      octx.moveTo(p[0] * vista.k + vista.x, p[1] * vista.k + vista.y);
-      for (let j = 2; j < p.length; j += 2)
-        octx.lineTo(p[j] * vista.k + vista.x, p[j + 1] * vista.k + vista.y);
-    }
-    octx.stroke();
-
-    octx.beginPath();
-    octx.strokeStyle = COR_UF; octx.lineWidth = 1;
-    for (const p of contornos) {
-      octx.moveTo(p[0] * vista.k + vista.x, p[1] * vista.k + vista.y);
-      for (let j = 2; j < p.length; j += 2)
-        octx.lineTo(p[j] * vista.k + vista.x, p[j + 1] * vista.k + vista.y);
-    }
-    octx.stroke();
-    octx.beginPath();
-
-    // Teto de trechos por quadro: como ordem[] é decrescente em vazão, cortar no
-    // teto sempre sacrifica os menores primeiro — o desenho degrada pela base,
-    // não pelo topo.
-    const teto = rapido ? 14000 : 60000;
-    visiveis = [];
-    for (let oi = 0; oi < N; oi++) {
-      const i = ordem[oi];
-      if (q[i] < corteQ) break;                     // ordem[] é decrescente em vazão
-      if (bbox[i * 4 + 2] < w0x || bbox[i * 4] > w1x ||
-          bbox[i * 4 + 3] < w0y || bbox[i * 4 + 1] > w1y) continue;
-      if (visiveis.length >= teto) break;
-      visiveis.push(i);
-    }
-    visiveisSet = new Set(visiveis);
-
-    if (modo === 'vazao') {
-      // Duas passadas: o que está fora do Brasil vai esmaecido. São bacias
-      // compartilhadas de verdade — a água do Solimões nasce no Peru — mas ali
-      // não há posto brasileiro medindo, e o traço mais fraco diz isso.
-      for (const passo of [0, 1]) {
-        octx.globalAlpha = passo === 0 ? 0.34 : 1;
-        let corAtual = '', larAtual = -1;
-        octx.beginPath();
-        for (const i of visiveis) {
-          if (foraBr.has(i) !== (passo === 0)) continue;
-          // cor e largura em degraus: trechos vizinhos em vazão caem no mesmo
-          // degrau e entram num único stroke()
-          const c = cor(q[i]), lw = Math.round(largura(q[i], z) * 3) / 3;
-          if (c !== corAtual || lw !== larAtual) {
-            octx.stroke(); octx.beginPath();
-            octx.strokeStyle = c; octx.lineWidth = lw;
-            corAtual = c; larAtual = lw;
-          }
-          traca(octx, i);
-        }
-        octx.stroke();
-      }
-    } else {
-      /* Poluição e tendência. A rede inteira vai primeiro em cinza — a
-         geografia do rio não muda com o modo, e sem ela os trechos coloridos
-         ficariam soltos no vazio. Por cima entra só quem tem número.
-
-         A largura continua saindo da vazão, nunca do que a cor mede: engrossar
-         o traço pelo efluente faria um córrego imundo parecer um rio grande, e
-         pela tendência faria um riacho secando parecer o São Francisco. */
-      octx.globalAlpha = 0.5;
-      octx.strokeStyle = COR_FRIA;
-      let larFria = -1;
-      octx.beginPath();
-      for (const i of visiveis) {
-        const lw = Math.round(largura(q[i], z) * 3) / 3;
-        if (lw !== larFria) {
-          octx.stroke(); octx.beginPath();
-          octx.lineWidth = lw; larFria = lw;
-        }
-        traca(octx, i);
-      }
-      octx.stroke();
-      octx.globalAlpha = 1;
-
-      /* A tendência pinta RIO, não ponto. Cada trecho leva a da estação que o
-         mede — a primeira abaixo dele, pela repartição que o tendencia_rede.py
-         faz da rede. É o que dá forma geográfica ao número: o Gorutuba secando
-         aparece como um rio laranja no norte de Minas, e não como um disco.
-
-         O que fica cinza fica cinza por dois motivos diferentes, e a nota do
-         modo diz os dois: ou não há estação rio abaixo, ou o trecho é fino
-         demais para carregar o número de uma régua distante. */
-      if (modo === 'tendencia') {
-        let corTend_ = '', larTend = -1;
-        octx.beginPath();
-        for (const i of (ordemTend || [])) {
-          if (q[i] < corteQ) continue;
-          if (bbox[i * 4 + 2] < w0x || bbox[i * 4] > w1x ||
-              bbox[i * 4 + 3] < w0y || bbox[i * 4 + 1] > w1y) continue;
-          // o mesmo corte da faixa, que filtra estação: escrito como `<=` para
-          // que corteTend === Infinity deixe passar as que estão enchendo
-          const p = TEND_PCT[TEND_TR[i] - 1];
-          if (!(p <= corteTend)) continue;
-          const c = corTend(p), lw = Math.round(largura(q[i], z) * 3) / 3;
-          if (c !== corTend_ || lw !== larTend) {
-            octx.stroke(); octx.beginPath();
-            octx.strokeStyle = c; octx.lineWidth = lw;
-            corTend_ = c; larTend = lw;
-          }
-          traca(octx, i);
-        }
-        octx.stroke();
-      }
-
-      /* Rio livre: o mesmo molde da tendência, por cima do cinza. Só pinta o
-         pedaço menor que o último corte; o resto fica no cinza da rede, que a
-         legenda nomeia. */
-      if (modo === 'livre') {
-        let corL = '', larL = -1;
-        octx.beginPath();
-        for (const i of (ordemLivre || [])) {
-          if (q[i] < corteQ) continue;
-          if (bbox[i * 4 + 2] < w0x || bbox[i * 4] > w1x ||
-              bbox[i * 4 + 3] < w0y || bbox[i * 4 + 1] > w1y) continue;
-          const c = LIV[classeLivre(LIVRE[i])], lw = Math.max(1, Math.round(largura(q[i], z) * 3) / 3);
-          if (c !== corL || lw !== larL) {
-            octx.stroke(); octx.beginPath();
-            octx.strokeStyle = c; octx.lineWidth = lw;
-            corL = c; larL = lw;
-          }
-          traca(octx, i);
-        }
-        octx.stroke();
-      }
-
-      /* Onde a cidade coleta esgoto e não há outorga nenhuma: não é rio limpo,
-         é rio sem registro. Vai antes da rampa para nunca cobrir um dado real.
-         Os modos vêm nomeados, não negados: o tracejado fala de efluente, e um
-         `modo !== 'outorga'` o deixaria entrar em qualquer modo novo. */
-      if (semDado.size && (modo === 'esgoto' || modo === 'industria')) {
-        octx.save();
-        octx.setLineDash([3, 4]);
-        octx.strokeStyle = COR_SEM;
-        octx.beginPath();
-        let larSem = -1;
-        for (const i of visiveis) {
-          if (!semDado.has(i)) continue;
-          const lw = Math.max(1.2, Math.round(largura(q[i], z) * 3) / 3);
-          if (lw !== larSem) {
-            octx.stroke(); octx.beginPath();
-            octx.lineWidth = lw; larSem = lw;
-          }
-          traca(octx, i);
-        }
-        octx.stroke();
-        octx.restore();
-      }
-
-      /* No modo indústria a intensidade vem da opacidade, não do tom — é uma
-         cor só, para não competir com a rampa do esgoto na leitura. Os dois
-         casos batem em degraus (cor+opacidade+largura) pelo mesmo motivo de
-         sempre: trechos no mesmo degrau saem num stroke() único. */
-      let corAtual = '', larAtual = -1, alfaAtual = -1;
-      octx.beginPath();
-      for (const i of (ordemPol[modo] || [])) {
-        // o filtro de detalhe do usuário continua valendo; o que não vale aqui
-        // é o teto por quadro, que comeria os córregos mais sujos
-        if (q[i] < corteQ) continue;
-        if (bbox[i * 4 + 2] < w0x || bbox[i * 4] > w1x ||
-            bbox[i * 4 + 3] < w0y || bbox[i * 4 + 1] > w1y) continue;
-        const f = fracDe(i);
-        if (f < (modo === 'outorga' ? OMIN : PMIN)) continue;
-        const t = p01(f);
-        const c = modo === 'industria' ? COR_IND
-                : modo === 'outorga' ? corOut(f) : corPol(f);
-        const alfa = modo === 'industria' ? (2 + Math.round(t * 6)) / 8 : 1;
-        const lw = Math.round(largura(q[i], z) * 3) / 3;
-        if (c !== corAtual || lw !== larAtual || alfa !== alfaAtual) {
-          octx.stroke(); octx.beginPath();
-          octx.strokeStyle = c; octx.lineWidth = lw; octx.globalAlpha = alfa;
-          corAtual = c; larAtual = lw; alfaAtual = alfa;
-        }
-        traca(octx, i);
-      }
-      octx.stroke();
-      octx.globalAlpha = 1;
-    }
-    octx.globalAlpha = 1;
-
-    // Marcadores no fundo, não a cada quadro: eram 2 mil arcos por frame, ~15 ms
-    // que a animação pagava sem necessidade — eles só mudam quando a vista muda.
-    if (mostrarEst) {
-      /* No modo tendência o ponto sai da divergente, igual ao rio que ele pinta:
-         é onde a medição é literal, e sem ele a cor do trecho não teria origem
-         na tela. O raio cresce um pouco — mas menos do que crescia quando o
-         ponto era o dado inteiro, porque agora o rio embaixo carrega o matiz e
-         um disco grande demais tapa justamente o trecho que explica. Trocar
-         fillStyle a cada ponto não custa: são algumas centenas, e o desenho em
-         lote existe por causa dos 462 mil trechos, não dos marcadores. */
-      const tend = modo === 'tendencia';
-      const r = tend ? Math.min(5, 2.4 + 0.8 * z) : Math.min(4.2, 1.6 + 0.8 * z);
-      octx.fillStyle = COR_ACC; octx.strokeStyle = COR_LEITO; octx.lineWidth = 1;
-      octx.globalAlpha = 0.82;
-      for (const e of EST_VIS) {
-        const [sx, sy] = paraTela(projX(e.lon), merc(e.lat));
-        if (sx < -8 || sy < -8 || sx > W + 8 || sy > H + 8) continue;
-        if (tend) octx.fillStyle = corTend(TEND[e.cod][0]);
-        octx.beginPath(); octx.arc(sx, sy, r, 0, 6.2832); octx.fill(); octx.stroke();
-      }
-      octx.globalAlpha = 1;
-    }
-    if (mostrarRes) {
-      octx.strokeStyle = COR_LEITO; octx.lineWidth = 1;
-      octx.fillStyle = COR_USINA;
-      octx.globalAlpha = 0.88;
-      for (const u of RES) {
-        const [sx, sy] = paraTela(projX(u.lon), merc(u.lat));
-        if (sx < -12 || sy < -12 || sx > W + 12 || sy > H + 12) continue;
-        // lado do quadrado pela vazão média turbinada
-        const l = (2.6 + 4 * t01(u.turb || 1)) * (1 + 0.18 * Math.log2(Math.max(1, z)));
-        octx.fillRect(sx - l / 2, sy - l / 2, l, l);
-        octx.strokeRect(sx - l / 2, sy - l / 2, l, l);
-      }
-      octx.globalAlpha = 1;
-    }
-    desenhaEtes(octx, z);
-    desenhaBarragens(octx, z);
-    estaticoSujo = false;
-    vazioEl.classList.toggle('on', visiveis.length === 0 && z > 2);
+    lista.sort((a, b) => q[b] - q[a]);
+    return (candLista = lista);
   }
 
   /* =====================================================================
@@ -2487,25 +2892,30 @@
     GP.cap = cap;
   }
   function geometriaPerto(z, corte) {
-    const chave = vista.k + '|' + vista.x + '|' + vista.y + '|' + W + '|' + H + '|' + corte;
-    if (GP.chave === chave && GP.vis === visiveis) return GP;
-    GP.chave = chave; GP.vis = visiveis; GP.n = 0; GP.pecas.length = 0;
-    const M = FP.margem, k = vista.k, ox = vista.x, oy = vista.y;
-    let sx = new Float64Array(256), sy = new Float64Array(256);
-    for (const i of visiveis) {
+    const chave = MAT.join(',') + '|' + W + '|' + H + '|' + corte;
+    const cand = candidatosFluxo(corte);
+    if (GP.chave === chave && GP.vis === cand) return GP;
+    GP.chave = chave; GP.vis = cand; GP.n = 0; GP.pecas.length = 0;
+    const M = FP.margem, T = MAT, hW = 0.5 * W, hH = 0.5 * H;
+    let sx = new Float64Array(256), sy = new Float64Array(256), sw = new Float64Array(256);
+    for (const i of cand) {
       if (q[i] < corte) continue;
       const a = inicio[i], nv = (inicio[i + 1] - a) >> 1;
       if (nv < 2) continue;
-      if (sx.length < nv) { sx = new Float64Array(nv * 2); sy = new Float64Array(nv * 2); }
+      if (sx.length < nv) { sx = new Float64Array(nv * 2); sy = new Float64Array(nv * 2); sw = new Float64Array(nv * 2); }
       for (let v = 0; v < nv; v++) {
-        sx[v] = coords[a + 2 * v] * k + ox; sy[v] = coords[a + 2 * v + 1] * k + oy;
+        // projeção pela matriz da câmera; vértice atrás dela vira NaN e a peça o pula
+        const wx = coords[a + 2 * v], wy = coords[a + 2 * v + 1], w = T[3] * wx + T[7] * wy + T[15];
+        sw[v] = w;
+        if (w > 1) { sx[v] = (T[0] * wx + T[4] * wy + T[12]) / w * hW + hW; sy[v] = (1 - (T[1] * wx + T[5] * wy + T[13]) / w) * hH; }
+        else { sx[v] = NaN; sy[v] = NaN; }
       }
       // arco acumulado do trecho cru, só para ancorar as peças em `cu`
       let arco = 0, v = 0;
       while (v < nv - 1) {
         const dentro = s => Math.max(sx[s], sx[s + 1]) >= -M && Math.min(sx[s], sx[s + 1]) <= W + M &&
                             Math.max(sy[s], sy[s + 1]) >= -M && Math.min(sy[s], sy[s + 1]) <= H + M;
-        if (!dentro(v)) { arco += Math.hypot(sx[v + 1] - sx[v], sy[v + 1] - sy[v]); v++; continue; }
+        if (!dentro(v)) { arco += Math.hypot(sx[v + 1] - sx[v], sy[v + 1] - sy[v]) || 0; v++; continue; }
         const ini = v;
         let fim = v + 1;
         while (fim < nv - 1 && dentro(fim)) fim++;      // fim = último vértice da peça
@@ -2536,10 +2946,10 @@
             const d = Math.hypot(dx, dy) || 1;
             nx[p0 + j] = -dy / d; ny[p0 + j] = dx / d;
           }
-          GP.pecas.push({ i, p: p0, n: np, a: cu[p0], b: cu[p0 + np - 1] });
+          GP.pecas.push({ i, p: p0, n: np, a: cu[p0], b: cu[p0 + np - 1], esc: escPersp(sw[ini]) });
           GP.n = n;
         }
-        for (let s = ini; s < fim; s++) arco += Math.hypot(sx[s + 1] - sx[s], sy[s + 1] - sy[s]);
+        for (let s = ini; s < fim; s++) arco += Math.hypot(sx[s + 1] - sx[s], sy[s + 1] - sy[s]) || 0;
         v = fim;
       }
     }
@@ -2569,7 +2979,7 @@
     // no começo da mistura o estilo de perto ainda é tênue: poucas partículas bastam
     const teto = (toqueGrosso ? FP.maxCabecas * 0.45 : FP.maxCabecas) * Math.min(1, 0.25 + 1.5 * mistura);
     for (const pc of g.pecas) {
-      const qq = q[pc.i], lwD = lwFluxo(qq, z) * 2;      // largura desenhada do rio, em px
+      const qq = q[pc.i], lwD = lwFluxo(qq, z) * 2 * pc.esc;      // largura desenhada do rio, em px
       const lwFaixa = Math.max(1, Math.min(2.8, 1 + lwD * 0.07));
       const lwKey = Math.round(lwFaixa * 4);
       if (lwKey !== lwGrupo) {
@@ -2626,23 +3036,26 @@
     ctx.lineCap = 'butt'; ctx.lineJoin = 'round';
     ctx.globalAlpha = 0.5 * mistura;
     ctx.strokeStyle = COR_FLUXO;
-    let larAtual = -1, conta = 0;
-    ctx.beginPath();
-    for (const i of visiveis) {
-      if (q[i] < corte) continue;
+    // um Path2D por largura: com a vista inclinada a largura varia pela distância,
+    // e agrupar por degrau mantém o número de stroke() pequeno
+    const grupos = new Map();
+    let conta = 0;
+    for (const i of candidatosFluxo(corte)) {
+      const s = perspDe(i);
+      if (!s) continue;
       conta++;
-      const lw = lwFluxo(q[i], z);
-      if (lw !== larAtual) {
-        ctx.stroke(); ctx.beginPath();
-        ctx.lineWidth = lw;
-        const traco = 3 + lw * 1.5, vao = 16 + lw * 5;
-        ctx.setLineDash([traco, vao]);
-        ctx.lineDashOffset = -fase % (traco + vao);
-        larAtual = lw;
-      }
-      traca(ctx, i);
+      const lw = Math.max(0.7, Math.round(largura(q[i], z) * 0.5 * s * 3) / 3);
+      let g = grupos.get(lw);
+      if (!g) grupos.set(lw, g = new Path2D());
+      traca(g, i);
     }
-    ctx.stroke();
+    for (const [lw, g] of grupos) {
+      ctx.lineWidth = lw;
+      const traco = 3 + lw * 1.5, vao = 16 + lw * 5;
+      ctx.setLineDash([traco, vao]);
+      ctx.lineDashOffset = -fase % (traco + vao);
+      ctx.stroke(g);
+    }
     ctx.setLineDash([]);
     ctx.globalAlpha = 1;
     return conta;
@@ -2654,7 +3067,7 @@
     const ctx = fctx;
     ctx.clearRect(0, 0, W, H);
     if (semMovimento.matches) t = 0;
-    const z = zAtual;
+    const z = zRel();
     const corte = Math.max(5, 240 / Math.pow(z, 1.35));   // só os rios de porte na vista
     const mistura = suave01((z - FP.zIni) / (FP.zPleno - FP.zIni));
     let conta = 0;
@@ -2664,77 +3077,25 @@
     nFluxo = conta;
   }
 
-  // O laço da animação só repinta a camada de fluxo; o fundo fica parado.
-  function quadroFluxo(t) {
-    if (estaticoSujo) desenhar();
-    else desenharFluxo(t === undefined ? performance.now() : t);
-  }
-
-  function desenhar(t) {
-    if (estaticoSujo) desenharEstatico();
-    ctx.clearRect(0, 0, W, H);
-    ctx.drawImage(off, 0, 0, W, H);
-    const z = zAtual;
-    const [w0x, w0y] = paraMundo(0, 0), [w1x, w1y] = paraMundo(W, H);
-
-    if (animando && !rapido) desenharFluxo(t === undefined ? performance.now() : t);
+  /* Tudo o que vai no canvas 2D de cima: o fluxo animado e os anéis de realce das
+     marcas. Roda a cada quadro do mapa e, com o fluxo ligado, a cada quadro da
+     animação — a câmera lida é sempre a do quadro que está na tela. */
+  function desenhaSobre(t) {
+    lerCamera();
+    if (animando) desenharFluxo(t === undefined ? performance.now() : t);
     else fctx.clearRect(0, 0, W, H);
-
-    if (realce >= 0) {
-      ctx.strokeStyle = COR_ACC;
-      let larAtual = -1;
-      ctx.beginPath();
-      for (const i of trechosDoRio(realce)) {
-        if (bbox[i * 4 + 2] < w0x || bbox[i * 4] > w1x ||
-            bbox[i * 4 + 3] < w0y || bbox[i * 4 + 1] > w1y) continue;
-        const lw = Math.round((largura(q[i], z) + 2.4) * 2) / 2;
-        if (lw !== larAtual) { ctx.stroke(); ctx.beginPath(); ctx.lineWidth = lw; larAtual = lw; }
-        traca(ctx, i);
-      }
-      ctx.stroke();
-    }
-
-    if (mostrarEst) {
-      const tend = modo === 'tendencia';
-      const r = tend ? Math.min(5.2, 2 + 0.7 * z) : Math.min(3.6, 1.15 + 0.62 * z);
-      ctx.fillStyle = COR_ACC; ctx.strokeStyle = COR_LEITO; ctx.lineWidth = 1;
-      ctx.globalAlpha = 0.72;
-      for (const e of EST_VIS) {
-        const [sx, sy] = paraTela(projX(e.lon), merc(e.lat));
-        if (sx < -8 || sy < -8 || sx > W + 8 || sy > H + 8) continue;
-        if (tend) ctx.fillStyle = corTend(TEND[e.cod][0]);
-        ctx.beginPath(); ctx.arc(sx, sy, r, 0, 6.2832); ctx.fill(); ctx.stroke();
-      }
-      ctx.globalAlpha = 1;
-    }
-
-    if (mostrarRes) {
-      ctx.strokeStyle = COR_LEITO; ctx.lineWidth = 1;
-      ctx.fillStyle = COR_USINA;
-      ctx.globalAlpha = 0.88;
-      for (const u of RES) {
-        const [sx, sy] = paraTela(projX(u.lon), merc(u.lat));
-        if (sx < -12 || sy < -12 || sx > W + 12 || sy > H + 12) continue;
-        // lado do quadrado pela vazão média turbinada
-        const l = (2.6 + 4 * t01(u.turb || 1)) * (1 + 0.18 * Math.log2(Math.max(1, z)));
-        ctx.fillRect(sx - l / 2, sy - l / 2, l, l);
-        ctx.strokeRect(sx - l / 2, sy - l / 2, l, l);
-      }
-      ctx.globalAlpha = 1;
-    }
-
-    desenhaEtes(ctx, z);
-
     const anel = (o, c, raio) => {
       const [sx, sy] = paraTela(projX(o.lon), merc(o.lat));
-      ctx.beginPath(); ctx.arc(sx, sy, raio, 0, 6.2832);
-      ctx.strokeStyle = c; ctx.lineWidth = 2; ctx.stroke();
+      if (!(sx === sx)) return;
+      fctx.beginPath(); fctx.arc(sx, sy, raio, 0, 6.2832);
+      fctx.strokeStyle = c; fctx.lineWidth = 2; fctx.stroke();
     };
     if (estRealce && mostrarEst) anel(estRealce, COR_ACC, 8);
     if (resRealce && mostrarRes) anel(resRealce, COR_USINA, 11);
     if (eteRealce && mostrarEtes) anel(eteRealce, COR_ETE, 10);
     if (barRealce && modo === 'livre') anel(barRealce, COR_BARR, 8);
   }
+  const quadroFluxo = t => desenhaSobre(t);
 
   /* laço de animação: só roda com o fluxo ligado */
   let laco = null;
@@ -2758,16 +3119,22 @@
 
   function acharTrecho(sx, sy, tolPx) {
     const [wx, wy] = paraMundo(sx, sy);
+    /* A tolerância em unidades de mundo é o maior dos passos de `tolPx` pixels nos
+       dois eixos da tela: com a vista inclinada um pixel vale mais chão ao longe
+       do que perto, e o eixo mais esticado é o que decide. */
+    const [ax, ay] = paraMundo(sx + tolPx, sy), [bx, by] = paraMundo(sx, sy - tolPx);
+    const tol = Math.max(Math.hypot(ax - wx, ay - wy), Math.hypot(bx - wx, by - wy));
+    if (!Number.isFinite(wx + wy + tol)) return -1;
     const cx = Math.floor((wx - bounds.minx) / spanX * (GRID - 1));
     const cy = Math.floor((wy - bounds.miny) / spanY * (GRID - 1));
-    const tol = tolPx / vista.k;
+    const raio = Math.max(1, Math.min(8, Math.ceil(tol / (spanX / (GRID - 1)))));
     let melhor = -1, melhorD = Infinity;
-    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -raio; dx <= raio; dx++) for (let dy = -raio; dy <= raio; dy++) {
+      if (cx + dx < 0 || cx + dx >= GRID || cy + dy < 0 || cy + dy >= GRID) continue;
       const k = chave(cx + dx, cy + dy);
-      if (k < 0 || k >= GRID * GRID) continue;
       for (let e = celIni[k]; e < celIni[k + 1]; e++) {
         const i = celLista[e];
-        if (!visiveisSet.has(i)) continue;
+        if (!desenhado(i)) continue;
         const a = inicio[i], b = inicio[i + 1];
         for (let j = a; j + 3 < b; j += 2) {
           const d = distSeg(wx, wy, coords[j], coords[j + 1], coords[j + 2], coords[j + 3]);
@@ -2782,6 +3149,7 @@
   }
 
   function acharPonto(lista, sx, sy, tolPx) {
+    lerCamera();
     let melhor = null, melhorD = tolPx;
     for (const o of lista) {
       const [x, y] = paraTela(projX(o.lon), merc(o.lat));
@@ -3117,60 +3485,42 @@
     tip.style.top = Math.max(6, y) + 'px';
   }
 
-  /* ---------- ponteiro: arrasto, pinça, toque, roda ---------- */
+  /* ---------- ponteiro: toque e passagem do cursor ----------
+     Arrasto, pinça, giro e roda são da biblioteca. O que continua aqui é o que
+     abre a ficha: um toque curto, de um dedo só e sem arrasto, e o cursor
+     passando por cima de um rio. Escuta o contêiner do mapa sem interferir nos
+     gestos dele. */
+  const contMapa = map.getCanvasContainer();
+  const relPos = ev => { const r = canvasMapa.getBoundingClientRect(); return [ev.clientX - r.left, ev.clientY - r.top]; };
   const ativos = new Map();
-  let pinca = null, movimento = 0, tInicio = 0;
+  let movimento = 0, tInicio = 0, multiplo = false;
 
-  cv.addEventListener('pointerdown', e => {
-    cancelaVoo();          // a mão do leitor vence a animação
-    cv.setPointerCapture(e.pointerId);
-    ativos.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
-    if (ativos.size === 1) { movimento = 0; tInicio = performance.now(); cv.classList.add('arrastando'); }
-    if (ativos.size === 2) {
-      const [a, b] = [...ativos.values()];
-      pinca = { d: Math.hypot(a.x - b.x, a.y - b.y), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 };
-    }
+  contMapa.addEventListener('pointerdown', e => {
+    ativos.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (ativos.size === 1) { movimento = 0; multiplo = false; tInicio = performance.now(); }
+    else multiplo = true;                  // dois dedos são pinça ou giro, nunca um toque
   });
-
-  cv.addEventListener('pointermove', e => {
+  contMapa.addEventListener('pointermove', e => {
     const ant = ativos.get(e.pointerId);
-    if (!ant) { inspecionar(e); return; }   // cursor livre: só realça e mostra o tooltip
-    const dx = e.offsetX - ant.x, dy = e.offsetY - ant.y;
-    ativos.set(e.pointerId, { x: e.offsetX, y: e.offsetY });
-    movimento += Math.abs(dx) + Math.abs(dy);
-
-    if (ativos.size >= 2 && pinca) {
-      const [a, b] = [...ativos.values()];
-      const d = Math.hypot(a.x - b.x, a.y - b.y);
-      const cx = (a.x + b.x) / 2, cy = (a.y + b.y) / 2;
-      if (pinca.d > 0) aplicarZoom(d / pinca.d, cx, cy);
-      vista.x += cx - pinca.cx; vista.y += cy - pinca.cy;
-      pinca = { d, cx, cy };
-    } else {
-      vista.x += dx; vista.y += dy;
-    }
-    prender();
+    if (!ant) { if (e.pointerType === 'mouse') inspecionar(e); return; }   // cursor livre: realça e mostra o tooltip
+    movimento += Math.abs(e.clientX - ant.x) + Math.abs(e.clientY - ant.y);
+    ativos.set(e.pointerId, { x: e.clientX, y: e.clientY });
     tip.classList.remove('on');
-    agendar(true);
   });
-
   const soltar = e => {
     const era = ativos.size;
     ativos.delete(e.pointerId);
-    if (ativos.size < 2) pinca = null;
-    if (ativos.size === 0) {
-      cv.classList.remove('arrastando');
-      if (era === 1 && movimento < 8 && performance.now() - tInicio < 500) selecionar(e);
-      agendar(false);
-    }
+    if (ativos.size === 0 && era === 1 && !multiplo && e.type === 'pointerup' &&
+        movimento < 8 && performance.now() - tInicio < 500) selecionar(e);
   };
-  cv.addEventListener('pointerup', soltar);
-  cv.addEventListener('pointercancel', soltar);
-  cv.addEventListener('pointerleave', () => {
+  contMapa.addEventListener('pointerup', soltar);
+  contMapa.addEventListener('pointercancel', soltar);
+  contMapa.addEventListener('pointerleave', () => {
     tip.classList.remove('on');
     realcar(selecao);
     repintar();
   });
+  map.on('movestart', () => tip.classList.remove('on'));
 
   function alvo(sx, sy, tol) {
     if (mostrarRes) { const u = acharPonto(RES, sx, sy, tol); if (u) return { u }; }
@@ -3202,7 +3552,8 @@
   }
 
   function inspecionar(ev) {
-    const a = alvo(ev.offsetX, ev.offsetY, 9);
+    const [ox, oy] = relPos(ev);
+    const a = alvo(ox, oy, 9);
     realcar(a || selecao);        // sem alvo, o realce volta para o que está fixado
     repintar();
     if (!a) { tip.classList.remove('on'); return; }
@@ -3230,7 +3581,8 @@
   }
 
   function selecionar(ev) {
-    const a = alvo(ev.offsetX, ev.offsetY, 18);
+    const [ox, oy] = relPos(ev);
+    const a = alvo(ox, oy, 18);
     fixado = !!a;
     aplicar(a);
     if (!a) tip.classList.remove('on');
@@ -3239,64 +3591,98 @@
     if (a && window.matchMedia('(max-width: 760px)').matches) abrirHud();
   }
 
-  function aplicarZoom(fator, cx, cy) {
-    const k2 = Math.max(kBase() * 0.9, Math.min(kBase() * ZOOM_MAX, vista.k * fator));
-    const r = k2 / vista.k;
-    vista.x = cx - (cx - vista.x) * r;
-    vista.y = cy - (cy - vista.y) * r;
-    vista.k = k2;
-    prender();
+  /* Voo até um enquadramento, mantendo o giro e a inclinação em que a vista está.
+     O que se interpola é o centro e o zoom (que já é o logaritmo da escala). */
+  const cancelaVoo = () => map.stop();
+  function voar(cx1, cy1, k1, instantaneo) {
+    cancelaVoo();
+    const o = { center: [lonDeX(cx1), latDeY(cy1)], zoom: zDeK(k1), essential: true,
+                duration: instantaneo || semMovimento.matches ? 0 : 500 };
+    if (o.duration) map.easeTo(o); else map.jumpTo(o);
   }
 
-  /* Voo até um enquadramento. O que se interpola é o CENTRO em coordenadas de
-     mundo e o LOGARITMO da escala, não `vista.x/y/k` direto: zoom é
-     multiplicativo, e mover o deslocamento em linha reta enquanto a escala anda
-     em log faz o mapa descrever uma curva torta, com o alvo escapando para o
-     lado no meio do caminho. */
-  let voo = null;
-  const cancelaVoo = () => { if (voo) { cancelAnimationFrame(voo); voo = null; } };
-  function voar(cx1, cy1, k1) {
-    cancelaVoo();
-    const meioY = () => (H - rodapeHud()) / 2;
-    const pousa = () => {
-      vista.k = k1; vista.x = W / 2 - cx1 * k1; vista.y = meioY() - cy1 * k1;
-      agendar(false);
-    };
-    if (semMovimento.matches) return pousa();
-    const k0 = vista.k, cx0 = (W / 2 - vista.x) / k0, cy0 = (meioY() - vista.y) / k0;
-    const lk0 = Math.log(k0), dlk = Math.log(k1) - lk0;
-    const t0 = performance.now(), DUR = 500;
-    const passo = t => {
-      const u = Math.min(1, (t - t0) / DUR);
-      if (u >= 1) { voo = null; return pousa(); }
-      // easeInOutCubic
-      const e = u < 0.5 ? 4 * u * u * u : 1 - Math.pow(-2 * u + 2, 3) / 2;
-      vista.k = Math.exp(lk0 + dlk * e);
-      const cx = cx0 + (cx1 - cx0) * e, cy = cy0 + (cy1 - cy0) * e;
-      vista.x = W / 2 - cx * vista.k; vista.y = meioY() - cy * vista.k;
-      // modo rápido: o corte por zoom derruba a contagem de trechos por quadro,
-      // que é o mesmo caminho que a roda e a pinça já usam
-      agendar(true);
-      voo = requestAnimationFrame(passo);
-    };
-    voo = requestAnimationFrame(passo);
+  /* ---------- Vista 3D ----------
+     Inclinar e girar são uma camada que se liga a pedido: desligada, o mapa é o de
+     sempre, plano e com o norte para cima, e os gestos de giro e inclinação ficam
+     desativados — dois dedos no celular não inclinam por acidente. Ligada, a
+     câmera sobe a ~50° e os gestos voltam. `define3D` é o ponto de entrada de
+     quem quiser ligar o 3D por conta própria (o tour), e a URL guarda o estado:
+     `?3d=1` mais a câmera no #hash. */
+  const PITCH_3D = 50;
+  let em3D = false;
+  const btNorte = document.getElementById('btNorte');
+  function define3D(on, o = {}) {
+    on = !!on; em3D = on;
+    const dur = o.animar === false || semMovimento.matches ? 0 : 700;
+    if (on) {
+      map.dragRotate.enable(); map.touchPitch.enable(); map.touchZoomRotate.enableRotation();
+      if (!o.manterCamera && map.getPitch() < 1) {
+        if (dur) map.easeTo({ pitch: PITCH_3D, duration: dur, essential: true }); else map.jumpTo({ pitch: PITCH_3D });
+      }
+    } else {
+      map.dragRotate.disable(); map.touchPitch.disable(); map.touchZoomRotate.disableRotation();
+      if (dur) map.easeTo({ pitch: 0, bearing: 0, duration: dur, essential: true });
+      else map.jumpTo({ pitch: 0, bearing: 0 });
+    }
+    btNorte.hidden = !on;
+    const b3 = document.getElementById('bt3d');
+    if (b3) b3.setAttribute('aria-pressed', String(on));
+    escreveURL();
   }
 
-  cv.addEventListener('wheel', e => {
-    e.preventDefault();
-    cancelaVoo();
-    aplicarZoom(Math.exp(-e.deltaY * 0.0016), e.offsetX, e.offsetY);
-    tip.classList.remove('on');
-    agendar(true);
-  }, { passive: false });
+  /* ---------- a câmera na URL ----------
+     #zoom/lat/lon/giro/inclinação, como no mapa dos geoglifos, e `3d=1` na query. O
+     modo (?mapa=) vive na mesma URL e não se atropelam. Por file:// o navegador
+     pode recusar reescrever a barra, e a recusa é esperada. */
+  let camMexida = false, urlPronta = false;
+  const HASH0 = location.hash, BUSCA0 = location.search;   // a biblioteca mexe na câmera ao nascer: lê a URL antes
+  const arred = (v, d) => +v.toFixed(d);
+  function escreveURL() {
+    if (!urlPronta) return;
+    try {
+      const u = new URL(location.href);
+      if (em3D) u.searchParams.set('3d', '1'); else u.searchParams.delete('3d');
+      const c = map.getCenter();
+      u.hash = camMexida
+        ? '#' + [arred(map.getZoom(), 2), arred(c.lat, 5), arred(c.lng, 5), Math.round(map.getBearing()),
+                 Math.round(map.getPitch())].join('/')
+        : '';
+      history.replaceState(null, '', u);
+    } catch (e) { /* file:// */ }
+  }
+  function lerHash(txt = location.hash) {
+    const p = txt.slice(1).split('/').map(Number);
+    if (p.length >= 3 && p.slice(0, 3).every(Number.isFinite))
+      return { zoom: p[0], center: [p[2], p[1]], bearing: p[3] || 0, pitch: p[4] || 0 };
+    return null;
+  }
+  function aplicaHash(txt) {
+    const h = lerHash(txt);
+    if (!h) return false;
+    camMexida = true;
+    const plano = POR_SOFTWARE;          // por software a página começa plana, e o interruptor segue à mão
+    if (plano) { h.bearing = 0; h.pitch = 0; }
+    map.jumpTo(h);
+    if (!plano && (h.pitch > 0 || h.bearing !== 0) && !em3D) define3D(true, { animar: false, manterCamera: true });
+    return true;
+  }
+  map.on('movestart', e => { if (e.originalEvent) camMexida = true; });
+  map.on('moveend', escreveURL);
+  map.on('rotate', () => { document.getElementById('icoNorte').style.transform = 'rotate(' + (-map.getBearing()) + 'deg)'; });
+  window.addEventListener('hashchange', () => { if (!aplicaHash(location.hash)) { camMexida = false; enquadrar(); } });
 
   /* ---------- controles ---------- */
-  document.getElementById('btMais').addEventListener('click', () => { cancelaVoo(); aplicarZoom(1.6, W / 2, H / 2); agendar(false); });
-  document.getElementById('btMenos').addEventListener('click', () => { cancelaVoo(); aplicarZoom(1 / 1.6, W / 2, H / 2); agendar(false); });
+  const passoZoom = f => { cancelaVoo(); map.easeTo({ zoom: map.getZoom() + Math.log2(f), duration: semMovimento.matches ? 0 : 250, essential: true }); };
+  document.getElementById('btMais').addEventListener('click', () => passoZoom(1.6));
+  document.getElementById('btMenos').addEventListener('click', () => passoZoom(1 / 1.6));
   document.getElementById('btReset').addEventListener('click', () => {
     cancelaVoo();
-    enquadrar(); fixado = false; aplicar(null); agendar(false);
+    enquadrar();
+    if (em3D) map.jumpTo({ pitch: PITCH_3D });
+    camMexida = false;
+    fixado = false; aplicar(null); escreveURL();
   });
+  btNorte.addEventListener('click', () => { cancelaVoo(); map.easeTo({ bearing: 0, duration: semMovimento.matches ? 0 : 300, essential: true }); });
 
   // cada interruptor guarda aqui como se liga, para que o modo também possa mexer
   const trocaCamada = {};
@@ -3326,16 +3712,17 @@
   });
   alterna('btFluxo', () => animando, v => {
     animando = v;
-    if (v) tocar(); else { parar(); fctx.clearRect(0, 0, W, H); quadroUnico(); }
+    if (v) tocar(); else { parar(); desenhaSobre(); }
     contadores();
   });
   alterna('btSat', () => mostrarSat, v => {
     mostrarSat = v;
-    if (!v) paraSatelite();
+    defineSatelite(v);
     // a CC BY pede atribuição enquanto a imagem está à mostra
     document.getElementById('creditoSat').classList.toggle('on', v);
-    repintarFundo();
   });
+  alterna('bt3d', () => em3D, v => define3D(v));
+  document.getElementById('avisoSwFecha').addEventListener('click', () => { document.getElementById('avisoSw').hidden = true; });
 
   const rg = document.getElementById('rgOrdem');
   const rgTexto = document.getElementById('rgTexto');
@@ -3351,7 +3738,8 @@
   rg.addEventListener('input', () => {
     qMinUsuario = LIMIARES[+rg.value];
     textoOrdem();
-    agendar(false);
+    preencheTexturas();
+    agendar();
   });
 
   /* A faixa da tendência, no mesmo molde da de cima: o input muta o corte,
@@ -3383,6 +3771,7 @@
     EST_VIS = filtraTend(corteTend);
     if (estRealce && !EST_VIS.includes(estRealce)) { fixado = false; aplicar(null); }
     textoTend();
+    refazModo();
     repintarFundo();
   });
 
@@ -3427,7 +3816,8 @@
     document.getElementById('notaModoCx').hidden = !NOTA_MODO[novo];
     montaLegenda();
     if (selecao) aplicar(selecao);   // a ficha aberta reescreve com a leitura do modo
-    agendar(false);
+    refazModo();
+    repintarFundo();
     escreveModoNaURL(novo);
   }
 
@@ -3571,9 +3961,7 @@
     fixado = true; aplicar({ i });
     const cx = (bbox[i * 4] + bbox[i * 4 + 2]) / 2, cy = (bbox[i * 4 + 1] + bbox[i * 4 + 3]) / 2;
     const larg = Math.max(bbox[i * 4 + 2] - bbox[i * 4], bbox[i * 4 + 3] - bbox[i * 4 + 1], 1e-4);
-    vista.k = Math.max(kBase(), Math.min(kBase() * ZOOM_MAX, Math.min(W, H) / (larg * 6)));
-    vista.x = W / 2 - cx * vista.k; vista.y = H / 2 - cy * vista.k;
-    agendar(false);
+    voar(cx, cy, Math.max(kBase(), Math.min(kBase() * ZOOM_MAX, Math.min(W, H) / (larg * 6))), true);
     abrirGaveta(false);
     if (window.matchMedia('(max-width: 760px)').matches) abrirHud();
   });
@@ -3928,15 +4316,33 @@
   textoOrdem();
   textoTend();
   window.__contadores = () => contadores();
-  // `desenhar()` direto não passa por quadroUnico(), que é quem chama os
-  // contadores — sem esta linha os números ao lado de cada camada só apareciam
-  // depois do primeiro arrasto, e o painel abria com "Estações ( )".
-  redimensionar(); enquadrar(); desenhar(); contadores();
+  redimensionar();
+  if (!map.isStyleLoaded()) await new Promise(r => map.once('load', r));
+  preencheTexturas();
+  montaFundo();
+  coresDoMapa();
+  /* A câmera: a do #hash, se a URL traz uma (um link compartilhado abre na mesma
+     vista, inclusive em 3D); senão o Brasil inteiro, plano. Por software a página
+     começa plana de qualquer jeito. */
+  if (!aplicaHash(HASH0)) enquadrar();
+  if (!POR_SOFTWARE && new URLSearchParams(BUSCA0).get('3d') === '1' && !em3D)
+    define3D(true, { animar: false, manterCamera: !!lerHash(HASH0) });
+  urlPronta = true;
+  map.on('render', () => desenhaSobre());
+  map.on('moveend', () => { contadores(); atualizaVazio(); });
+  /* O véu de carregamento sai depois do primeiro quadro com rios, não de um
+     tempo fixo; o teto de 6 s garante que ele não fique se o quadro nunca vier. */
+  await new Promise(r => {
+    const f = () => { if (RIOS.desenhou) { map.off('render', f); r(); } };
+    map.on('render', f);
+    map.triggerRepaint();
+    setTimeout(r, 6000);
+  });
+  desenhaSobre(); contadores(); atualizaVazio();
   if (animando) tocar();
-  // Dois rAF: o primeiro garante que o quadro que `desenhar()` acabou de
-  // preparar já foi ao compositor; sem o segundo, o véu some no mesmo quadro
-  // em que o canvas troca de conteúdo e um flash de fundo vazio escapa entre
-  // os dois em conexões mais lentas para pintar.
+  // Dois rAF: o primeiro garante que o quadro já foi ao compositor; sem o
+  // segundo, o véu some no mesmo quadro em que o canvas troca de conteúdo e um
+  // flash de fundo vazio escapa entre os dois.
   const carregando = document.getElementById('carregando');
   if (carregando) {
     requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -3950,15 +4356,33 @@
   let timerResize;
   window.addEventListener('resize', () => {
     clearTimeout(timerResize);
-    timerResize = setTimeout(() => { redimensionar(); enquadrar(); agendar(false); }, 120);
+    // a biblioteca já refaz o canvas; aqui só recalcula os limites e, se o leitor
+    // ainda não mexeu na câmera, reenquadra (a barra de endereço do celular que
+    // encolhe não pode desfazer a vista que ele escolheu)
+    timerResize = setTimeout(() => { redimensionar(); if (!camMexida) enquadrar(); agendar(); }, 120);
   });
-  const trocouTema = () => { lerCores(); montaLegenda(); agendar(false); };
+  const trocouTema = () => { lerCores(); montaLegenda(); coresDoMapa(); refazModo(); repintarFundo(); };
   window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', trocouTema);
   new MutationObserver(trocouTema)
     .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   semMovimento.addEventListener('change', e => {
     // a camada continua ligada; só deixa de andar (ou volta a andar)
-    if (e.matches) { parar(); quadroUnico(); } else if (animando) tocar();
+    if (e.matches) { parar(); repintar(); } else if (animando) tocar();
+  });
+  /* O WebGL pode ser tirado da página (o iOS descarta o de uma aba em segundo
+     plano). A biblioteca refaz o contexto dela; os recursos das nossas duas
+     camadas morreram junto e são recriados aqui, dos mesmos dados. */
+  canvasMapa.addEventListener('webglcontextlost', () => { RIOS.perdido = true; PONTOS.perdido = true; });
+  map.on('webglcontextrestored', () => {
+    if (!RIOS.perdido) return;
+    const gl = map.painter.context.gl;
+    RIOS.inicia(gl); PONTOS.inicia(gl);
+    preencheTexturas(); repintarFundo();
+  });
+  map.on('error', e => {
+    // o satélite é opcional e pode falhar (sem rede, ladrilho recusado): isso não é erro da página
+    if (e && e.sourceId === 'sat') return;
+    console.error(e && e.error ? e.error : e);
   });
 })();
 </script>
