@@ -717,34 +717,71 @@
       width: 22px; height: 22px; fill: none; stroke: currentColor;
       stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;
     }
-    .barra-baixo button[aria-expanded="true"] { background: color-mix(in srgb, var(--accent) 16%, transparent); color: var(--accent); }
+    /* Estado ativo e transição de cor vindos do cantography: preenchimento
+       tingido + contorno da mesma cor, e 160 ms na troca. */
+    .barra-baixo button { border: 1px solid transparent; transition: background-color .16s, color .16s, border-color .16s; }
+    .barra-baixo button[aria-expanded="true"] {
+      background: color-mix(in srgb, var(--accent) 18%, transparent); color: var(--accent);
+      border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+    }
     .barra-baixo button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
     /* O #hud vira o painel que sobe de cima da barra. Um painel por vez: cada
        cartão leva `data-p` e só o do `data-aberto` fica. `.recolhido` = nenhum. */
     .hud {
       top: auto; left: 0; right: 0; bottom: calc(var(--barra) + env(safe-area-inset-bottom));
-      z-index: 4; 
-      width: auto; max-width: none; max-height: min(62dvh, calc(100dvh - 140px));
-      padding: 0 10px 8px; gap: 8px;
-      transition: transform .22s ease, visibility 0s;
+      z-index: 4;
+      width: auto; max-width: none;
+      /* Teto do cantography: 75 % da altura, parando abaixo da faixa de cima
+         (busca + botões, 56 px) com folga. A barra de baixo já está descontada. */
+      max-height: min(72dvh, calc(100dvh - var(--barra) - env(safe-area-inset-bottom) - 72px));
+      /* O próprio #hud é a folha: vidro, cantos de cima arredondados e alça.
+         Os cartões dentro dela perdem moldura (regra de `.cartao` abaixo). */
+      pointer-events: auto;
+      background: var(--realce), var(--vidro);
+      backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+      border-top: 1px solid var(--rule); border-radius: 16px 16px 0 0; box-shadow: var(--sombra);
+      padding: 20px 16px 10px; gap: 0;
+      transition: transform .28s cubic-bezier(.4, 0, .2, 1), visibility 0s;
+    }
+    /* alça (36 × 4), só visual como a do cantography */
+    .hud::before {
+      content: ""; display: block; flex: none; width: 36px; height: 4px; border-radius: 2px;
+      background: var(--ink-3); opacity: .45; margin: -12px auto 10px;
     }
     @media (prefers-reduced-motion: reduce) { .hud { transition: none; } }
     .hud.recolhido {
       transform: translateY(calc(100% + 24px)); visibility: hidden;
-      transition: transform .22s ease, visibility 0s .22s;
+      transition: transform .28s cubic-bezier(.4, 0, .2, 1), visibility 0s .28s;
     }
     .hud:not([data-aberto="modo"]) [data-p="modo"],
     .hud:not([data-aberto="camadas"]) [data-p="camadas"],
     .hud:not([data-aberto="legenda"]) [data-p="legenda"],
     .hud:not([data-aberto="dados"]) [data-p="dados"],
     .hud:not([data-aberto="ficha"]) [data-p="ficha"] { display: none; }
-    .cartao { border-radius: 6px; padding: 13px 15px; }
+    .cartao {
+      background: none; backdrop-filter: none; -webkit-backdrop-filter: none;
+      border: 0; border-radius: 0; box-shadow: none; padding: 12px 0;
+    }
+    #cartaoRede { border-top: 1px solid var(--rule); }
+    /* Dados: o corpo de "Sobre os dados" aparece direto, sem o botão de
+       recolher e sem moldura própria; o link das séries vira o rodapé dele. */
+    .sobre-topo { display: none; }
+    .sobre-corpo, .sobre-corpo.on {
+      display: block; margin: 0; padding: 0 0 4px; max-height: none; overflow: visible;
+      background: none; backdrop-filter: none; -webkit-backdrop-filter: none;
+      border: 0; border-radius: 0; box-shadow: none;
+    }
+    /* com o painel aberto o zoom e o crédito ficariam por baixo da folha */
+    body.painel-aberto .zoom, body.painel-aberto .credito-sat {
+      opacity: 0; visibility: hidden; pointer-events: none;
+    }
+    .zoom, .credito-sat { transition: opacity .16s, visibility 0s; }
     /* A coluna da direita se desfaz: os cartões voltam a ser filhos-flex do painel. */
     .hud-dir { display: contents; }
     .titulo-cartao .eyebrow, .titulo-cartao h1 { display: none; }
-    .titulo-cartao { order: 9; }
-    .titulo-cartao .ir-series { margin: 0; padding-top: 0; border-top: 0; }
+    .titulo-cartao { order: 9; padding: 0; border-top: 1px solid var(--rule); }
+    .titulo-cartao .ir-series { margin: 0; padding: 0; border-top: 0; }
 
     h1 { font-size: 1.28rem; }
     .zoom { top: auto; bottom: calc(var(--barra) + 12px + env(safe-area-inset-bottom)); right: 12px; }
@@ -752,7 +789,7 @@
     /* Topo: a busca ocupa o que sobra e, à direita, dois botões de ícone lado a
        lado (Sobre, Tabela e método) no lugar dos dois de texto empilhados. */
     .abrir-par { bottom: auto; top: 12px; right: 12px; flex-direction: row; gap: 6px; }
-    .abrir { width: 44px; padding: 0; display: flex; align-items: center; justify-content: center; }
+    .abrir { width: 44px; padding: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center; }
     .abrir .ico-abrir {
       display: block; width: 22px; height: 22px; fill: none; stroke: currentColor;
       stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round;
@@ -763,7 +800,8 @@
     }
     /* 12 + 44 + 6 + 44 + 12 de folga entre o campo e os botões */
     .busca { top: 12px; left: 12px; right: auto; width: calc(100vw - 24px - 94px - 8px); max-width: none; }
-    .busca input { min-height: 44px; }
+    /* pílula de 44 px, como a busca do cantography */
+    .busca input { min-height: 44px; border-radius: 22px; padding-left: 16px; }
     /* A lista não cabe na largura do campo: "PA/MT · 9.010 m³/s · 1.893,3 km"
        quebra em duas linhas e a sugestão passa a ocupar o dobro da altura. Ela
        sobra sobre o mapa, que é espaço livre. */
@@ -3229,6 +3267,7 @@
     for (const b of botoesPainel)
       b.setAttribute('aria-expanded', String(!recolhido && b.dataset.painel === aberto));
     hud.inert = cel && recolhido;
+    document.body.classList.toggle('painel-aberto', cel && !recolhido);
     for (const c of hud.querySelectorAll('[data-p]'))
       c.inert = cel && (recolhido || c.dataset.p !== aberto);
     // a gaveta rola: reabrir no ponto onde o leitor parou esconde o começo do painel
