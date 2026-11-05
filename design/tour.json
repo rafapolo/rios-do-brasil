@@ -8,10 +8,10 @@
     ],
     "camera": {
       "centro": [
-        -52.0,
-        -14.0
+        -53,
+        -13.5
       ],
-      "zoom": 3.7,
+      "zoom": 3.3,
       "pitch": 0,
       "bearing": 0
     },
@@ -25,6 +25,7 @@
     "duracao_ms": 9000,
     "modo": "vazao",
     "camadas": [
+      "fluxo",
       "estacoes"
     ],
     "camera": {
@@ -46,6 +47,7 @@
     "duracao_ms": 11000,
     "modo": "vazao",
     "camadas": [
+      "fluxo",
       "reservatorios",
       "satelite"
     ],
@@ -67,7 +69,9 @@
     "id": "amazonia-livre",
     "duracao_ms": 9000,
     "modo": "livre",
-    "camadas": [],
+    "camadas": [
+      "fluxo"
+    ],
     "camera": {
       "centro": [
         -62.0,
@@ -86,15 +90,17 @@
     "id": "paranapanema",
     "duracao_ms": 10000,
     "modo": "livre",
-    "camadas": [],
+    "camadas": [
+      "fluxo"
+    ],
     "camera": {
       "centro": [
-        -50.6,
-        -22.9
+        -50.7,
+        -23.2
       ],
       "zoom": 7.0,
-      "pitch": 50,
-      "bearing": 70
+      "pitch": 45,
+      "bearing": -8
     },
     "kicker": "Rio em degraus",
     "frase": "O Paranapanema tem 11 usinas hidrelétricas em cerca de 900 km: uma barragem a cada 80 km, o rio picado em reservatórios.",
@@ -105,13 +111,15 @@
     "id": "piranhas-acu",
     "duracao_ms": 10000,
     "modo": "outorga",
-    "camadas": [],
+    "camadas": [
+      "fluxo"
+    ],
     "camera": {
       "centro": [
-        -37.1,
-        -5.9
+        -37.4,
+        -6.2
       ],
-      "zoom": 8.0,
+      "zoom": 7.6,
       "pitch": 45,
       "bearing": -30
     },
@@ -125,14 +133,15 @@
     "duracao_ms": 9000,
     "modo": "vazao",
     "camadas": [
+      "fluxo",
       "estacoes"
     ],
     "camera": {
       "centro": [
-        -36.6,
-        -7.3
+        -36.94,
+        -7.26
       ],
-      "zoom": 8.0,
+      "zoom": 9.2,
       "pitch": 45,
       "bearing": 20
     },
@@ -146,12 +155,13 @@
     "duracao_ms": 11000,
     "modo": "tendencia",
     "camadas": [
+      "fluxo",
       "estacoes"
     ],
     "camera": {
       "centro": [
-        -44.6,
-        -13.4
+        -45.0,
+        -14.0
       ],
       "zoom": 7.2,
       "pitch": 45,
@@ -167,6 +177,7 @@
     "duracao_ms": 9000,
     "modo": "vazao",
     "camadas": [
+      "fluxo",
       "satelite"
     ],
     "camera": {
@@ -188,14 +199,15 @@
     "duracao_ms": 11000,
     "modo": "esgoto",
     "camadas": [
+      "fluxo",
       "etes"
     ],
     "camera": {
       "centro": [
-        -46.75,
-        -23.5
+        -46.9,
+        -23.4
       ],
-      "zoom": 9.3,
+      "zoom": 9.0,
       "pitch": 50,
       "bearing": 20
     },
@@ -208,7 +220,9 @@
     "id": "acre-perda",
     "duracao_ms": 8000,
     "modo": "vazao",
-    "camadas": [],
+    "camadas": [
+      "fluxo"
+    ],
     "camera": {
       "centro": [
         -68.5,
@@ -234,10 +248,10 @@
     ],
     "camera": {
       "centro": [
-        -52.0,
-        -14.0
+        -53,
+        -13.5
       ],
-      "zoom": 3.9,
+      "zoom": 3.7,
       "pitch": 55,
       "bearing": -20
     },

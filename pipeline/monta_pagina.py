@@ -51,6 +51,11 @@ if (S / "tendencia_mapa.json").exists():
     pagina = pagina.replace("/*__TENDMAPA__*/", embutir("tendencia_mapa.json"))
 else:
     print("  tendencia_mapa.json ausente — mapa sai sem tendência por estação")
+# O tour: roteiro (design/tour.json, números e frases conferidos no banco — ver design/tour.md),
+# o código que dirige a página e o som. Texto puro, sem compressão: são ~40 kB.
+pagina = pagina.replace("/*__ROTEIRO__*/", (S.parent / "design" / "tour.json").read_text().replace("</", "<\\/"))
+pagina = pagina.replace("/*__SOMTOUR__*/", (S / "som_tour.js").read_text())
+pagina = pagina.replace("/*__TOUR__*/", (S / "tour.js").read_text())
 pagina = pagina.replace("/*__DADOS__*/", embutir("rede_vazao.json"))
 out = S / "rios_brasil.html"
 out.write_text(pagina)
