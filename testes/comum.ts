@@ -193,6 +193,8 @@ export function copiaSondada(): string {
     "    filtraTend: (c) => filtraTend(c), corTend: (p) => corTend(p),\n" +
     "    fichaTrecho: (i) => fichaTrecho(i), fichaEstacao: (e) => fichaEstacao(e),\n" +
     "    aplicaModo: (m) => aplicaModo(m), vista,\n" +
+    "    camera: (lon, lat, z) => { const k = kBase() * z; vista.k = k; vista.x = W / 2 - projX(lon) * k;\n" +
+    "      vista.y = H / 2 - merc(lat) * k; agendar(false); },\n" +
     "    montaBusca: () => { montaBusca(); return BUSCA.repr.length; },\n" +
     "    buscaRios: (s) => buscaRios(s).map(r => ({ nome: D.nomes[nomeIdx[r.i]],\n" +
     "      uf: ufDoRio(r.i), q: r.q, peso: r.peso, i: r.i })),\n" +

@@ -240,7 +240,11 @@ degraus de 5 km (a ficha diz "a cerca de 35 km"; erro máximo de 2 km), 106 kB g
 no `index.html`: **17.433.585 → 17.190.093 bytes (17,4 → 17,2 MB)**.
 
 O render é Canvas 2D puro, sem biblioteca: a rede vai para um canvas fora de tela e só é
-redesenhada quando a vista muda; a animação de fluxo tem canvas próprio por cima.
+redesenhada quando a vista muda; a animação de fluxo tem canvas próprio por cima. De longe são tracinhos tracejados no eixo de cada
+trecho; de perto (a mistura vai de 10× a 26× o enquadramento nacional) viram partículas com rastro
+que some nas pontas, em faixas paralelas dentro da largura do rio e seguindo o leito suavizado,
+com velocidade que cresce devagar com a vazão. A qualidade cai sozinha se o quadro passar de ~24 ms,
+e com `prefers-reduced-motion` a camada fica ligada e parada.
 
 ## Licença
 

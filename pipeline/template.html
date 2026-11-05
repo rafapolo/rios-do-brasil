@@ -38,6 +38,7 @@
     --ramp-0: #cde2fb; --ramp-1: #9ec5f4; --ramp-2: #6da7ec; --ramp-3: #3987e5;
     --ramp-4: #256abf; --ramp-5: #184f95; --ramp-6: #0d366b;
     --fluxo:  #0d366b;
+    --fluxo-brilho: #eef6ff;   /* realce de perto: clarão sobre o traço azul-escuro */
     /* Efluente: a cor sobe com a fração do rio que é esgoto. O tom mais claro é
        o rio quase limpo, o mais escuro é o rio que virou o próprio efluente. */
     --pol-0: #ffe9a3; --pol-1: #fed36f; --pol-2: #feb44c; --pol-3: #fd8d3c;
@@ -95,6 +96,7 @@
       --ramp-0: #0d366b; --ramp-1: #184f95; --ramp-2: #256abf; --ramp-3: #3987e5;
       --ramp-4: #6da7ec; --ramp-5: #9ec5f4; --ramp-6: #cde2fb;
       --fluxo:  #dbeafd;
+      --fluxo-brilho: #ffffff;
       /* No escuro a rampa acende em vez de escurecer: quanto pior, mais brilha. */
       --pol-0: #4a2f16; --pol-1: #6f4319; --pol-2: #96511e; --pol-3: #bd5824;
       --pol-4: #dd542c; --pol-5: #f24634; --pol-6: #ff5f4d;
@@ -131,6 +133,7 @@
     --ramp-0: #0d366b; --ramp-1: #184f95; --ramp-2: #256abf; --ramp-3: #3987e5;
     --ramp-4: #6da7ec; --ramp-5: #9ec5f4; --ramp-6: #cde2fb;
     --fluxo:  #dbeafd;
+    --fluxo-brilho: #ffffff;
     --pol-0: #4a2f16; --pol-1: #6f4319; --pol-2: #96511e; --pol-3: #bd5824;
     --pol-4: #dd542c; --pol-5: #f24634; --pol-6: #ff5f4d;
     --pol-ind: #a894ee;
@@ -1453,7 +1456,7 @@
   const o01 = v => (Math.log10(Math.max(OMIN, Math.min(OMAX, v))) - O0) / (O1 - O0);
 
   const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-  let RAMPA = [], POL = [], OUT = [], TND = [], COR_FLUXO = '', COR_UF = '', COR_ACC = '', COR_USINA = '', COR_ETE = '', COR_LEITO = '', COR_TERRA = '', COR_DIVISA = '';
+  let RAMPA = [], POL = [], OUT = [], TND = [], COR_FLUXO = '', COR_BRILHO = '', COR_UF = '', COR_ACC = '', COR_USINA = '', COR_ETE = '', COR_LEITO = '', COR_TERRA = '', COR_DIVISA = '';
   let COR_FRIA = '', COR_IND = '', COR_SEM = '', LIV = [], COR_BARR = '';
   // A divergente não é uma família de sete tokens numerados como as outras: os
   // dois lados têm nome próprio de propósito, para ninguém escrever --tend-5 e
@@ -1465,7 +1468,7 @@
     POL = [0, 1, 2, 3, 4, 5, 6].map(i => css('--pol-' + i));
     OUT = [0, 1, 2, 3, 4, 5, 6].map(i => css('--out-' + i));
     TND = TOKENS_TEND.map(css);
-    COR_FLUXO = css('--fluxo'); COR_UF = css('--uf-line'); COR_ACC = css('--accent');
+    COR_FLUXO = css('--fluxo'); COR_BRILHO = css('--fluxo-brilho'); COR_UF = css('--uf-line'); COR_ACC = css('--accent');
     COR_USINA = css('--usina'); COR_LEITO = css('--leito'); COR_ETE = css('--ete');
     COR_TERRA = css('--terra'); COR_DIVISA = css('--divisa');
     COR_FRIA = css('--rede-fria'); COR_IND = css('--pol-ind'); COR_SEM = css('--sem-dado');
@@ -2392,30 +2395,220 @@
     vazioEl.classList.toggle('on', visiveis.length === 0 && z > 2);
   }
 
-  /* Camada de fluxo: tracinhos correndo rio abaixo. A geometria da BHO é
-     desenhada de montante para jusante em todos os trechos e o fim de cada um
-     encaixa no começo do trecho seguinte, então basta puxar o lineDashOffset
-     para o negativo — o traço anda no sentido do fluxo. A velocidade é a mesma
-     em toda a rede, que é o comportamento real: a água corre a poucos km/h
-     tanto no riacho quanto no Amazonas; o que muda é a seção, já codificada na
-     largura do traço. */
-  const VEL = 30;   // px/s
+  /* =====================================================================
+     CAMADA DE FLUXO  (isolada de propósito: é a parte que vai ser portada)
+
+     Entradas, e só elas:
+       - os trechos à vista (`visiveis`, em ordem decrescente de vazão);
+       - a geometria de cada um em COORDENADAS DE TELA, de montante para
+         jusante (`coords`/`inicio` × `vista`, dentro de `geometriaPerto`);
+       - a vazão `q[i]` (que já define a largura de traço, via `largura()`).
+     Saída: pixels em `fctx`, um canvas próprio por cima da rede. Nada aqui
+     lê o terreno: a direção é a da topologia (o traço já nasce montante →
+     jusante). Para portar, basta trocar `geometriaPerto` por quem entrega a
+     polilinha projetada de cada feição e `fctx` por um layer de overlay.
+
+     Dois estilos, misturados pelo zoom:
+       LONGE  — tracinhos tracejados, um por trecho, no eixo (o original).
+                Barato; com a rede inteira na tela são 16 mil trechos.
+       PERTO  — partículas com rastro que desvanece nas pontas, em várias
+                faixas paralelas dentro da largura desenhada do rio, seguindo
+                a curva suavizada do leito. A velocidade cresce devagar com a
+                vazão. Só existe com poucos trechos largos à vista, e é a
+                quantidade de cabeças (`FP.maxCabecas`) que limita o custo.
+     ===================================================================== */
+  const VEL = 30;   // px/s, estilo de longe: igual em toda a rede
   let nFluxo = 0;
-  function desenharFluxo(t) {
-    const ctx = fctx;
-    ctx.clearRect(0, 0, W, H);
-    const z = zAtual;
-    const corte = Math.max(5, 240 / Math.pow(z, 1.35));   // só os rios de porte na vista
+  const FP = {
+    zIni: 10, zPleno: 26,   // a mistura longe→perto vai de zIni (0%) a zPleno (100%)
+    margem: 60,            // px além da tela em que ainda se geram partículas
+    maxCabecas: 2000,      // teto de partículas por quadro (~6 µs cada); em tela de toque vale 45%
+    secoes: [0.14, 0.50, 0.92, 0.55],   // opacidade de cada quarto do rastro, da cauda à cabeça
+  };
+  const suave01 = x => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
+  /* Qualidade adaptativa: 1 = densidade cheia. Cai quando o intervalo entre
+     quadros passa de ~24 ms (menos de ~40 fps) e volta devagar. Em tela de
+     toque começa e termina mais baixa. Respeita o orçamento sem número mágico
+     por aparelho. */
+  const toqueGrosso = window.matchMedia('(pointer: coarse)').matches;
+  const QUAL_MAX = toqueGrosso ? 0.6 : 1;
+  let qualFluxo = QUAL_MAX, dtFluxo = 16.7, tUltFluxo = 0;
+  function ajustaQualidade(t) {
+    const dt = t - tUltFluxo; tUltFluxo = t;
+    if (!(dt > 0 && dt < 250)) return;
+    dtFluxo += (dt - dtFluxo) * 0.1;
+    if (dtFluxo > 24) qualFluxo = Math.max(0.3, qualFluxo * 0.93);
+    else if (dtFluxo < 19 && qualFluxo < QUAL_MAX) qualFluxo = Math.min(QUAL_MAX, qualFluxo * 1.015);
+  }
+  const hashU = (i, l) => (Math.imul(i * 7 + l * 131 + 1, 2654435761) >>> 0) / 4294967296;
+
+  /* ---- geometria de perto: polilinhas de tela suavizadas, em cache ----
+     Para cada trecho com vazão acima do corte: os vértices viram coordenadas
+     de tela, o pedaço que cruza a tela (mais `margem`) é separado em "peças",
+     e cada peça é arredondada (curvas quadráticas pelos pontos médios — o leito
+     deixa de ser uma poligonal de 20–350 m) com a normal e o comprimento de
+     arco acumulado em cada ponto. O arco `cu` conta desde o começo do trecho
+     (montante), então as partículas ficam presas ao rio e não à tela. O cache
+     vale enquanto a câmera e a lista de trechos não mudam. */
+  const GP = { chave: '', vis: null, n: 0, cap: 0, cx: null, cy: null, cu: null, nx: null, ny: null,
+               pecas: [] };
+  const lwFluxo = (qq, z) => Math.max(0.7, Math.round(largura(qq, z) * 0.5 * 3) / 3);
+  function crescePerto(preciso) {
+    if (preciso <= GP.cap) return;
+    const cap = Math.max(preciso, GP.cap * 2, 4096);
+    for (const k of ['cx', 'cy', 'cu', 'nx', 'ny']) {
+      const novo = new Float64Array(cap);
+      if (GP[k]) novo.set(GP[k].subarray(0, GP.n));
+      GP[k] = novo;
+    }
+    GP.cap = cap;
+  }
+  function geometriaPerto(z, corte) {
+    const chave = vista.k + '|' + vista.x + '|' + vista.y + '|' + W + '|' + H + '|' + corte;
+    if (GP.chave === chave && GP.vis === visiveis) return GP;
+    GP.chave = chave; GP.vis = visiveis; GP.n = 0; GP.pecas.length = 0;
+    const M = FP.margem, k = vista.k, ox = vista.x, oy = vista.y;
+    let sx = new Float64Array(256), sy = new Float64Array(256);
+    for (const i of visiveis) {
+      if (q[i] < corte) continue;
+      const a = inicio[i], nv = (inicio[i + 1] - a) >> 1;
+      if (nv < 2) continue;
+      if (sx.length < nv) { sx = new Float64Array(nv * 2); sy = new Float64Array(nv * 2); }
+      for (let v = 0; v < nv; v++) {
+        sx[v] = coords[a + 2 * v] * k + ox; sy[v] = coords[a + 2 * v + 1] * k + oy;
+      }
+      // arco acumulado do trecho cru, só para ancorar as peças em `cu`
+      let arco = 0, v = 0;
+      while (v < nv - 1) {
+        const dentro = s => Math.max(sx[s], sx[s + 1]) >= -M && Math.min(sx[s], sx[s + 1]) <= W + M &&
+                            Math.max(sy[s], sy[s + 1]) >= -M && Math.min(sy[s], sy[s + 1]) <= H + M;
+        if (!dentro(v)) { arco += Math.hypot(sx[v + 1] - sx[v], sy[v + 1] - sy[v]); v++; continue; }
+        const ini = v;
+        let fim = v + 1;
+        while (fim < nv - 1 && dentro(fim)) fim++;      // fim = último vértice da peça
+        crescePerto(GP.n + (fim - ini + 1) * 5 + 4);
+        const p0 = GP.n, { cx, cy } = GP;
+        let n = p0;
+        cx[n] = sx[ini]; cy[n] = sy[ini]; n++;
+        for (let s = ini + 1; s < fim; s++) {           // quadrática: do ponto médio anterior ao próximo, vértice como controle
+          const mx0 = (sx[s - 1] + sx[s]) / 2, my0 = (sy[s - 1] + sy[s]) / 2;
+          const mx1 = (sx[s] + sx[s + 1]) / 2, my1 = (sy[s] + sy[s + 1]) / 2;
+          const c = Math.hypot(sx[s] - sx[s - 1], sy[s] - sy[s - 1]) + Math.hypot(sx[s + 1] - sx[s], sy[s + 1] - sy[s]);
+          const passos = c > 40 ? 4 : c > 16 ? 3 : 2;
+          for (let u = 0; u <= passos; u++) {
+            const f = u / passos, g = 1 - f;
+            cx[n] = g * g * mx0 + 2 * g * f * sx[s] + f * f * mx1;
+            cy[n] = g * g * my0 + 2 * g * f * sy[s] + f * f * my1; n++;
+          }
+        }
+        cx[n] = sx[fim]; cy[n] = sy[fim]; n++;
+        const np = n - p0;
+        if (np >= 2) {
+          const { cu, nx, ny } = GP;
+          cu[p0] = arco;
+          for (let j = 1; j < np; j++) cu[p0 + j] = cu[p0 + j - 1] + Math.hypot(cx[p0 + j] - cx[p0 + j - 1], cy[p0 + j] - cy[p0 + j - 1]);
+          for (let j = 0; j < np; j++) {                // normal pela direção média dos vizinhos
+            const ja = p0 + Math.max(0, j - 1), jb = p0 + Math.min(np - 1, j + 1);
+            let dx = cx[jb] - cx[ja], dy = cy[jb] - cy[ja];
+            const d = Math.hypot(dx, dy) || 1;
+            nx[p0 + j] = -dy / d; ny[p0 + j] = dx / d;
+          }
+          GP.pecas.push({ i, p: p0, n: np, a: cu[p0], b: cu[p0 + np - 1] });
+          GP.n = n;
+        }
+        for (let s = ini; s < fim; s++) arco += Math.hypot(sx[s + 1] - sx[s], sy[s + 1] - sy[s]);
+        v = fim;
+      }
+    }
+    return GP;
+  }
+
+  /* Velocidade de perto, px/s. Hidraulicamente a velocidade média cresce muito
+     mais devagar que a vazão (a seção alarga junto): ~Q^0.15 dá de 14 px/s num
+     córrego a ~56 num rio grande, sem o Amazonas virar uma enxurrada. */
+  const velPerto = qq => Math.max(14, Math.min(56, 10 * Math.pow(Math.max(qq, 1), 0.15)));
+
+  function fluxoPerto(ctx, z, corte, t, mistura) {
+    const g = geometriaPerto(z, corte);
+    const { cx, cy, cu, nx, ny } = g;
+    const NS = FP.secoes.length;
+    ctx.lineCap = 'butt'; ctx.lineJoin = 'round';
+    ctx.strokeStyle = COR_BRILHO;
+    let grupo = null, lwGrupo = -1, cabecas = 0, conta = 0;
+    const solta = () => {
+      if (!grupo) return;
+      for (let s = 0; s < NS; s++) {
+        ctx.globalAlpha = FP.secoes[s] * mistura;
+        ctx.stroke(grupo[s]);
+      }
+    };
+    const toque = toqueGrosso ? 3 : 6;
+    // no começo da mistura o estilo de perto ainda é tênue: poucas partículas bastam
+    const teto = (toqueGrosso ? FP.maxCabecas * 0.45 : FP.maxCabecas) * Math.min(1, 0.25 + 1.5 * mistura);
+    for (const pc of g.pecas) {
+      const qq = q[pc.i], lwD = lwFluxo(qq, z) * 2;      // largura desenhada do rio, em px
+      const lwFaixa = Math.max(1, Math.min(2.8, 1 + lwD * 0.07));
+      const lwKey = Math.round(lwFaixa * 4);
+      if (lwKey !== lwGrupo) {
+        solta();
+        grupo = FP.secoes.map(() => new Path2D());
+        ctx.lineWidth = lwFaixa; lwGrupo = lwKey;
+      }
+      const faixas = Math.max(1, Math.min(toque, Math.floor(lwD / 2.4)));
+      const v = velPerto(qq);
+      conta++;
+      for (let l = 0; l < faixas; l++) {
+        if (cabecas > teto) break;
+        const h = hashU(pc.i, l), h2 = hashU(pc.i, l + 17);
+        const S = (70 + 60 * h) / qualFluxo;                 // distância entre cabeças
+        const T = 30 + 24 * h2 + lwD * 0.9;                  // comprimento do rastro
+        const m0 = (((t * 0.001 * v * (0.9 + 0.2 * h2) + h * S * 9) % S) + S) % S;
+        const desloc = faixas > 1 ? ((l + 0.5) / faixas - 0.5) * lwD * 0.78 : 0;
+        const j0 = Math.ceil((pc.a - m0) / S), j1 = Math.floor((pc.b + T - m0) / S);
+        for (let j = j0; j <= j1; j++) {
+          const u = m0 + j * S;
+          cabecas++;
+          // cursor: acha o segmento onde o rastro começa e anda para frente
+          let lo = pc.p, hi = pc.p + pc.n - 1;
+          const u0 = Math.max(pc.a, u - T);
+          while (hi - lo > 1) { const md = (lo + hi) >> 1; if (cu[md] <= u0) lo = md; else hi = md; }
+          let kk = lo;
+          for (let s = 0; s < NS; s++) {
+            const us = Math.max(pc.a, u - T + T * s / NS), ue = Math.min(pc.b, u - T + T * (s + 1) / NS);
+            if (ue <= us) continue;
+            const cam = grupo[s];
+            while (kk < pc.p + pc.n - 2 && cu[kk + 1] <= us) kk++;
+            let f = (us - cu[kk]) / ((cu[kk + 1] - cu[kk]) || 1);
+            cam.moveTo(cx[kk] + (cx[kk + 1] - cx[kk]) * f + (nx[kk] + (nx[kk + 1] - nx[kk]) * f) * desloc,
+                       cy[kk] + (cy[kk + 1] - cy[kk]) * f + (ny[kk] + (ny[kk + 1] - ny[kk]) * f) * desloc);
+            let k2 = kk;
+            while (k2 < pc.p + pc.n - 2 && cu[k2 + 1] < ue) {
+              k2++;
+              cam.lineTo(cx[k2] + nx[k2] * desloc, cy[k2] + ny[k2] * desloc);
+            }
+            f = (ue - cu[k2]) / ((cu[k2 + 1] - cu[k2]) || 1);
+            cam.lineTo(cx[k2] + (cx[k2 + 1] - cx[k2]) * f + (nx[k2] + (nx[k2 + 1] - nx[k2]) * f) * desloc,
+                       cy[k2] + (cy[k2 + 1] - cy[k2]) * f + (ny[k2] + (ny[k2 + 1] - ny[k2]) * f) * desloc);
+          }
+        }
+      }
+    }
+    solta();
+    ctx.globalAlpha = 1;
+    return conta;
+  }
+
+  function fluxoLonge(ctx, z, corte, t, mistura) {
     const fase = (t / 1000) * VEL;
     ctx.lineCap = 'butt'; ctx.lineJoin = 'round';
-    ctx.globalAlpha = 0.5;
+    ctx.globalAlpha = 0.5 * mistura;
     ctx.strokeStyle = COR_FLUXO;
     let larAtual = -1, conta = 0;
     ctx.beginPath();
     for (const i of visiveis) {
       if (q[i] < corte) continue;
       conta++;
-      const lw = Math.max(0.7, Math.round(largura(q[i], z) * 0.5 * 3) / 3);
+      const lw = lwFluxo(q[i], z);
       if (lw !== larAtual) {
         ctx.stroke(); ctx.beginPath();
         ctx.lineWidth = lw;
@@ -2429,6 +2622,21 @@
     ctx.stroke();
     ctx.setLineDash([]);
     ctx.globalAlpha = 1;
+    return conta;
+  }
+
+  /* Ponto de entrada. `t` em ms. Com movimento reduzido o quadro é parado
+     (t = 0): a camada continua ligada, só não anda. */
+  function desenharFluxo(t) {
+    const ctx = fctx;
+    ctx.clearRect(0, 0, W, H);
+    if (semMovimento.matches) t = 0;
+    const z = zAtual;
+    const corte = Math.max(5, 240 / Math.pow(z, 1.35));   // só os rios de porte na vista
+    const mistura = suave01((z - FP.zIni) / (FP.zPleno - FP.zIni));
+    let conta = 0;
+    if (mistura < 1) conta = fluxoLonge(ctx, z, corte, t, mistura > 0.08 ? 1 - mistura : 1);
+    if (mistura > 0.08) conta = fluxoPerto(ctx, z, corte, t, mistura);
     ctx.lineCap = 'round';
     nFluxo = conta;
   }
@@ -2509,7 +2717,9 @@
   let laco = null;
   function tocar() {
     if (laco) return;
-    const passo = t => { laco = animando ? requestAnimationFrame(passo) : null; quadroFluxo(t); };
+    // com movimento reduzido a camada fica ligada e parada: um quadro, sem laço
+    if (semMovimento.matches) { quadroUnico(); return; }
+    const passo = t => { laco = animando ? requestAnimationFrame(passo) : null; ajustaQualidade(t); quadroFluxo(t); };
     laco = requestAnimationFrame(passo);
   }
   function parar() { if (laco) { cancelAnimationFrame(laco); laco = null; } }
@@ -3705,7 +3915,8 @@
   new MutationObserver(trocouTema)
     .observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   semMovimento.addEventListener('change', e => {
-    if (e.matches) { animando = false; parar(); quadroUnico(); }
+    // a camada continua ligada; só deixa de andar (ou volta a andar)
+    if (e.matches) { parar(); quadroUnico(); } else if (animando) tocar();
   });
 })();
 </script>

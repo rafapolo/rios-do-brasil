@@ -89,11 +89,11 @@ conferência: `processa.py` roda validação cruzada 5-fold contra estações re
 (semiárido caindo, arco de desmatamento subindo). Ao mexer nos números, compare contra o que o
 README afirma — os valores lá são resultado medido, não arredondamento.
 
-**As páginas geradas, sim.** 97 testes em `testes/`, com Bun e Playwright:
+**As páginas geradas, sim.** 103 testes em `testes/`, com Bun e Playwright:
 
 ```bash
 bun install && bun run preparar   # baixa chromium, firefox e webkit (uma vez)
-bun test                          # em série, ~2,5 min, 97 testes nos três motores
+bun test                          # em série, ~2,5 min, 103 testes nos três motores
 bun run test                      # um processo por arquivo, 3 ao mesmo tempo, ~1,5 min (testes/roda.ts)
 ```
 
@@ -139,8 +139,8 @@ Todos os JSON intermediários são gitignored. Os HTML gerados são versionados 
   `moldura`, que é só o contorno do Brasil). Sem ele o mapa é plano infinito e um arrasto
   distraído joga a rede para fora da tela sem deixar pista de para que lado voltar. Quem subir
   o `ZOOM_MAX` precisa reconferir duas coisas que não são cobertas por teste: o degrau da grade
-  da BHO (11 m nas bacias grandes, 110 m nas pequenas) e a camada de fluxo, que nunca foi
-  calibrada acima dessa faixa.
+  da BHO (11 m nas bacias grandes, 110 m nas pequenas) e a camada de fluxo, calibrada até
+  `ZOOM_MAX` = 120 (estilo de perto, `FP` no template; `testes/fluxo.test.ts` percorre as escalas).
 - **`<meta name="viewport">` é obrigatório** e as duas páginas ficaram sem ele por muito tempo.
   Sem a tag, o celular adota um viewport de 980 px e reduz tudo por zoom: o texto sai minúsculo
   e **nenhuma media query de `max-width` dispara**, então todo o CSS de celular vira letra
