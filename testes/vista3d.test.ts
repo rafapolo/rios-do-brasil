@@ -315,6 +315,41 @@ describe("relevo na vista 3D", () => {
     await pg.context().close();
   }, LENTO);
 
+  test("o mosaico fino acompanha o arrasto: a rede não fica na grade enquanto a câmera anda", async () => {
+    const { pg } = await abrir(copiaSondada(), { fresco: true });
+    await pg.route("**/elevation-tiles-prod.s3.amazonaws.com/**", (r) =>
+      r.fulfill({ contentType: "image/png", body: terrarium(777), headers: { "access-control-allow-origin": "*" } }));
+    await roda(pg, pertoDoRio);
+    await pg.waitForFunction("window.__testes.fino().on", undefined, { timeout: 20_000 });
+    const ini = await roda<any>(pg, "() => window.__testes.fino()");
+    // com o bearing de 90°, 3.000 px de arrasto andam vários ladrilhos z10; antes o mosaico só mudava no moveend
+    await roda(pg, "() => window.__testes.map.panBy([3000, 0], { duration: 5000 })");
+    await pg.waitForFunction(`(() => { const f = window.__testes.fino(); return f.x0 !== ${ini.x0} || f.y0 !== ${ini.y0}; })()`,
+      undefined, { timeout: 4000 });
+    await pg.waitForTimeout(300);   // a borda nova chega da rota (ladrilho fino) no quadro seguinte
+    const r = await roda<any>(pg, "() => { const t = window.__testes, c = t.map.getCenter(); return { andando: t.map.isMoving(), f: t.fino(), alt: t.altMundo(c.lng, c.lat) }; }");
+    expect(r.andando, "a câmera parou antes da conferência: o teste não prova nada").toBe(true);
+    expect(r.f.on).toBe(true);
+    // o centro em movimento está dentro do mosaico, e no ladrilho fino (777 m), não na grade
+    expect(r.alt).toBeCloseTo(777, 0);
+    await roda(pg, "() => window.__testes.map.stop()");
+    await pg.context().close();
+  }, LENTO);
+
+  test("o teto de zoom sobe um nível na vista 3D e volta ao sair dela", async () => {
+    const { pg } = await abrir(copiaSondada(), { fresco: true });
+    const plano = await roda<number>(pg, "() => window.__testes.map.getMaxZoom()");
+    await roda(pg, `() => { const t = window.__testes; t.define3D(true, { animar: false }); t.map.jumpTo({ zoom: t.map.getMaxZoom() }); }`);
+    const r3d = await roda<any>(pg, "() => { const m = window.__testes.map; return { max: m.getMaxZoom(), z: m.getZoom() }; }");
+    expect(r3d.max - plano).toBeCloseTo(1, 5);
+    expect(r3d.z).toBeCloseTo(r3d.max, 5);
+    await roda(pg, "() => window.__testes.define3D(false, { animar: false })");
+    const r2d = await roda<any>(pg, "() => { const m = window.__testes.map; return { max: m.getMaxZoom(), z: m.getZoom() }; }");
+    expect(r2d.max).toBeCloseTo(plano, 5);
+    expect(r2d.z).toBeLessThanOrEqual(plano + 1e-6);
+    await pg.context().close();
+  }, LENTO);
+
   test("sem rede, de perto, o relevo cai calado na grade embutida", async () => {
     const { pg } = await abrir(copiaSondada(), { fresco: true });
     await pg.route("**/elevation-tiles-prod.s3.amazonaws.com/**", (r) => r.abort());
