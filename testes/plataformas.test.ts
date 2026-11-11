@@ -379,7 +379,7 @@ describe("WebGL: sem ele, por software e depois de perdê-lo", () => {
       const pg = await (await b.newContext({ viewport: { width: 1280, height: 800 } })).newPage();
       const erros: string[] = [];
       pg.on("pageerror", (e) => erros.push(e.message));
-      await pg.goto(urlDe(INDEX) + "?3d=1");
+      await pg.goto(copiaSondada() + "?3d=1");
       await pg.waitForSelector("#carregando", { state: "detached", timeout: 90_000 });
       expect(await pg.isVisible("#avisoSw"), "faltou o aviso de WebGL por software").toBe(true);
       expect(await pg.textContent("#avisoSw")).toContain("por software");
@@ -387,6 +387,12 @@ describe("WebGL: sem ele, por software e depois de perdê-lo", () => {
       expect(await pg.isEnabled("#bt3d")).toBe(true);
       await pg.waitForTimeout(2500);
       expect(await roda<number>(pg, TINTA), "o mapa por software não desenhou a rede").toBeGreaterThan(20);
+      // o botão 3D continua inclinando, mas por software não há terreno
+      await pg.click("#bt3d");
+      await pg.waitForTimeout(1500);
+      expect(await roda<any>(pg, `() => ({ pitch: Math.round(window.__testes.map.getPitch()),
+        terreno: !!window.__testes.map.getTerrain(), relevo: window.__testes.relevo() })`))
+        .toMatchObject({ terreno: false, relevo: { tem: false, ativo: false } });
       expect(erros).toEqual([]);
     } finally { await b.close(); }
   }, 150_000);

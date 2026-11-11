@@ -145,3 +145,126 @@ describe("vista 3D", () => {
     await pg.context().close();
   }, LENTO);
 });
+
+/* O relevo de verdade na vista 3D (tasks/relevo-3d.md): a grade do ETOPO vai embutida, vira
+ * terreno da biblioteca pelos ladrilhos montados no navegador, e a rede sobe com ele no shader
+ * (e o fluxo, os anéis e o acerto pelo paraTela). Desligado o 3D, nada disso existe. */
+const assina = `() => {
+  const c = document.getElementById('cv');
+  const t = document.createElement('canvas'); t.width = c.width; t.height = c.height;
+  const x = t.getContext('2d'); x.drawImage(c, 0, 0);
+  const d = x.getImageData(0, 0, c.width, c.height).data;
+  let h = 0;
+  for (let i = 0; i < d.length; i += 4 * 53) h = (h * 31 + d[i] * 7 + d[i + 1] * 3 + d[i + 2]) >>> 0;
+  return h;
+}`;
+const esperaTerreno = (pg: Page) => pg.waitForFunction(
+  "window.__testes.relevo().ativo && window.__testes.map.areTilesLoaded()", undefined, { timeout: 20_000 });
+/* um vértice do Tietê no planalto, perto da nascente, e a câmera inclinada sobre a serra */
+const tieteNaSerra = `() => {
+  // a BHO parte o Tietê nos reservatórios: os trechos da cabeceira saem direto pelo nome
+  const t = window.__testes, pts = [];
+  let i = -1;
+  for (let k = 0; k < t.N; k++) {
+    if (t.D.nomes[t.nomeIdx[k]] !== 'Rio Tietê') continue;
+    for (let j = t.inicio[k]; j < t.inicio[k + 1]; j += 2) {
+      const lon = t.coords[j] * 360 - 180;
+      const lat = 360 / Math.PI * Math.atan(Math.exp(Math.PI * (1 - 2 * t.coords[j + 1]))) - 90;
+      if (lon > -46.6 && lon < -45.9 && lat > -23.75 && lat < -23.4) { pts.push({ wx: t.coords[j], wy: t.coords[j + 1], lon, lat }); i = k; }
+    }
+  }
+  /* o centro no litoral, olhando a serra do mar: o z é relativo ao centro, e com o centro no
+     planalto o Tietê ficaria na mesma altitude dele (z ≈ 0) e o teste não veria diferença */
+  t.map.jumpTo({ center: [-46.25, -23.98], zoom: t.map.getMinZoom() + 5, bearing: -10, pitch: 58 });
+  return { nome: t.D.nomes[t.nomeIdx[i]], pts: pts.filter((_, k) => k % Math.max(1, (pts.length / 8) | 0) === 0).slice(0, 8) };
+}`;
+
+describe("relevo na vista 3D", () => {
+  test("o 3D liga o terreno e o sombreamento em menos de 300 ms; desligar tira os dois e o plano volta igual", async () => {
+    const { pg } = await abrir(copiaSondada(), { fresco: true });
+    await pg.waitForTimeout(500);
+    const antes = await roda<number>(pg, assina);
+    expect(await roda<any>(pg, `() => window.__testes.relevo()`)).toMatchObject({ tem: true, ativo: false });
+    const ms = await roda<number>(pg, `() => new Promise(ok => {
+      const t = window.__testes, t0 = performance.now();
+      t.define3D(true, { animar: false });
+      const vê = () => t.relevo().ativo && t.map.getTerrain() ? ok(performance.now() - t0) : requestAnimationFrame(vê);
+      vê();
+    })`);
+    expect(ms, "abrir o 3D com relevo passou de 300 ms").toBeLessThan(300);
+    await esperaTerreno(pg);
+    const lig = await roda<any>(pg, `() => { const m = window.__testes.map; return {
+      fonte: !!m.getSource('relevo'), sombra: !!m.getLayer('sombra'), terreno: m.getTerrain() && m.getTerrain().source,
+      elev: m.transform.elevation, exag: m.terrain.exaggeration }; }`);
+    expect(lig).toMatchObject({ fonte: true, sombra: true, terreno: "relevo" });
+    expect(lig.elev, "o centro do Brasil ficou na altitude zero").toBeGreaterThan(1000);
+    expect(lig.exag).toBe(12);
+    expect(await roda<number>(pg, TINTA)).toBeGreaterThan(20);
+
+    await roda(pg, `() => window.__testes.define3D(false, { animar: false })`);
+    await pg.waitForTimeout(900);
+    const des = await roda<any>(pg, `() => { const m = window.__testes.map; return {
+      fonte: !!m.getSource('relevo') || !!m.getSource('relevo-sombra'), sombra: !!m.getLayer('sombra'),
+      terreno: !!m.getTerrain(), ativo: window.__testes.relevo().ativo }; }`);
+    expect(des).toEqual({ fonte: false, sombra: false, terreno: false, ativo: false });
+    expect(await roda<number>(pg, assina), "o plano não voltou igual depois do relevo").toBe(antes);
+    await pg.context().close();
+  }, LENTO);
+
+  test("a rede sobe com o terreno: o paraTela bate com a biblioteca e a GPU pinta onde ele diz", async () => {
+    const { pg } = await abrir(copiaSondada(), { fresco: true });
+    await roda(pg, `() => window.__testes.define3D(true, { animar: false })`);
+    await esperaTerreno(pg);
+    const { pts } = await roda<any>(pg, tieteNaSerra);
+    expect(pts.length).toBeGreaterThanOrEqual(5);
+    await esperaTerreno(pg);
+    await pg.waitForTimeout(600);
+    const r = await roda<any>(pg, `(pts) => {
+      const t = window.__testes, m = t.map, c = document.getElementById('cv'), k = c.width / c.clientWidth;
+      const tmp = document.createElement('canvas'); tmp.width = c.width; tmp.height = c.height;
+      const x = tmp.getContext('2d'); x.drawImage(c, 0, 0);
+      const M = m.transform.customLayerMatrix(), W = c.clientWidth, H = c.clientHeight;
+      return pts.map(p => {
+        const [sx, sy] = t.paraTela(p.wx, p.wy), d = m.project([p.lon, p.lat]);
+        const w = M[3] * p.wx + M[7] * p.wy + M[15];   // o mesmo ponto sem o z: onde ele estaria no plano
+        const plano = [(M[0] * p.wx + M[4] * p.wy + M[12]) / w * 0.5 * W + 0.5 * W, (1 - (M[1] * p.wx + M[5] * p.wy + M[13]) / w) * 0.5 * H];
+        const px = x.getImageData(Math.round(sx * k) - 3, Math.round(sy * k) - 3, 7, 7).data;
+        let azul = false;
+        for (let i = 0; i < px.length; i += 4) if (px[i + 2] > px[i] + 40) azul = true;
+        return { erro: Math.hypot(sx - d.x, sy - d.y), semZ: Math.hypot(plano[0] - d.x, plano[1] - d.y), azul };
+      });
+    }`, pts);
+    for (const p of r) expect(p.erro, "o paraTela não pôs o ponto no terreno").toBeLessThan(1);
+    expect(Math.min(...r.map((p: any) => p.semZ)), "sem z o ponto cairia no mesmo lugar: o teste não discrimina").toBeGreaterThan(4);
+    expect(r.filter((p: any) => p.azul).length, "a GPU não desenhou o Tietê onde o paraTela diz").toBeGreaterThanOrEqual(r.length - 1);
+    await pg.context().close();
+  }, LENTO);
+
+  test("clicar no Tietê com a câmera inclinada sobre a serra abre a ficha dele", async () => {
+    const { pg } = await abrir(copiaSondada(), { fresco: true });
+    await roda(pg, `() => window.__testes.define3D(true, { animar: false })`);
+    await esperaTerreno(pg);
+    const { nome, pts } = await roda<any>(pg, tieteNaSerra);
+    await esperaTerreno(pg);
+    await pg.waitForTimeout(600);
+    const p = pts[(pts.length / 2) | 0];
+    const px = await roda<{ x: number; y: number }>(pg, `(p) => { const d = window.__testes.map.project([p.lon, p.lat]); return { x: d.x, y: d.y }; }`, p);
+    await pg.mouse.click(px.x, px.y);
+    await pg.waitForTimeout(500);
+    expect((await pg.textContent("#ficha")) ?? "", "a ficha do Tietê não abriu sobre o relevo").toContain(nome);
+    await pg.context().close();
+  }, LENTO);
+
+  test("com o 3D e o terreno ligados a página não sai à rede", async () => {
+    const { pg } = await abrir(copiaSondada(), { fresco: true });
+    const externos: string[] = [];
+    pg.on("request", (q) => { if (!q.url().startsWith("file:") && !q.url().startsWith("data:") && !q.url().startsWith("blob:")) externos.push(q.url()); });
+    await roda(pg, `() => window.__testes.define3D(true, { animar: false })`);
+    await esperaTerreno(pg);
+    await roda(pg, `() => window.__testes.map.jumpTo({ center: [-68, -16], zoom: window.__testes.map.getMinZoom() + 3, bearing: 60, pitch: 60 })`);
+    await esperaTerreno(pg);
+    await pg.waitForTimeout(500);
+    expect(externos, "o relevo pediu algo à rede").toEqual([]);
+    await pg.context().close();
+  }, LENTO);
+});

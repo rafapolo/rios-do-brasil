@@ -212,7 +212,10 @@ export function copiaSondada(): string {
     "    buscaRios: (s) => buscaRios(s).map(r => ({ nome: D.nomes[nomeIdx[r.i]],\n" +
     "      uf: ufDoRio(r.i), q: r.q, peso: r.peso, i: r.i })),\n" +
     "    vaiAoRio: (i) => vaiAoRio(i), trechosDoRio: (i) => [...trechosDoRio(i)],\n" +
-    "    cor: (v) => cor(v), largura: (v, z) => largura(v, z), t01: (v) => t01(v) };\n";
+    "    cor: (v) => cor(v), largura: (v, z) => largura(v, z), t01: (v) => t01(v),\n" +
+    "    relevo: () => ({ ativo: REL.ativo, exag: REL.exag, elev: REL.elev, zMax: REL.zMax, tem: TEM_RELEVO }),\n" +
+    "    ligaRelevo: () => ligaRelevo(), desligaRelevo: () => desligaRelevo(),\n" +
+    "    altEm: (lon, lat) => altLonLat(lon, lat) };\n";
   const destino = join(mkdtempSync(join(tmpdir(), "rios-")), "index.html");
   writeFileSync(destino, s.replace(ancora, sonda + ancora), "utf8");
   return urlDe(destino);
