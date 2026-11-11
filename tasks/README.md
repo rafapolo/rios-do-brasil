@@ -9,6 +9,7 @@ medidas contra o serviço, não supostas.
 | [Barragens e rio livre](barragens.md) | SNISB via ArcGIS do SNIRH + hidrelétricas da Aneel | **implementado em 29/10/2026**: modo "Rio livre" no mapa, por `baixa_barragens.py` e `barragens.py` |
 | [Qualidade da água medida](qualidade-agua.md) | Indicadores de Qualidade (RNQA) do SNIRH | **sem fonte desde out/2026**: o serviço `SPR/Indicadores_Qualidade_v31072023` devolve 404 (29/10/2026) e nada no SNIRH o substitui — ver a nota no arquivo |
 | [Camada de satélite](done/satelite.md) | Sentinel-2 cloudless da EOX, mosaico de 2016 (CC BY 4.0) | **implementado e com a suíte fechando** — o que travava era uma asserção, não a camada. Os anos 2017+ são BY-NC-SA e não cabem no MIT deste repo |
+| [Relevo de verdade na vista 3D](done/relevo-3d.md) | ETOPO 2022 (NOAA, CC0), embutido no HTML | **implementado em 11/11/2026**: terreno + sombreamento no 3D e a rede elevada no shader, +1,4 MB |
 | [Peso do mapa e tempo da suíte](peso-do-mapa.md) | — | **aberto**: a página foi a 17,4 MB com o rio livre e o `mapa.test.ts` passou de 3 min |
 
 ## Feitos a partir do lake

@@ -142,6 +142,7 @@ UHE Itá, com +70% por década, que é o enchimento do reservatório.
 | Reservatórios | Sistema de Acompanhamento de Reservatórios (SAR), ANA |
 | Contorno dos estados | `br_geobr_mapas` / IBGE |
 | Terra e fronteiras | [Natural Earth](https://www.naturalearthdata.com) 1:50m |
+| Relevo da vista 3D | [ETOPO 2022](https://www.ncei.noaa.gov/products/etopo-global-relief-model) 60″, NOAA NCEI, CC0 ([doi:10.25921/fd45-gt74](https://doi.org/10.25921/fd45-gt74)); `world_noaa_etopo.etopo2022_60s_america_sul` no lake |
 | Imagem de satélite (camada opcional) | [EOxCloudless](https://cloudless.eox.at) 2016, da EOX IT Services GmbH — dados Copernicus Sentinel modificados, sob [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) |
 
 ## Como a vazão é estimada
@@ -194,6 +195,8 @@ python3 baixa_outorgas.py        # outorgas de lançamento e captação do SNIRH
 python3 baixa_atlas_esgotos.py   # Atlas Esgotos + sedes municipais, do espelho no beelink
 python3 processa.py              # regionaliza a vazão, acumula o efluente e valida (~5 min)
 python3 outorga.py               # licença de retirada acumulada por trecho (~12 min)
+python3 baixa_relevo.py          # recorte do ETOPO 2022 para o lake, uma vez (~30 s, 42 MB)
+python3 relevo.py                # grade do relevo da vista 3D, 1/30° (~1 s)
 python3 monta_pagina.py          # gera o index.html
 ```
 
@@ -235,7 +238,7 @@ então só é preciso rodar se quiser trocar a base de contornos.
 
 Dependências: `requests`, `polars`, `numpy`, `scipy`, `shapely`, `pyarrow`.
 
-## Como a página cabe em 17 MB
+## Como a página cabe em 19 MB
 
 São 2,6 milhões de vértices. Em JSON de inteiros isso daria 34 MB. Três medidas:
 
@@ -279,6 +282,23 @@ norte para cima, e os gestos de giro e inclinação ficam desativados; ligada, a
 (botão direito ou Ctrl para girar, dois dedos no celular, botão de bússola para voltar ao norte). A URL
 guarda o estado: `?3d=1` e a câmera em `#zoom/lat/lon/giro/inclinação`, ao lado de `?mapa=<modo>`.
 
+Com o 3D ligado entra o **relevo de verdade**: o ETOPO 2022 (NOAA, 60″) reamostrado pelo `relevo.py`
+numa grade de 1/30° (~3,7 km, 1.770 × 1.470 células), embutida como os dados e descomprimida só na
+primeira vez em que o 3D liga. A página monta no navegador os ladrilhos de altitude que o terreno da
+MapLibre pede (Terrarium, por `addProtocol`, nada vem da rede), põe um sombreamento por cima da terra e
+sobe a rede no shader da camada própria, com a mesma altitude e o mesmo exagero (o z vai relativo à
+altitude do centro da tela: `notas/spike-relevo.md`). A altura é **exagerada** — 12× com o país inteiro na
+tela, caindo com a raiz do zoom até 1,5× de perto — e, acima de 2.000 m, conta só um quarto, senão os
+Andes viram uma parede que esconde a Amazônia. A grade achata o que é estreito: o Pico da Neblina sai com
+~2.270 m (−24%), as Agulhas Negras com ~2.390 m (−14%); o `relevo.py` imprime essa conferência. Por WebGL
+por software não há relevo, e o 3D só inclina a câmera.
+
+O relevo custou **+1,4 MB** na página (17.746.517 → 19.129.124 bytes, 17,7 → 19,1 MB; a grade em int16 seria 5,2 MB: vai
+como resíduo de um preditor plano, em zigue-zague e em dois planos de byte, quantizada a 2 m, e o gzip
+faz o resto). Abrir a página não muda (1,3 s até o véu sair), ligar o 3D leva menos de 300 ms a mais
+(um teste confere), e girar a 55° fica em 79 fps no enquadramento nacional e 73 fps de perto, contra
+84 e 61 sem o relevo (`notas/spike/relevo-fps.ts`, ruído de uma medida só).
+
 Medido no chromium embutido do Playwright, Mac M4, `index.html` por `file://`
 (`notas/spike/base.ts`, `notas/spike/final.ts`):
 
@@ -296,7 +316,8 @@ segmentos): é utilizável, mas lento; é o ponto fraco da escolha.
 
 ## Licença
 
-Código sob MIT. Os dados são públicos, da ANA, do IBGE e do Natural Earth — cite as fontes.
+Código sob MIT. Os dados são públicos, da ANA, do IBGE, do Natural Earth e da NOAA (o relevo do ETOPO 2022 é
+CC0) — cite as fontes.
 
 A página embute a **MapLibre GL JS 4.7.1** (BSD de 3 cláusulas, © contribuidores da MapLibre), sem
 alteração; o texto da licença está em `pipeline/vendor/maplibre-gl-LICENSE.txt`.

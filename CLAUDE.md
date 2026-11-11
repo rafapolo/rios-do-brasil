@@ -7,7 +7,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 Duas páginas HTML autocontidas sobre os rios do Brasil, geradas por scripts Python:
 
 - **`index.html`** — mapa dos 462.539 trechos da Base Hidrográfica Ottocodificada da ANA,
-  desenhados pela vazão média. MapLibre GL embutida + camada WebGL própria (vista 3D a pedido), 17,7 MB.
+  desenhados pela vazão média. MapLibre GL embutida + camada WebGL própria (vista 3D a pedido, com relevo), 19,1 MB.
 - **`series.html`** — análise da série histórica da ANA (1901–2023): tendência de vazão por
   estação, dias de rio seco, deslocamento da cheia, Q7,10, tamanho da rede, espelho d'água
   (MapBiomas) e perda na distribuição (SNIS). SVG, 990 KB.
@@ -69,6 +69,8 @@ python3 tendencia_rede.py         # leva o %/década da estação para os trecho
 python3 bacia_rede.py             # nome da bacia (22 maiores por km) na ficha do trecho, ~10 s
 python3 baixa_barragens.py        # SNISB + hidrelétricas da Aneel, ~3 min (opcional)
 python3 barragens.py              # modo "Rio livre": corta a rede em cada barragem, ~10 s
+python3 baixa_relevo.py           # ETOPO 2022 60″ para o lake, uma vez (~30 s)
+python3 relevo.py                 # grade do relevo da vista 3D, 1/30°, ~1 s (opcional)
 python3 monta_pagina.py
 
 # séries históricas (series.html) — só depende do lake
@@ -89,11 +91,11 @@ conferência: `processa.py` roda validação cruzada 5-fold contra estações re
 (semiárido caindo, arco de desmatamento subindo). Ao mexer nos números, compare contra o que o
 README afirma — os valores lá são resultado medido, não arredondamento.
 
-**As páginas geradas, sim.** 133 testes em `testes/`, com Bun e Playwright:
+**As páginas geradas, sim.** 137 testes em `testes/`, com Bun e Playwright:
 
 ```bash
 bun install && bun run preparar   # baixa chromium, firefox e webkit (uma vez)
-bun test                          # em série, ~2,5 min, 133 testes nos três motores
+bun test                          # em série, ~2,5 min, 137 testes nos três motores
 bun run test                      # um processo por arquivo, 3 ao mesmo tempo, ~1,5 min (testes/roda.ts)
 ```
 
@@ -116,7 +118,7 @@ Três coisas ao mexer na suíte:
   não dá para alcançá-los de fora. `copiaSondada()` gera uma cópia temporária do `index.html`
   com `window.__testes` injetado antes do marcador `/* ---------- início ---------- */` — o
   produto não ganha porta de depuração por causa do teste.
-- Abrir o `index.html` custa ~1,5 s (17 MB, gzip, 462 mil trechos; no chromium da suíte, com GPU): `abrir()` espera o véu `#carregando` sair, não um tempo fixo. Cada par (motor, URL) é aberto
+- Abrir o `index.html` custa ~1,5 s (19 MB, gzip, 462 mil trechos; no chromium da suíte, com GPU): `abrir()` espera o véu `#carregando` sair, não um tempo fixo. Cada par (motor, URL) é aberto
   uma vez e reaproveitado; quem mexe no estado da página chama `reinicia()` antes. Página aberta com `fresco: true` e que não vai mais ser usada deve ser fechada (`p.context().close()`): cada uma guarda 462 mil trechos. O teto é 3 min por rodada: os bugs de plataforma (celular, Tab, notch, sem JS) portados do cantography moram em `plataformas.test.ts`; a busca de rio tem arquivo próprio (`busca.test.ts`) para a rodada paralela se repartir bem; se o `mapa.test.ts` voltar a passar de ~2 min, parta-o de novo em vez de aumentar o teto.
 
 ## Como uma página é montada
@@ -167,6 +169,20 @@ Todos os JSON intermediários são gitignored. Os HTML gerados são versionados 
   `#zoom/lat/lon/giro/inclinação`; a câmera da URL é lida **antes** da biblioteca mexer na vista
   (`HASH0`, `BUSCA0`). O tour deve chamar `define3D` e restaurar o estado ao sair. Por WebGL por
   software (`POR_SOFTWARE`) a página avisa, abre plana e corta mais faixas de vazão.
+- **O relevo da vista 3D** (`tasks/relevo-3d.md`, spike em `notas/spike-relevo.md`) é o ETOPO 2022 numa grade
+  de 1/30° (`relevo.py` → `relevo.json` + `relevo.bin`, marcadores `/*__RELEVO__*/` e `/*__RELEVOMETA__*/`),
+  descomprimida só na primeira vez que o 3D liga. A altitude sai do pipeline já com mar em 0, a compressão acima
+  de `TETO` (2.000 m, um quarto acima disso) e o quantum de 2 m; a página não mexe mais nela. Três consumidores
+  leem o mesmo número: os ladrilhos `raster-dem` (Terrarium montado em `ladrilhoRelevo` por `addProtocol`, PNG
+  feito à mão), a textura R16F do shader da rede e dos marcadores (`ALT_GLSL`/`zDe`) e `altEm`/`zMundo` na CPU
+  (`paraTela`, `traca`, `perspDe`, `cortaCelulas`). **O z de camada própria é relativo ao centro:**
+  `(h·exagero − map.transform.elevation)/(C·cos φ)` — a `customLayerMatrix()` não conhece o terreno, e com o z
+  absoluto a rede flutua. O exagero mora em `EXAGERO` (12× no enquadramento nacional, cai com a raiz do zoom,
+  piso 1,5×), aplicado a `map.terrain.exaggeration` a cada zoom. **Ligar/desligar o terreno com a câmera em
+  movimento congela a animação dela** (pitch parado em 32° de 60°, o padding do tour pela metade): `aplicaRelevo`
+  espera o `moveend`, e o `define3D` animado liga o relevo antes de inclinar. Sombreamento numa fonte própria
+  (`relevo-sombra`, a biblioteca avisa se dividir com o terreno), cores nos tokens `--relevo-sombra`/`--relevo-luz`.
+  Por software (`POR_SOFTWARE`) não há relevo. A sonda expõe `relevo()`, `ligaRelevo`, `desligaRelevo` e `altEm`.
 - **Os limites da câmera do mapa moram em dois lugares só, e nenhum deles é literal solto.**
   O teto de zoom é `ZOOM_MAX` (hoje 180 × o enquadramento nacional, ~13 m/px; a 240 o córrego pequeno vira escada), traduzido em
   `limitesDeZoom()` para o zoom da biblioteca (`512·2^zoom` = `vista.k`). O limite de
