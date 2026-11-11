@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Spike: terreno + camada custom</title>
+<link rel="stylesheet" href="../../pipeline/vendor/maplibre-gl-4.7.1.css">
+<style>html,body,#m{margin:0;height:100%;background:#dde}</style>
+<script src="../../pipeline/vendor/maplibre-gl-4.7.1.js"></script>
+</head><body><div id="m"></div>
+<script>
+/* Bancada da etapa 0 do tasks/relevo-3d.md. Um DEM de mentira (gaussiana de 3.000 m centrada em
+   -50, -15, sigma 2°), servido em Terrarium por addProtocol, e uma camada custom com três linhas: uma
+   cruz que passa pelo pico, com z calculado na CPU pela mesma gaussiana. Roda com notas/spike/relevo.ts. */
+const PICO = [-50, -15], H0 = 3000, SIG = 2, EXAG = 12;
+const alt = (lon, lat) => H0 * Math.exp(-(((lon - PICO[0]) ** 2 + (lat - PICO[1]) ** 2) / (2 * SIG * SIG)));
+const merc = lat => { const s = Math.sin(lat * Math.PI / 180); return 0.5 - Math.log((1 + s) / (1 - s)) / (4 * Math.PI); };
+const projX = lon => (lon + 180) / 360;
+const lonDeX = x => x * 360 - 180;
+const latDeY = y => 360 / Math.PI * Math.atan(Math.exp((0.5 - y) * 2 * Math.PI)) - 90;
+
+/* PNG mínimo: RGB 8 bits, deflate em blocos "stored" (sem compressão) — determinístico nos três
+   motores, sem canvas no caminho (o canvas pode aplicar gestão de cor ou ruído anti-fingerprint). */
+const CRC = new Uint32Array(256).map((_, n) => { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; return c >>> 0; });
+const crc = (b, i, j) => { let c = ~0; for (let k = i; k < j; k++) c = CRC[(c ^ b[k]) & 255] ^ (c >>> 8); return ~c >>> 0; };
+function png(w, h, rgb) {
+  const linha = w * 3 + 1, cru = new Uint8Array(linha * h);
+  for (let y = 0; y < h; y++) { cru[y * linha] = 0; cru.set(rgb.subarray(y * w * 3, (y + 1) * w * 3), y * linha + 1); }
+  const nb = Math.ceil(cru.length / 65535), z = new Uint8Array(2 + cru.length + nb * 5 + 4);
+  z[0] = 0x78; z[1] = 1; let o = 2, a = 1, b = 0;
+  for (let i = 0; i < cru.length; i += 65535) {
+    const n = Math.min(65535, cru.length - i);
+    z[o++] = i + n >= cru.length ? 1 : 0; z[o++] = n & 255; z[o++] = n >> 8; z[o++] = ~n & 255; z[o++] = (~n >> 8) & 255;
+    z.set(cru.subarray(i, i + n), o); o += n;
+  }
+  for (let i = 0; i < cru.length; i++) { a = (a + cru[i]) % 65521; b = (b + a) % 65521; }
+  const ad = ((b << 16) | a) >>> 0; z[o++] = ad >>> 24; z[o++] = (ad >> 16) & 255; z[o++] = (ad >> 8) & 255; z[o++] = ad & 255;
+  const pedacos = [], pedaco = (tipo, dados) => {
+    const p = new Uint8Array(12 + dados.length), v = new DataView(p.buffer);
+    v.setUint32(0, dados.length); for (let k = 0; k < 4; k++) p[4 + k] = tipo.charCodeAt(k);
+    p.set(dados, 8); v.setUint32(8 + dados.length, crc(p, 4, 8 + dados.length)); pedacos.push(p);
+  };
+  const ih = new Uint8Array(13), iv = new DataView(ih.buffer); iv.setUint32(0, w); iv.setUint32(4, h); ih[8] = 8; ih[9] = 2;
+  pedaco('IHDR', ih); pedaco('IDAT', z); pedaco('IEND', new Uint8Array(0));
+  const tot = new Uint8Array(8 + pedacos.reduce((s, p) => s + p.length, 0));
+  tot.set([137, 80, 78, 71, 13, 10, 26, 10]); let q = 8; for (const p of pedacos) { tot.set(p, q); q += p.length; }
+  return tot.buffer;
+}
+let pedidos = 0;
+maplibregl.addProtocol('relevo', async (params) => {
+  pedidos++;
+  const [z, x, y] = params.url.replace('relevo://', '').split('/').map(Number);
+  const T = 256, n = 2 ** z, rgb = new Uint8Array(T * T * 3);
+  for (let j = 0; j < T; j++) for (let i = 0; i < T; i++) {
+    const h = alt(lonDeX((x + (i + 0.5) / T) / n), latDeY((y + (j + 0.5) / T) / n));
+    const v = Math.round((h + 32768) * 256), o = (j * T + i) * 3;
+    rgb[o] = v >> 16; rgb[o + 1] = (v >> 8) & 255; rgb[o + 2] = v & 255;
+  }
+  return { data: png(T, T, rgb) };
+});
+
+const map = new maplibregl.Map({ container: 'm', center: PICO, zoom: 5, pitch: 60, bearing: 20, maxPitch: 85,
+  style: { version: 8, sources: {}, layers: [{ id: 'fundo', type: 'background', paint: { 'background-color': '#dde' } }] },
+  preserveDrawingBuffer: true, fadeDuration: 0, attributionControl: false });
+
+// linhas com z: uma cruz pelo pico, a cada 0,05°
+const LIN = [];
+for (let t = -6; t <= 6; t += 0.05) { LIN.push([PICO[0] + t, PICO[1]], [PICO[0] + t + 0.05, PICO[1]]); LIN.push([PICO[0], PICO[1] + t], [PICO[0], PICO[1] + t + 0.05]); }
+const zMerc = (h, lat) => h / (40075016.686 * Math.cos(lat * Math.PI / 180));
+const custom = {
+  id: 'linhas', type: 'custom', renderingMode: '2d', comZ: true,
+  onAdd(_m, gl) {
+    const vs = `#version 300 es
+    uniform mat4 uM; in vec3 aP; void main(){ gl_Position = uM * vec4(aP, 1.); }`;
+    const fs = `#version 300 es
+    precision highp float; out vec4 o; void main(){ o = vec4(.85,.1,.1,1.); }`;
+    const sh = (t, s) => { const o = gl.createShader(t); gl.shaderSource(o, s); gl.compileShader(o); if (!gl.getShaderParameter(o, gl.COMPILE_STATUS)) throw gl.getShaderInfoLog(o); return o; };
+    this.p = gl.createProgram(); gl.attachShader(this.p, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(this.p, sh(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(this.p);
+    this.b = gl.createBuffer(); this.aP = gl.getAttribLocation(this.p, 'aP'); this.uM = gl.getUniformLocation(this.p, 'uM');
+    this.sobe(gl);
+  },
+  sobe(gl) {
+    const f = new Float32Array(LIN.length * 3);
+    LIN.forEach(([lo, la], i) => { f[i * 3] = projX(lo); f[i * 3 + 1] = merc(la); f[i * 3 + 2] = this.comZ ? zMerc(alt(lo, la), la) * EXAG : 0; });
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.b); gl.bufferData(gl.ARRAY_BUFFER, f, gl.STATIC_DRAW);
+  },
+  render(gl, m) {
+    window.__matrizRecebida = Array.from(m);
+    window.__depthTest = gl.isEnabled(gl.DEPTH_TEST);
+    if (window.__semDepth) gl.disable(gl.DEPTH_TEST);
+    gl.useProgram(this.p); gl.uniformMatrix4fv(this.uM, false, m);
+    gl.bindBuffer(gl.ARRAY_BUFFER, this.b); gl.enableVertexAttribArray(this.aP); gl.vertexAttribPointer(this.aP, 3, gl.FLOAT, false, 0, 0);
+    gl.drawArrays(gl.LINES, 0, LIN.length);
+  },
+};
+map.on('load', () => {
+  // quadrado "terra" (fill), uma divisa (line), para ver o drapeamento
+  map.addSource('q', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'Polygon', coordinates: [[[-54, -19], [-46, -19], [-46, -11], [-54, -11], [-54, -19]]] } } });
+  map.addLayer({ id: 'terra', type: 'fill', source: 'q', paint: { 'fill-color': '#cfc8b0' } });
+  map.addSource('d', { type: 'geojson', data: { type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: [[-53, -16], [-47, -14]] } } });
+  map.addLayer({ id: 'div', type: 'line', source: 'd', paint: { 'line-color': '#225', 'line-width': 3 } });
+  map.addSource('relevo', { type: 'raster-dem', tiles: ['relevo://{z}/{x}/{y}'], tileSize: 256, encoding: 'terrarium', maxzoom: 7 });
+  map.addLayer({ id: 'sombra', type: 'hillshade', source: 'relevo', paint: { 'hillshade-exaggeration': 0.6 } });
+  map.addLayer(custom);
+  map.setTerrain({ source: 'relevo', exaggeration: EXAG });
+  window.__pronto = true;
+});
+window.sonda = {
+  map, custom, PICO, EXAG, alt, zMerc, merc, projX, get pedidos() { return pedidos; },
+  /* onde a custom desenha o pico (matriz × (x, y, z)) vs. onde a biblioteca o põe (map.project) */
+  /* z da custom em relação à altitude do centro: o que a biblioteca faz com o próprio terreno */
+  pontos() {
+    const M = map.transform.customLayerMatrix(), W = map.getCanvas().clientWidth, H = map.getCanvas().clientHeight;
+    const el = map.transform.elevation;
+    return [[-50, -15], [-48, -15], [-50, -13], [-52.5, -16.5]].map(([lo, la]) => {
+      const x = projX(lo), y = merc(la), h = map.queryTerrainElevation([lo, la]);
+      const pr = z => { const v = [0, 1, 3].map(r => M[r] * x + M[4 + r] * y + M[8 + r] * z + M[12 + r]); return [+(v[0] / v[2] * 0.5 * W + 0.5 * W).toFixed(1), +((1 - v[1] / v[2]) * 0.5 * H).toFixed(1)]; };
+      const d = map.project([lo, la]), u = map.unproject([d.x, d.y]);
+      return { lo, la, alt: +alt(lo, la).toFixed(0), queryTerrain: h && +h.toFixed(0),
+        deles: [+d.x.toFixed(1), +d.y.toFixed(1)], zAbs: pr(zMerc(alt(lo, la) * EXAG, la)),
+        zRel: pr(zMerc(alt(lo, la) * EXAG - el, la)), unproject: [+u.lng.toFixed(3), +u.lat.toFixed(3)] };
+    });
+  },
+  pico() {
+    const M = map.transform.customLayerMatrix(), W = map.getCanvas().clientWidth, H = map.getCanvas().clientHeight;
+    const x = projX(PICO[0]), y = merc(PICO[1]), z = zMerc(H0, PICO[1]) * EXAG;
+    const v = [0, 1, 2, 3].map(r => M[r] * x + M[4 + r] * y + M[8 + r] * z + M[12 + r]);
+    const nosso = [(v[0] / v[3] * 0.5 + 0.5) * W, (1 - v[1] / v[3]) * 0.5 * H];
+    const deles = map.project(PICO);
+    const volta = map.unproject(nosso);
+    return { nosso, deles: [deles.x, deles.y], unproject: [volta.lng, volta.lat], elevCentro: map.transform.elevation,
+             altNoPico: map.queryTerrainElevation ? map.queryTerrainElevation(PICO) : null,
+             matrizIgual: JSON.stringify(Array.from(M).map(a => +a.toFixed(6))) === JSON.stringify((window.__matrizRecebida || []).map(a => +a.toFixed(6))) };
+  },
+};
+</script></body></html>

@@ -22,6 +22,8 @@
     --leito:    #e2e8ea;
     --uf-line:  #a9bcc2;
     --terra:    #dfe6e8;
+    --relevo-sombra: rgba(38, 56, 62, 0.5);   /* hillshade do 3D: o lado da serra contra a luz */
+    --relevo-luz:    rgba(255, 255, 255, 0.4);
     --divisa:   #8ea3aa;
     --rule:     #c5d0d4;
     --ink:      #0b1416;
@@ -85,6 +87,8 @@
       --leito:    #1f1f26;
       --uf-line:  #33434b;
       --terra:    #141a1e;
+      --relevo-sombra: rgba(0, 0, 0, 0.62);
+      --relevo-luz:    rgba(190, 215, 225, 0.1);
       --divisa:   #475a63;
       --rule:     #26333a;
       --ink:      #eef5f6;
@@ -122,6 +126,8 @@
     /* terra e divisa faltavam aqui: quem forçava o tema escuro num sistema
        claro ficava com o mapa de fundo claro e os painéis escuros */
     --terra:    #141a1e;
+    --relevo-sombra: rgba(0, 0, 0, 0.62);
+    --relevo-luz:    rgba(190, 215, 225, 0.1);
     --divisa:   #475a63;
     --rule:     #26333a;
     --ink:      #eef5f6;
@@ -1239,6 +1245,11 @@
         <code>br_ana_outorgas.captacoes</code></li>
       <li><b>Barragens</b> — SNISB, ANA, e empreendimentos hidrelétricos em operação da Aneel.</li>
       <li><b>Fronteiras</b> — Natural Earth. <b>Satélite</b> — EOxCloudless 2016, EOX, CC BY 4.0.</li>
+      <li><b>Relevo da vista 3D</b> — ETOPO 2022 (60″), NOAA NCEI, domínio público (CC0),
+        <a href="https://doi.org/10.25921/fd45-gt74" target="_blank" rel="noopener">doi:10.25921/fd45-gt74</a>. Vai embutido numa grade de
+        ~3,7 km, então serra estreita e pico saem achatados (o Pico da Neblina fica com ~2.270 m). A altura é
+        exagerada: 12× com o país inteiro na tela, caindo até 1,5× de perto, e acima de 2.000 m conta só um
+        quarto, para os Andes não esconderem a Amazônia. <code>world_noaa_etopo.etopo2022_60s_america_sul</code></li>
     </ul>
     <p class="nota">
       As tabelas com nome de banco vêm do <a href="https://rodado.xyz" target="_blank" rel="noopener">rodado</a>,
@@ -1361,6 +1372,8 @@
 <script id="etes" type="text/plain">/*__ETES__*/</script>
 <script id="barragens" type="text/plain">/*__BARRAGENS__*/</script>
 <script id="tendencia" type="text/plain">/*__TENDMAPA__*/</script>
+<script id="relevo" type="text/plain">/*__RELEVO__*/</script>
+<script id="relevoMeta" type="application/json">/*__RELEVOMETA__*/</script>
 <script>
 (async function () {
   /* Os dados vão embutidos em gzip+base64 e são descomprimidos aqui. O ganho é
@@ -2053,6 +2066,194 @@
     limitesDeZoom();
   }
 
+  /* ---------- relevo (só com o 3D ligado) ----------
+     A grade do relevo.py (ETOPO 2022, 1/30°, ~3,7 km) vai embutida como os dados e só é
+     descomprimida na primeira vez em que o 3D liga. Dela saem três coisas, e as três leem o
+     mesmo número (a altitude já vem com os Andes comprimidos acima de `teto`, no pipeline):
+       1. os ladrilhos `raster-dem` do terreno da biblioteca, montados no navegador por
+          `addProtocol` em Terrarium (PNG feito à mão: canvas no caminho pode mexer na cor);
+       2. a textura de altitude com que o shader da rede e o dos marcadores sobem cada vértice;
+       3. `altEm`, a mesma interpolação bilinear na CPU, para o `paraTela` (fluxo, anéis, acerto).
+     O z de uma camada própria é em unidade de Mercator e RELATIVO à altitude do centro da tela
+     (`map.transform.elevation`): z = (h·exagero − elevação) / (C·cos φ). Medido no spike
+     (notas/spike-relevo.md): com o z absoluto a rede sai 13 px acima do terreno.
+     Por WebGL por software não há relevo: o 3D só inclina a câmera, como antes. */
+  const RELEVO_META = (() => {
+    try {
+      const t = document.getElementById('relevoMeta').textContent.trim();
+      return t && !t.startsWith('/*') ? JSON.parse(t) : null;
+    } catch (e) { return null; }
+  })();
+  const TEM_RELEVO = !!RELEVO_META && !POR_SOFTWARE;
+  /* O exagero vertical: o Brasil é baixo, e sem exagero o planalto some na inclinação.
+     12× no enquadramento nacional, caindo com a raiz do zoom (a 16× já é 3×), nunca abaixo
+     de 1,5×: de perto a Serra do Mar a 12× viraria uma parede de 12 km. */
+  const EXAGERO = { nacional: 12, perto: 1.5, queda: 0.5 };
+  const exageroDoZoom = () => Math.max(EXAGERO.perto, Math.min(EXAGERO.nacional,
+    EXAGERO.nacional * Math.pow(zRel(), -EXAGERO.queda)));
+  const C_TERRA = 2 * Math.PI * 6371008.8;   // a circunferência que a biblioteca usa
+  const REL = { ativo: false, querer: false, pendente: false, alt: null, exag: 0, elev: 0, carga: null, zMax: 0 };
+
+  async function carregaRelevo() {
+    if (REL.alt) return REL.alt;
+    if (!REL.carga) REL.carga = (async () => {
+      const s = atob(document.getElementById('relevo').textContent.trim());
+      const gz = new Uint8Array(s.length);
+      for (let i = 0; i < s.length; i++) gz[i] = s.charCodeAt(i);
+      const fluxo = new Blob([gz]).stream().pipeThrough(new DecompressionStream('gzip'));
+      const b = new Uint8Array(await new Response(fluxo).arrayBuffer());
+      const { nlat, nlon, quantum } = RELEVO_META, n = nlat * nlon;
+      if (b.length !== 2 * n) throw new Error('relevo com tamanho inesperado');
+      // planos de byte → zigzag → resíduo do preditor plano (esquerda + cima − diagonal)
+      const g = new Int32Array(n);
+      for (let k = 0; k < n; k++) {
+        const v = b[k] | (b[n + k] << 8);
+        g[k] = (v >>> 1) ^ -(v & 1);
+      }
+      for (let i = 0; i < nlat; i++) for (let j = 0; j < nlon; j++) {
+        const k = i * nlon + j;
+        if (i && j) g[k] += g[k - 1] + g[k - nlon] - g[k - nlon - 1];
+        else if (j) g[k] += g[k - 1];
+        else if (i) g[k] += g[k - nlon];
+      }
+      const alt = new Float32Array(n);
+      let mx = 0;
+      for (let k = 0; k < n; k++) { alt[k] = g[k] * quantum; if (alt[k] > mx) mx = alt[k]; }
+      REL.zMax = mx;
+      return (REL.alt = alt);
+    })();
+    return REL.carga;
+  }
+  /* bilinear entre centros de célula; fora da grade é mar (0) */
+  function altLonLat(lon, lat) {
+    const A = REL.alt, m = RELEVO_META;
+    if (!A) return 0;
+    const u = (lon - m.lonO) / m.passo - 0.5, v = (lat - m.latS) / m.passo - 0.5;
+    if (!(u >= 0 && v >= 0 && u <= m.nlon - 1 && v <= m.nlat - 1)) return 0;
+    const j = Math.min(u | 0, m.nlon - 2), i = Math.min(v | 0, m.nlat - 2), fu = u - j, fv = v - i;
+    const k = i * m.nlon + j;
+    return (A[k] * (1 - fu) + A[k + 1] * fu) * (1 - fv) + (A[k + m.nlon] * (1 - fu) + A[k + m.nlon + 1] * fu) * fv;
+  }
+  const altEm = (wx, wy) => altLonLat(wx * 360 - 180, latDeY(wy));
+  /* o z de mundo de um ponto: 0 com o relevo desligado */
+  const zMundo = (wx, wy) => REL.ativo
+    ? (altEm(wx, wy) * REL.exag - REL.elev) * Math.cosh(2 * Math.PI * (0.5 - wy)) / C_TERRA : 0;
+
+  /* PNG RGB de 8 bits com o deflate em blocos "stored": determinístico nos três motores */
+  const TAB_CRC = new Uint32Array(256).map((_, n) => {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
+    return c >>> 0;
+  });
+  function pngRGB(w, h, rgb) {
+    const linha = w * 3 + 1, cru = new Uint8Array(linha * h);
+    for (let y = 0; y < h; y++) cru.set(rgb.subarray(y * w * 3, (y + 1) * w * 3), y * linha + 1);
+    const nb = Math.ceil(cru.length / 65535), z = new Uint8Array(2 + cru.length + nb * 5 + 4);
+    z[0] = 0x78; z[1] = 1;
+    let o = 2, a = 1, b = 0;
+    for (let i = 0; i < cru.length; i += 65535) {
+      const n = Math.min(65535, cru.length - i);
+      z[o++] = i + n >= cru.length ? 1 : 0; z[o++] = n & 255; z[o++] = n >> 8; z[o++] = ~n & 255; z[o++] = (~n >> 8) & 255;
+      z.set(cru.subarray(i, i + n), o); o += n;
+    }
+    for (let i = 0; i < cru.length; i++) { a = (a + cru[i]) % 65521; b = (b + a) % 65521; }
+    const ad = ((b << 16) | a) >>> 0;
+    z[o++] = ad >>> 24; z[o++] = (ad >> 16) & 255; z[o++] = (ad >> 8) & 255; z[o++] = ad & 255;
+    const pedacos = [];
+    const pedaco = (tipo, dados) => {
+      const p = new Uint8Array(12 + dados.length), dv = new DataView(p.buffer);
+      dv.setUint32(0, dados.length);
+      for (let k = 0; k < 4; k++) p[4 + k] = tipo.charCodeAt(k);
+      p.set(dados, 8);
+      let c = ~0;
+      for (let k = 4; k < 8 + dados.length; k++) c = TAB_CRC[(c ^ p[k]) & 255] ^ (c >>> 8);
+      dv.setUint32(8 + dados.length, ~c >>> 0);
+      pedacos.push(p);
+    };
+    const ih = new Uint8Array(13), iv = new DataView(ih.buffer);
+    iv.setUint32(0, w); iv.setUint32(4, h); ih[8] = 8; ih[9] = 2;
+    pedaco('IHDR', ih); pedaco('IDAT', z); pedaco('IEND', new Uint8Array(0));
+    const tot = new Uint8Array(8 + pedacos.reduce((s, p) => s + p.length, 0));
+    tot.set([137, 80, 78, 71, 13, 10, 26, 10]);
+    let q = 8;
+    for (const p of pedacos) { tot.set(p, q); q += p.length; }
+    return tot.buffer;
+  }
+  const LADO_DEM = 256, ZMAX_DEM = 7;   // a z7 o pixel do ladrilho (~1,2 km) já é mais fino que a grade
+  function ladrilhoRelevo(z, x, y) {
+    const n = 2 ** z, rgb = new Uint8Array(LADO_DEM * LADO_DEM * 3);
+    for (let j = 0; j < LADO_DEM; j++) {
+      const lat = latDeY((y + (j + 0.5) / LADO_DEM) / n);
+      for (let i = 0; i < LADO_DEM; i++) {
+        const h = altLonLat((x + (i + 0.5) / LADO_DEM) / n * 360 - 180, lat);
+        const v = Math.round((h + 32768) * 256), o = (j * LADO_DEM + i) * 3;
+        rgb[o] = v >> 16; rgb[o + 1] = (v >> 8) & 255; rgb[o + 2] = v & 255;
+      }
+    }
+    return pngRGB(LADO_DEM, LADO_DEM, rgb);
+  }
+  let protocoloRelevo = false;
+  /* Ligar ou desligar o terreno no meio de uma animação da câmera a congela onde ela estiver
+     (medido na bancada: um easeTo de 0° a 60° parava em 32°, e o padding do tour pela metade).
+     Então a troca espera a câmera parar: `REL.querer` guarda o pedido, e um `moveend` pendente
+     aplica o último. Rede, terreno e sombreamento trocam juntos, no mesmo quadro. */
+  function aplicaRelevo() {
+    if (REL.querer === REL.ativo || !REL.alt || !map.getLayer('terra')) return;
+    if (map.isMoving()) {
+      if (!REL.pendente) { REL.pendente = true; map.once('moveend', () => { REL.pendente = false; aplicaRelevo(); }); }
+      return;
+    }
+    if (REL.querer) {
+      if (!protocoloRelevo) {
+        maplibregl.addProtocol('relevo', async p => {
+          const [z, x, y] = p.url.slice('relevo://'.length).split('/').map(Number);
+          return { data: ladrilhoRelevo(z, x, y) };
+        });
+        protocoloRelevo = true;
+      }
+      /* duas fontes com os mesmos ladrilhos: a biblioteca pede (e avisa no console) que o
+         sombreamento não divida a fonte com o terreno, que ela reamostra por conta própria */
+      const dem = { type: 'raster-dem', tiles: ['relevo://{z}/{x}/{y}'], tileSize: LADO_DEM,
+                    encoding: 'terrarium', maxzoom: ZMAX_DEM };
+      map.addSource('relevo', dem);
+      map.addSource('relevo-sombra', { ...dem });
+      // logo acima da terra: por baixo do satélite, do véu e da rede
+      map.addLayer({ id: 'sombra', type: 'hillshade', source: 'relevo-sombra', paint: corSombra() },
+                   map.getLayer('sat') ? 'sat' : 'veu-sat');
+      REL.exag = exageroDoZoom();
+      map.setTerrain({ source: 'relevo', exaggeration: REL.exag });
+      REL.ativo = true;
+    } else {
+      REL.ativo = false;
+      map.setTerrain(null);
+      if (map.getLayer('sombra')) map.removeLayer('sombra');
+      for (const f of ['relevo', 'relevo-sombra']) if (map.getSource(f)) map.removeSource(f);
+      REL.elev = 0; REL.exag = 0;
+    }
+    map.triggerRepaint();
+  }
+  async function ligaRelevo() {
+    if (!TEM_RELEVO) return;
+    REL.querer = true;
+    try { await carregaRelevo(); } catch (e) { console.warn('relevo', e); REL.querer = false; return; }
+    if (!em3D) REL.querer = false;   // desligou enquanto descomprimia
+    aplicaRelevo();
+  }
+  function desligaRelevo() {
+    REL.querer = false;
+    aplicaRelevo();
+  }
+  const corSombra = () => ({ 'hillshade-shadow-color': css('--relevo-sombra'),
+                             'hillshade-highlight-color': css('--relevo-luz'),
+                             'hillshade-accent-color': css('--relevo-sombra'),
+                             'hillshade-exaggeration': 0.55 });
+  /* O exagero acompanha o zoom: a biblioteca lê `terrain.exaggeration` a cada quadro e
+     recalcula a altitude do centro com ele. */
+  map.on('zoom', () => {
+    if (!REL.ativo || !map.terrain) return;
+    map.terrain.exaggeration = exageroDoZoom();
+  });
+
   /* A matriz que leva o mundo [0,1] ao espaço de recorte, a mesma com que a
      biblioteca desenha. É o que reprojeta o resto da página (acerto, marcadores,
      fluxo) com a vista inclinada: `map.project` por vértice custaria uma alocação
@@ -2062,14 +2263,18 @@
   let MAT = map.transform.customLayerMatrix(), CENTRO_W = 1;
   function lerCamera() {
     MAT = map.transform.customLayerMatrix();
+    // com o relevo, o centro da tela está na altitude do terreno, e o z dele é 0 (ver zMundo)
+    REL.elev = REL.ativo ? map.transform.elevation : 0;
+    REL.exag = REL.ativo && map.terrain ? map.terrain.exaggeration : 0;
     const c = map.getCenter();
     CENTRO_W = MAT[3] * projX(c.lng) + MAT[7] * merc(c.lat) + MAT[15];
   }
   const paraTela = (wx, wy) => {
-    const w = MAT[3] * wx + MAT[7] * wy + MAT[15];
+    const z = REL.ativo ? zMundo(wx, wy) : 0;
+    const w = MAT[3] * wx + MAT[7] * wy + MAT[11] * z + MAT[15];
     if (!(w > 1)) return [NaN, NaN];
-    return [(MAT[0] * wx + MAT[4] * wy + MAT[12]) / w * 0.5 * W + 0.5 * W,
-            (1 - (MAT[1] * wx + MAT[5] * wy + MAT[13]) / w) * 0.5 * H];
+    return [(MAT[0] * wx + MAT[4] * wy + MAT[8] * z + MAT[12]) / w * 0.5 * W + 0.5 * W,
+            (1 - (MAT[1] * wx + MAT[5] * wy + MAT[9] * z + MAT[13]) / w) * 0.5 * H];
   };
   /* O ponto do chão sob um pixel. Com a vista inclinada o pixel acima do
      horizonte não toca o chão; a biblioteca devolve um valor finito qualquer, e o
@@ -2407,12 +2612,54 @@
     : [PASSOS.base, ...((modo === 'esgoto' || modo === 'industria') && semDado.size ? [PASSOS.sem] : []),
        ...PASSOS.cor.map(p => modo === 'livre' ? { ...p, minW: 1 } : p)];
 
+  /* A altitude no vertex shader: a mesma grade do relevo numa textura R16F (filtrável no
+     WebGL 2 sem extensão), com o mesmo z relativo ao centro do `zMundo` da CPU. uAltK é
+     (exagero, altitude do centro em m, ligado); desligado, o z é 0 e nada muda no plano. */
+  const ALT_GLSL = `
+uniform highp sampler2D uAlt; uniform vec4 uAltCaixa; uniform vec3 uAltK;
+float zDe(vec2 p) {
+  if (uAltK.z < .5) return 0.;
+  const float PI = 3.14159265;
+  float lat = degrees(atan(sinh(PI * (1. - 2. * p.y))));
+  vec2 t = vec2((p.x * 360. - 180. - uAltCaixa.x) * uAltCaixa.z, (lat - uAltCaixa.y) * uAltCaixa.w);
+  float h = (t.x < 0. || t.y < 0. || t.x > 1. || t.y > 1.) ? 0. : texture(uAlt, t).r;
+  return (h * uAltK.x - uAltK.y) * cosh(2. * PI * (.5 - p.y)) / ${C_TERRA.toFixed(1)};
+}`;
+  const UNIF_ALT = ['uAlt', 'uAltCaixa', 'uAltK'];
+  function criaTexAlt(gl) {
+    const m = RELEVO_META, t = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, t);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R16F, m.nlon, m.nlat, 0, gl.RED, gl.FLOAT, REL.alt);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    return t;
+  }
+  /* liga a textura na unidade 2 e passa os uniformes; a textura nasce no primeiro quadro com relevo */
+  function uniformesAlt(gl, camada) {
+    const u = camada.u, on = REL.ativo && !!REL.alt;
+    if (on && !camada.texAlt) camada.texAlt = criaTexAlt(gl);
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, on ? camada.texAlt : null);
+    gl.uniform1i(u.uAlt, 2);
+    gl.activeTexture(gl.TEXTURE0);
+    if (on) {
+      const m = RELEVO_META;
+      gl.uniform4f(u.uAltCaixa, m.lonO, m.latS, 1 / (m.nlon * m.passo), 1 / (m.nlat * m.passo));
+    }
+    gl.uniform3f(u.uAltK, REL.exag, REL.elev, on ? 1 : 0);
+  }
+
   const VS_REDE = `#version 300 es
 precision highp float;
 uniform mat4 uM; uniform vec2 uVp;
 uniform float uZf, uRef, uMinW, uExtra, uCap, uAlfa;
 uniform vec4 uUni;
-uniform highp sampler2D uCor; uniform highp sampler2D uLar;
+uniform highp sampler2D uCor; uniform highp sampler2D uLar;${ALT_GLSL}
 in vec2 aA; in vec2 aB; in float aIa; in float aIb; in float aCa; in float aCb; in vec2 aQ;
 out vec4 vCor; out float vLado; out float vHw; out float vAl; out float vCum;
 void main() {
@@ -2426,7 +2673,7 @@ void main() {
   if (uAlfa == 2. && c.a >= .99) return;
   float w = texelFetch(uLar, uv, 0).r * 4. * uZf + uExtra;
   w = max(w, uMinW);
-  vec4 pa = uM * vec4(aA, 0., 1.), pb = uM * vec4(aB, 0., 1.);
+  vec4 pa = uM * vec4(aA, zDe(aA), 1.), pb = uM * vec4(aB, zDe(aB), 1.);
   const float E = 1.;
   if (pa.w < E && pb.w < E) return;
   float ta = 0., tb = 1., dw = pb.w - pa.w;
@@ -2481,17 +2728,22 @@ void main() {
   const celVis = new Uint8Array(GC2);
   function cortaCelulas() {
     const M = MAT, sx = spanX / GC, sy = spanY / GC;
+    const nCantos = REL.ativo ? 8 : 4;
+    const zBaixoK = -REL.elev / C_TERRA, zCimaK = (REL.zMax * REL.exag - REL.elev) / C_TERRA;
     for (let c = 0; c < GC2; c++) {
       if (!celTem[c]) { celVis[c] = 0; continue; }
       const e = celExt[c];
       const x0 = bounds.minx + (c % GC) * sx - e, x1 = x0 + sx + 2 * e;
       const y0 = bounds.miny + Math.floor(c / GC) * sy - e, y1 = y0 + sy + 2 * e;
       let fora = 15, atras = false;
-      for (let k = 0; k < 4; k++) {
+      /* com relevo, a caixa ganha altura: do mar (0) ao ponto mais alto da grade, para um
+         bloco de serra não sair por "fora da tela" quando o topo dele ainda aparece */
+      for (let k = 0; k < nCantos; k++) {
         const x = k & 1 ? x1 : x0, y = k & 2 ? y1 : y0;
-        const w = M[3] * x + M[7] * y + M[15];
+        const z = k & 4 ? zCimaK * Math.cosh(2 * Math.PI * (0.5 - y)) : zBaixoK * Math.cosh(2 * Math.PI * (0.5 - y));
+        const w = M[3] * x + M[7] * y + M[11] * z + M[15];
         if (w <= 0) { atras = true; break; }
-        const px = M[0] * x + M[4] * y + M[12], py = M[1] * x + M[5] * y + M[13];
+        const px = M[0] * x + M[4] * y + M[8] * z + M[12], py = M[1] * x + M[5] * y + M[9] * z + M[13];
         fora &= (px < -w ? 1 : 0) | (px > w ? 2 : 0) | (py < -w ? 4 : 0) | (py > w ? 8 : 0);
       }
       celVis[c] = atras || fora === 0 ? 1 : 0;
@@ -2525,8 +2777,9 @@ void main() {
       this.gl = gl; this.perdido = false;
       const p = this.p = compila(gl, VS_REDE, FS_REDE);
       this.u = {}; this.a = {};
-      for (const n of ['uM', 'uVp', 'uZf', 'uRef', 'uMinW', 'uExtra', 'uCap', 'uAlfa', 'uUni', 'uCor', 'uLar', 'uTraco', 'uK', 'uPx'])
+      for (const n of ['uM', 'uVp', 'uZf', 'uRef', 'uMinW', 'uExtra', 'uCap', 'uAlfa', 'uUni', 'uCor', 'uLar', 'uTraco', 'uK', 'uPx', ...UNIF_ALT])
         this.u[n] = gl.getUniformLocation(p, n);
+      this.texAlt = null;
       for (const n of ['aA', 'aB', 'aIa', 'aIb', 'aCa', 'aCb', 'aQ']) this.a[n] = gl.getAttribLocation(p, n);
       this.bufV = gl.createBuffer();
       gl.bindBuffer(gl.ARRAY_BUFFER, this.bufV);
@@ -2642,6 +2895,7 @@ void main() {
       gl.uniform1f(u.uPx, dpx);
       gl.uniform1f(u.uK, kDeZ(map.getZoom()) * dpx);
       gl.uniform1i(u.uCor, 0); gl.uniform1i(u.uLar, 1);
+      uniformesAlt(gl, this);
       gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, this.tex.lar);
       gl.activeTexture(gl.TEXTURE0);
       gl.uniform4f(u.uUni, 0, 0, 0, 0);
@@ -2677,12 +2931,12 @@ void main() {
      CSS sem regerar imagem a cada troca de tema. O tamanho é em pixels de tela. */
   const VS_PONTOS = `#version 300 es
 precision highp float;
-uniform mat4 uM; uniform vec2 uVp; uniform float uEsc, uMarg;
+uniform mat4 uM; uniform vec2 uVp; uniform float uEsc, uMarg;${ALT_GLSL}
 in vec2 aPos; in vec2 aTam; in vec4 aCor;
 out vec2 vLoc; out vec4 vCor; out float vOco; out float vTam;
 void main() {
   gl_Position = vec4(2., 2., 2., 1.);
-  vec4 p = uM * vec4(aPos, 0., 1.);
+  vec4 p = uM * vec4(aPos, zDe(aPos), 1.);
   if (p.w < 1.) return;
   float tam = aTam.x * uEsc;
   float meia = tam * .5 + uMarg;
@@ -2744,7 +2998,8 @@ void main() {
       this.perdido = false;
       const p = this.p = compila(gl, VS_PONTOS, FS_PONTOS);
       this.u = {}; this.a = {};
-      for (const n of ['uM', 'uVp', 'uEsc', 'uMarg', 'uForma', 'uLinha', 'uLw', 'uAlfa']) this.u[n] = gl.getUniformLocation(p, n);
+      for (const n of ['uM', 'uVp', 'uEsc', 'uMarg', 'uForma', 'uLinha', 'uLw', 'uAlfa', ...UNIF_ALT]) this.u[n] = gl.getUniformLocation(p, n);
+      this.texAlt = null;
       for (const n of ['aPos', 'aTam', 'aCor']) this.a[n] = gl.getAttribLocation(p, n);
       this.b = {};
       for (const k of Object.keys(CONJ)) { this.b[k] = { f: gl.createBuffer(), c: gl.createBuffer(), n: 0 }; sujoPontos[k] = true; }
@@ -2768,6 +3023,8 @@ void main() {
       gl.bindVertexArray(this.vao);
       gl.uniformMatrix4fv(u.uM, false, matriz);
       gl.uniform2f(u.uVp, gl.drawingBufferWidth, gl.drawingBufferHeight);
+      lerCamera();
+      uniformesAlt(gl, this);
       const leito = rgba(COR_LEITO);
       gl.uniform4f(u.uLinha, leito[0] / 255, leito[1] / 255, leito[2] / 255, 1);
       for (const [k, on] of quais) {
@@ -2857,6 +3114,7 @@ void main() {
     map.setPaintProperty('veu-sat', 'background-color', COR_TERRA);
     map.setPaintProperty('divisas', 'line-color', COR_DIVISA);
     map.setPaintProperty('ufs', 'line-color', COR_UF);
+    if (map.getLayer('sombra')) for (const [k, v] of Object.entries(corSombra())) map.setPaintProperty('sombra', k, v);
   }
 
   /* Satélite: a imagem é uma fonte raster que só existe enquanto a camada está
@@ -2933,11 +3191,13 @@ void main() {
   function traca(c, i) {
     const a = inicio[i], b = inicio[i + 1], M = MAT, hW = 0.5 * W, hH = 0.5 * H;
     let pen = false;
+    const comZ = REL.ativo;
     for (let j = a; j < b; j += 2) {
-      const wx = coords[j], wy = coords[j + 1];
-      const w = M[3] * wx + M[7] * wy + M[15];
+      const wx = coords[j], wy = coords[j + 1], z = comZ ? zMundo(wx, wy) : 0;
+      const w = M[3] * wx + M[7] * wy + M[11] * z + M[15];
       if (!(w > 1)) { pen = false; continue; }
-      const sx = (M[0] * wx + M[4] * wy + M[12]) / w * hW + hW, sy = (1 - (M[1] * wx + M[5] * wy + M[13]) / w) * hH;
+      const sx = (M[0] * wx + M[4] * wy + M[8] * z + M[12]) / w * hW + hW,
+            sy = (1 - (M[1] * wx + M[5] * wy + M[9] * z + M[13]) / w) * hH;
       if (pen) c.lineTo(sx, sy); else { c.moveTo(sx, sy); pen = true; }
     }
   }
@@ -2946,7 +3206,8 @@ void main() {
      trechos de mesma largura seguirem num stroke() só. */
   const DEGRAUS_PERSP = [0.4, 0.55, 0.7, 0.85, 1, 1.2, 1.5];
   function perspDe(i) {
-    const j = inicio[i], w = MAT[3] * coords[j] + MAT[7] * coords[j + 1] + MAT[15];
+    const j = inicio[i], z = zMundo(coords[j], coords[j + 1]);
+    const w = MAT[3] * coords[j] + MAT[7] * coords[j + 1] + MAT[11] * z + MAT[15];
     if (!(w > 1)) return 0;
     const s = escPersp(w);
     let m = DEGRAUS_PERSP[0];
@@ -3770,10 +4031,16 @@ void main() {
     const dur = o.animar === false || semMovimento.matches ? 0 : 700;
     if (on) {
       map.dragRotate.enable(); map.touchPitch.enable(); map.touchZoomRotate.enableRotation();
-      if (!o.manterCamera && map.getPitch() < 1) {
+      const inclina = () => {
+        if (!em3D || o.manterCamera || map.getPitch() >= 1) return;
         if (dur) map.easeTo({ pitch: PITCH_3D, duration: dur, essential: true }); else map.jumpTo({ pitch: PITCH_3D });
-      }
+      };
+      /* o `setTerrain` no meio de um easeTo para a animação onde ela estiver (a câmera ficava
+         em 1°): com animação, o relevo liga antes (descomprimir leva ~50 ms) e a câmera sobe depois */
+      if (dur && TEM_RELEVO && !REL.ativo) ligaRelevo().then(inclina);
+      else { inclina(); ligaRelevo(); }
     } else {
+      desligaRelevo();
       map.dragRotate.disable(); map.touchPitch.disable(); map.touchZoomRotate.disableRotation();
       if (dur) map.easeTo({ pitch: 0, bearing: 0, duration: dur, essential: true });
       else map.jumpTo({ pitch: 0, bearing: 0 });

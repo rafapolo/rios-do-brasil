@@ -51,6 +51,21 @@ if (S / "tendencia_mapa.json").exists():
     pagina = pagina.replace("/*__TENDMAPA__*/", embutir("tendencia_mapa.json"))
 else:
     print("  tendencia_mapa.json ausente — mapa sai sem tendência por estação")
+# O relevo da vista 3D (relevo.py): a grade binária vai gzip + base64, e a geometria em JSON
+# puro ao lado. Opcional: sem ele o 3D só inclina a câmera, como antes. As chaves são
+# conferidas porque um relevo.json velho quebraria a decodificação calado.
+if (S / "relevo.json").exists() and (S / "relevo.bin").exists():
+    import json
+    meta = json.loads((S / "relevo.json").read_text())
+    faltam = {"latS", "lonO", "passo", "nlat", "nlon", "quantum", "teto", "fator", "max"} - meta.keys()
+    if faltam:
+        raise SystemExit(f"relevo.json sem {sorted(faltam)}: rode o relevo.py de novo")
+    if (S / "relevo.bin").stat().st_size != 2 * meta["nlat"] * meta["nlon"]:
+        raise SystemExit("relevo.bin não bate com o relevo.json: rode o relevo.py de novo")
+    pagina = pagina.replace("/*__RELEVOMETA__*/", json.dumps(meta, ensure_ascii=False))
+    pagina = pagina.replace("/*__RELEVO__*/", embutir_texto("relevo.bin"))
+else:
+    print("  relevo.json/relevo.bin ausentes — o 3D sai sem relevo")
 # O tour: roteiro (design/tour.json, números e frases conferidos no banco — ver design/tour.md),
 # o código que dirige a página e o som. Texto puro, sem compressão: são ~40 kB.
 pagina = pagina.replace("/*__ROTEIRO__*/", (S.parent / "design" / "tour.json").read_text().replace("</", "<\\/"))
