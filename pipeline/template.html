@@ -1975,6 +1975,12 @@
      maior valor em que o degrau ainda se lê como traço. O fluxo, de longe e de
      perto, segue a 120 quadros/s em 240× (headless), então o teto é do dado. */
   const ZOOM_MAX = 180;
+  /* Na vista 3D o teto sobe um nível (~6,5 m/px no centro): inclinada, a escala muda ao longo da
+     tela e quem chega perto quer ver a encosta, que o relevo fino (SRTM de 30 m) sustenta. O
+     degrau da grade da BHO continua lá, mas o chão em volta dá a medida. `tetoZoom` é o que vale
+     agora; o define3D troca. */
+  const ZOOM_MAX_3D = 2 * ZOOM_MAX;
+  let tetoZoom = ZOOM_MAX;
   /* ---------- câmera: MapLibre GL ----------
      A coordenada de mundo desta página já era o Mercator normalizado em [0,1]
      (`projX`/`merc`), que é exatamente o espaço em que a MapLibre desenha: o
@@ -2047,7 +2053,7 @@
 
   function limitesDeZoom() {
     map.setMinZoom(zBase() + Math.log2(0.9));
-    map.setMaxZoom(zBase() + Math.log2(ZOOM_MAX));
+    map.setMaxZoom(zBase() + Math.log2(tetoZoom));
     map.setPadding({ top: 0, left: 0, right: 0, bottom: rodapeHud() });
   }
   function enquadrar() {
@@ -2148,7 +2154,7 @@
      CPU e GPU nunca discordam. Fora do mosaico vale a grade. */
   const FINO_URL = 'https://elevation-tiles-prod.s3.amazonaws.com/terrarium/';
   const FINO_ZMIN = 10, FINO_ZMAX = 12, FINO_LADO = 8, FINO_PX = 256;
-  const FINO = { cache: new Map(), atlas: null, z: 0, x0: 0, y0: 0, ver: 0, gera: 0, sujo: false, tex: null, verTex: -1, gl: null };
+  const FINO = { cache: new Map(), prontos: new Map(), atlas: null, z: 0, x0: 0, y0: 0, ver: 0, gera: 0, sujo: false, tex: null, verTex: -1, gl: null };
   function pedeFino(z, x, y) {
     const k = z + '/' + x + '/' + y;
     if (FINO.cache.has(k)) return FINO.cache.get(k);
@@ -2187,11 +2193,15 @@
           const v = Math.max(0, cru[i]);
           h[i] = v > RELEVO_META.teto ? RELEVO_META.teto + (v - RELEVO_META.teto) * RELEVO_META.fator : v;
         }
+        FINO.prontos.set(k, h);
         return h;
       } catch (e) { return null; }
     })();
     FINO.cache.set(k, pr);
-    if (FINO.cache.size > 400) FINO.cache.delete(FINO.cache.keys().next().value);
+    if (FINO.cache.size > 400) {
+      const velho = FINO.cache.keys().next().value;
+      FINO.cache.delete(velho); FINO.prontos.delete(velho);
+    }
     return pr;
   }
   /* copia um ladrilho (o fino, ou a grade reamostrada) para a sua casa no mosaico */
@@ -2205,22 +2215,42 @@
         A[o + c] = altLonLat((FINO.x0 + i + (c + 0.5) / FINO_PX) / n * 360 - 180, lat);
     }
   }
-  /* refaz o mosaico quando a câmera para em outro lugar; chamado no moveend e ao ligar o relevo */
-  function atualizaFino() {
+  /* Refaz o mosaico em volta do centro. Não espera o `moveend`: no arrasto a biblioteca já está
+     desenhando o terreno fino do lugar novo, e a rede que sai do mosaico cai na grade de 3,7 km
+     — medido no meio de um panBy na Mantiqueira, 360 m entre rio e chão. No `move` (`emMovimento`)
+     só recentra quando o centro anda mais de um ladrilho, e a troca é incremental: o que o mosaico
+     velho já tinha é copiado, o ladrilho que já chegou da rede entra direto (`FINO.prontos`), e só
+     a borda nova passa pela grade enquanto o pedido não volta. */
+  function atualizaFino(emMovimento) {
     // o nível que a biblioteca usa para o terreno no centro (`transform.tileZoom`): o mesmo ladrilho
     const z = Math.min(FINO_ZMAX, Math.floor(map.getZoom()));
     if (!REL.ativo || z < FINO_ZMIN) {
       if (FINO.atlas) { FINO.atlas = null; FINO.gera++; FINO.ver++; map.triggerRepaint(); }
       return;
     }
-    const c = map.getCenter(), n = 2 ** z;
-    const x0 = Math.floor(projX(c.lng) * n) - FINO_LADO / 2, y0 = Math.floor(merc(c.lat) * n) - FINO_LADO / 2;
+    const c = map.getCenter(), n = 2 ** z, M = FINO_LADO / 2;
+    const cx = Math.floor(projX(c.lng) * n), cy = Math.floor(merc(c.lat) * n);
+    const x0 = cx - M, y0 = cy - M;
     if (FINO.atlas && FINO.z === z && FINO.x0 === x0 && FINO.y0 === y0) return;
-    Object.assign(FINO, { z, x0, y0, atlas: new Float32Array((FINO_LADO * FINO_PX) ** 2) });
+    if (emMovimento && FINO.atlas && FINO.z === z &&
+        Math.abs(cx - FINO.x0 - M) <= 1 && Math.abs(cy - FINO.y0 - M) <= 1) return;
+    const velho = FINO.atlas && FINO.z === z ? { A: FINO.atlas, x0: FINO.x0, y0: FINO.y0 } : null;
+    const L = FINO_LADO * FINO_PX;
+    Object.assign(FINO, { z, x0, y0, atlas: new Float32Array(L * L) });
     const vez = ++FINO.gera;
     FINO.ver++;
     for (let j = 0; j < FINO_LADO; j++) for (let i = 0; i < FINO_LADO; i++) {
-      poeNoMosaico(i, j, null);
+      const k = z + '/' + (x0 + i) + '/' + (y0 + j);
+      const pronto = FINO.prontos.get(k);
+      if (pronto) { poeNoMosaico(i, j, pronto); continue; }
+      const vi = velho ? x0 + i - velho.x0 : -1, vj = velho ? y0 + j - velho.y0 : -1;
+      if (vi >= 0 && vj >= 0 && vi < FINO_LADO && vj < FINO_LADO) {
+        // a casa já estava no mosaico velho (a grade reamostrada, ou o fino que chegou)
+        for (let r = 0; r < FINO_PX; r++) {
+          const de = (vj * FINO_PX + r) * L + vi * FINO_PX;
+          FINO.atlas.set(velho.A.subarray(de, de + FINO_PX), (j * FINO_PX + r) * L + i * FINO_PX);
+        }
+      } else poeNoMosaico(i, j, null);
       pedeFino(z, x0 + i, y0 + j).then(h => {
         if (!h || vez !== FINO.gera || !FINO.atlas) return;
         poeNoMosaico(i, j, h);
@@ -2384,7 +2414,8 @@
     if (!REL.ativo || !map.terrain) return;
     map.terrain.exaggeration = exageroDoZoom();
   });
-  map.on('moveend', atualizaFino);
+  map.on('moveend', () => atualizaFino());
+  map.on('move', () => atualizaFino(true));
 
   /* A matriz que leva o mundo [0,1] ao espaço de recorte, a mesma com que a
      biblioteca desenha. É o que reprojeta o resto da página (acerto, marcadores,
@@ -2789,9 +2820,15 @@ float zDe(vec2 p) {
        biblioteca, o mesmo): 16 MB que sobem de novo quando a versão do mosaico muda */
     const fino = on && !!FINO.atlas;
     if (fino && (FINO.verTex !== FINO.ver || FINO.gl !== gl)) {
-      if (FINO.tex && FINO.gl === gl) gl.deleteTexture(FINO.tex);
       gl.activeTexture(gl.TEXTURE3);
-      FINO.tex = criaTexAlt(gl, true);
+      if (FINO.tex && FINO.gl === gl) {
+        // o tamanho é sempre o mesmo: sobe por cima, sem apagar e recriar a textura
+        const L = FINO_LADO * FINO_PX;
+        gl.bindTexture(gl.TEXTURE_2D, FINO.tex);
+        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, L, L, gl.RED, gl.FLOAT, FINO.atlas);
+      } else FINO.tex = criaTexAlt(gl, true);
       FINO.verTex = FINO.ver; FINO.gl = gl;
     }
     gl.activeTexture(gl.TEXTURE3);
@@ -4181,6 +4218,10 @@ void main() {
   const btNorte = document.getElementById('btNorte');
   function define3D(on, o = {}) {
     on = !!on; em3D = on;
+    /* ao sair do 3D o teto desce antes do easeTo: o setMaxZoom com o zoom acima dele é um jumpTo,
+       e um jumpTo no meio da animação a para */
+    tetoZoom = on ? ZOOM_MAX_3D : ZOOM_MAX;
+    limitesDeZoom();
     const dur = o.animar === false || semMovimento.matches ? 0 : 700;
     if (on) {
       map.dragRotate.enable(); map.touchPitch.enable(); map.touchZoomRotate.enableRotation();
