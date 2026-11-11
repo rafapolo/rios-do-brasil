@@ -207,3 +207,13 @@ trabalho, mas o controle fica todo do nosso lado.
   única, a rede elevada no shader, sem terreno por software) e a nova linha em "Comandos".
 - README: o crédito da fonte do relevo, a resolução e a exageração.
 - A nota do 3D na página: "relevo exagerado N×, grade de ~3,7 km; picos achatados".
+
+## Depois (11/11/2026): montanhas maiores e relevo fino de perto
+
+- Exagero de 12× para **30×** no enquadramento nacional (a 12× a serra mal aparecia), caindo com o zoom na potência
+  0,55 até o piso de 1,5×.
+- A grade de 3,7 km não tem o Pão de Açúcar. A partir do zoom 10 da biblioteca o terreno vem dos ladrilhos Terrarium
+  da AWS (SRTM ~30 m), e a rede de rios lê a mesma altitude por um mosaico 8 × 8 desses ladrilhos (`FINO`). Sem rede,
+  volta à grade. Agulhas de 2–4 km nos z10/z11 da AWS (no mar da Barra da Tijuca, por exemplo) saem por um filtro de
+  pixel isolado. O terreno da biblioteca passou a usar o ladrilho do nível da tela (`deltaZoom` 0): ~75 m/px no zoom
+  máximo, em vez de 150. Testes: `vista3d.test.ts` ("de perto o relevo vem da rede…", "sem rede, de perto…").

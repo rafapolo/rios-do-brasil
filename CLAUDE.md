@@ -177,12 +177,24 @@ Todos os JSON intermediários são gitignored. Os HTML gerados são versionados 
   feito à mão), a textura R16F do shader da rede e dos marcadores (`ALT_GLSL`/`zDe`) e `altEm`/`zMundo` na CPU
   (`paraTela`, `traca`, `perspDe`, `cortaCelulas`). **O z de camada própria é relativo ao centro:**
   `(h·exagero − map.transform.elevation)/(C·cos φ)` — a `customLayerMatrix()` não conhece o terreno, e com o z
-  absoluto a rede flutua. O exagero mora em `EXAGERO` (12× no enquadramento nacional, cai com a raiz do zoom,
-  piso 1,5×), aplicado a `map.terrain.exaggeration` a cada zoom. **Ligar/desligar o terreno com a câmera em
+  absoluto a rede flutua. O exagero mora em `EXAGERO` (30× no enquadramento nacional, cai com o zoom na potência
+  0,55, piso 1,5×), aplicado a `map.terrain.exaggeration` a cada zoom.
+  **De perto (zoom ≥ 10 da biblioteca) o relevo vem da rede**: ladrilhos Terrarium da AWS
+  (`elevation-tiles-prod`, SRTM ~30 m, sem chave, com CORS) em `pedeFino`, com a mesma regra da grade (mar em 0,
+  compressão acima do teto) — é a segunda parte opcional da página que sai à rede, depois do satélite; sem rede cai
+  calada na grade. Os z10/z11 da AWS trazem agulhas de 2–4 km no mar perto da costa (reamostragem): o pixel 200 m
+  acima do 3º vizinho mais alto vira a mediana 3 × 3, em duas passadas; filtro mais simples (desvio da mediana)
+  come a borda do Pão de Açúcar. A rede de rios lê a MESMA altitude por um mosaico de 8 × 8 ladrilhos em volta do
+  centro (`FINO.atlas`, `atualizaFino` no `moveend`), segunda textura do shader (`uAltF`, unidade 3) e fonte do
+  `altEm` da CPU; onde o ladrilho não chegou, o mosaico guarda a grade reamostrada. **O nível do mosaico tem de ser
+  o do terreno da biblioteca**, que por padrão pede um nível abaixo da tela (`deltaZoom` 1): a página o força a 0
+  logo depois do `setTerrain` (e limpa o `_sourceTileCache` que o próprio `setTerrain` já encheu), senão o teto de
+  zoom pararia no z10 (150 m/px) e a rede descolaria do chão. **Ligar/desligar o terreno com a câmera em
   movimento congela a animação dela** (pitch parado em 32° de 60°, o padding do tour pela metade): `aplicaRelevo`
   espera o `moveend`, e o `define3D` animado liga o relevo antes de inclinar. Sombreamento numa fonte própria
   (`relevo-sombra`, a biblioteca avisa se dividir com o terreno), cores nos tokens `--relevo-sombra`/`--relevo-luz`.
-  Por software (`POR_SOFTWARE`) não há relevo. A sonda expõe `relevo()`, `ligaRelevo`, `desligaRelevo` e `altEm`.
+  Por software (`POR_SOFTWARE`) não há relevo. A sonda expõe `relevo()`, `ligaRelevo`, `desligaRelevo`, `altEm`
+  (só a grade), `altMundo` (o que a rede lê, com o mosaico fino) e `fino()`.
 - **Os limites da câmera do mapa moram em dois lugares só, e nenhum deles é literal solto.**
   O teto de zoom é `ZOOM_MAX` (hoje 180 × o enquadramento nacional, ~13 m/px; a 240 o córrego pequeno vira escada), traduzido em
   `limitesDeZoom()` para o zoom da biblioteca (`512·2^zoom` = `vista.k`). O limite de

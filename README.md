@@ -19,7 +19,7 @@ ela vem pronta na topologia da base da ANA.
 - **Fluxo animado** correndo no sentido real do escoamento (opcional, desligado por padrão)
 - **Imagem de satélite** por baixo da rede, para conferir no chão o que a página afirma —
   o reservatório que encolheu, o pivô encostado no trecho pintado de laranja. Opcional e
-  desligada por padrão: é a única parte da página que sai à rede, e sem ela o arquivo
+  desligada por padrão: é, com o relevo de perto da vista 3D, a única parte da página que sai à rede, e sem ela o arquivo
   continua se bastando por `file://`. O mosaico é de **2016**, não de agora — a largura do
   rio na imagem é composto anual de uma década atrás, e o número na ficha é que é a vazão
 - **1.851 estações fluviométricas** com série longa, cada uma com o regime mês a mês —
@@ -287,9 +287,14 @@ numa grade de 1/30° (~3,7 km, 1.770 × 1.470 células), embutida como os dados 
 primeira vez em que o 3D liga. A página monta no navegador os ladrilhos de altitude que o terreno da
 MapLibre pede (Terrarium, por `addProtocol`, nada vem da rede), põe um sombreamento por cima da terra e
 sobe a rede no shader da camada própria, com a mesma altitude e o mesmo exagero (o z vai relativo à
-altitude do centro da tela: `notas/spike-relevo.md`). A altura é **exagerada** — 12× com o país inteiro na
-tela, caindo com a raiz do zoom até 1,5× de perto — e, acima de 2.000 m, conta só um quarto, senão os
-Andes viram uma parede que esconde a Amazônia. A grade achata o que é estreito: o Pico da Neblina sai com
+altitude do centro da tela: `notas/spike-relevo.md`). A altura é **exagerada** — 30× com o país inteiro na
+tela, caindo com o zoom até 1,5× de perto — e, acima de 2.000 m, conta só um quarto, senão os
+Andes viram uma parede que esconde a Amazônia. **De perto** a grade não basta (o Pão de Açúcar, com 400 m
+de largura, não existe numa célula de 3,7 km): a partir do zoom 10 da biblioteca o terreno vem dos ladrilhos
+Terrarium públicos da AWS (SRTM de ~30 m, ~75 m por pixel no zoom máximo da página), opcionais como o
+satélite — sem rede, a página volta calada à grade embutida. Os níveis 10 e 11 desses ladrilhos trazem
+agulhas de 2 a 4 km no mar junto à costa, que a página tira antes de desenhar, e a rede de rios lê a mesma
+altitude que o terreno, de um mosaico dos mesmos ladrilhos em volta do centro. A grade achata o que é estreito: o Pico da Neblina sai com
 ~2.270 m (−24%), as Agulhas Negras com ~2.390 m (−14%); o `relevo.py` imprime essa conferência. Por WebGL
 por software não há relevo, e o 3D só inclina a câmera.
 
