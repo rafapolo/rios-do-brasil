@@ -2,6 +2,7 @@
  * mapa é o de sempre — plano, norte para cima, sem gesto que incline por acidente;
  * ligada, a câmera sobe a ~50° e os gestos voltam. A URL guarda o estado. */
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { deflateSync } from "node:zlib";
 import type { Page } from "playwright";
 import { LENTO, INDEX, TINTA, abrir, copiaSondada, fecharTudo, roda, servidor, urlDe } from "./comum";
 
@@ -198,7 +199,7 @@ describe("relevo na vista 3D", () => {
       elev: m.transform.elevation, exag: m.terrain.exaggeration }; }`);
     expect(lig).toMatchObject({ fonte: true, sombra: true, terreno: "relevo" });
     expect(lig.elev, "o centro do Brasil ficou na altitude zero").toBeGreaterThan(1000);
-    expect(lig.exag).toBe(12);
+    expect(lig.exag).toBe(30);
     expect(await roda<number>(pg, TINTA)).toBeGreaterThan(20);
 
     await roda(pg, `() => window.__testes.define3D(false, { animar: false })`);
@@ -255,7 +256,7 @@ describe("relevo na vista 3D", () => {
     await pg.context().close();
   }, LENTO);
 
-  test("com o 3D e o terreno ligados a página não sai à rede", async () => {
+  test("de longe, com o 3D e o terreno ligados, a página não sai à rede", async () => {
     const { pg } = await abrir(copiaSondada(), { fresco: true });
     const externos: string[] = [];
     pg.on("request", (q) => { if (!q.url().startsWith("file:") && !q.url().startsWith("data:") && !q.url().startsWith("blob:")) externos.push(q.url()); });
@@ -265,6 +266,66 @@ describe("relevo na vista 3D", () => {
     await esperaTerreno(pg);
     await pg.waitForTimeout(500);
     expect(externos, "o relevo pediu algo à rede").toEqual([]);
+    await pg.context().close();
+  }, LENTO);
+
+  /* De perto o relevo vem dos ladrilhos Terrarium da AWS (a grade embutida, de 3,7 km, não tem o
+   * Pão de Açúcar). O ladrilho é servido aqui: chapado a 777 m, com uma agulha de 4 km num pixel
+   * só, que é o defeito que os z10/z11 da AWS trazem no mar perto da costa. */
+  const terrarium = (m: number, agulha = false) => {
+    const N = 256, cru = Buffer.alloc((N * 3 + 1) * N);
+    for (let y = 0; y < N; y++) for (let x = 0; x < N; x++) {
+      const h = agulha && x === 100 && y === 100 ? 4000 : m, v = Math.round((h + 32768) * 256), o = y * (N * 3 + 1) + 1 + x * 3;
+      cru[o] = v >> 16; cru[o + 1] = (v >> 8) & 255; cru[o + 2] = v & 255;
+    }
+    const crc = (b: Buffer) => { let c = ~0; for (const x of b) { c ^= x; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; } return ~c >>> 0; };
+    const pedaco = (t: string, d: Buffer) => { const tb = Buffer.concat([Buffer.from(t), d]), l = Buffer.alloc(4), c = Buffer.alloc(4);
+      l.writeUInt32BE(d.length); c.writeUInt32BE(crc(tb)); return Buffer.concat([l, tb, c]); };
+    const ih = Buffer.alloc(13); ih.writeUInt32BE(N, 0); ih.writeUInt32BE(N, 4); ih[8] = 8; ih[9] = 2;
+    return Buffer.concat([Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]), pedaco("IHDR", ih),
+      pedaco("IDAT", deflateSync(cru)), pedaco("IEND", Buffer.alloc(0))]);
+  };
+  /* zoom 10,3 da biblioteca: o terreno e o mosaico ficam no ladrilho z10 */
+  const pertoDoRio = `() => { const t = window.__testes; t.define3D(true, { animar: false });
+    t.map.jumpTo({ center: [-43.1566, -22.9486], zoom: 10.3, bearing: 90, pitch: 60 }); }`;
+
+  test("de perto o relevo vem da rede: a rede de rios lê a mesma altitude, e a agulha da AWS sai", async () => {
+    const { pg } = await abrir(copiaSondada(), { fresco: true });
+    const pedidos: string[] = [];
+    await pg.route("**/elevation-tiles-prod.s3.amazonaws.com/**", (r) => {
+      pedidos.push(r.request().url());
+      r.fulfill({ contentType: "image/png", body: terrarium(777, true), headers: { "access-control-allow-origin": "*" } });
+    });
+    await roda(pg, pertoDoRio);
+    await pg.waitForFunction(`(() => { const t = window.__testes; return t.fino().on && Math.abs(t.altMundo(-43.1566, -22.9486) - 777) < 1; })()`,
+      undefined, { timeout: 20_000 });
+    await esperaTerreno(pg);
+    const zs = new Set(pedidos.map(u => Number(u.split("/terrarium/")[1].split("/")[0])));
+    expect([...zs].every(z => z >= 10 && z <= 12), `zooms pedidos: ${[...zs]}`).toBe(true);
+    const r = await roda<any>(pg, `() => { const t = window.__testes, f = t.fino(), n = 2 ** f.z;
+      // o centro do pixel (100, 100) de um ladrilho do mosaico: era a agulha
+      const wx = (f.x0 + 1 + 100.5 / 256) / n, wy = (f.y0 + 1 + 100.5 / 256) / n;
+      const lon = wx * 360 - 180, lat = 360 / Math.PI * Math.atan(Math.exp(Math.PI * (1 - 2 * wy))) - 90;
+      return { z: f.z, agulha: t.altMundo(lon, lat), grade: t.altEm(-43.1566, -22.9486),
+               terreno: t.map.transform.elevation / t.map.terrain.exaggeration }; }`);
+    expect(r.z).toBe(10);
+    expect(r.agulha, "o pixel solto de 4 km passou pelo filtro").toBeCloseTo(777, 0);
+    expect(r.terreno, "o terreno da biblioteca não usou o ladrilho fino").toBeCloseTo(777, -1);
+    expect(Math.abs(r.grade - 777), "a grade embutida já dava 777 m: o teste não prova nada").toBeGreaterThan(50);
+    await pg.context().close();
+  }, LENTO);
+
+  test("sem rede, de perto, o relevo cai calado na grade embutida", async () => {
+    const { pg } = await abrir(copiaSondada(), { fresco: true });
+    await pg.route("**/elevation-tiles-prod.s3.amazonaws.com/**", (r) => r.abort());
+    await roda(pg, pertoDoRio);
+    await pg.waitForFunction("window.__testes.fino().on", undefined, { timeout: 20_000 });
+    await esperaTerreno(pg);
+    const r = await roda<any>(pg, `() => { const t = window.__testes;
+      return { fino: t.altMundo(-43.20, -22.95), grade: t.altEm(-43.20, -22.95) }; }`);
+    // o mosaico guarda a grade reamostrada nos centros de pixel: só a interpolação difere
+    expect(Math.abs(r.fino - r.grade)).toBeLessThan(2);
+    expect(await roda<number>(pg, TINTA)).toBeGreaterThan(20);
     await pg.context().close();
   }, LENTO);
 });

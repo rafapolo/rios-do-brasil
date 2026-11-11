@@ -215,7 +215,8 @@ export function copiaSondada(): string {
     "    cor: (v) => cor(v), largura: (v, z) => largura(v, z), t01: (v) => t01(v),\n" +
     "    relevo: () => ({ ativo: REL.ativo, exag: REL.exag, elev: REL.elev, zMax: REL.zMax, tem: TEM_RELEVO }),\n" +
     "    ligaRelevo: () => ligaRelevo(), desligaRelevo: () => desligaRelevo(),\n" +
-    "    altEm: (lon, lat) => altLonLat(lon, lat) };\n";
+    "    altEm: (lon, lat) => altLonLat(lon, lat), altMundo: (lon, lat) => altEm(projX(lon), merc(lat)),\n" +
+    "    fino: () => ({ on: !!FINO.atlas, z: FINO.z, x0: FINO.x0, y0: FINO.y0, ver: FINO.ver }) };\n";
   const destino = join(mkdtempSync(join(tmpdir(), "rios-")), "index.html");
   writeFileSync(destino, s.replace(ancora, sonda + ancora), "utf8");
   return urlDe(destino);
