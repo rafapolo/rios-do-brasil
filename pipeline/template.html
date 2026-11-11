@@ -2086,9 +2086,10 @@
   })();
   const TEM_RELEVO = !!RELEVO_META && !POR_SOFTWARE;
   /* O exagero vertical: o Brasil é baixo, e sem exagero o planalto some na inclinação.
-     12× no enquadramento nacional, caindo com a raiz do zoom (a 16× já é 3×), nunca abaixo
-     de 1,5×: de perto a Serra do Mar a 12× viraria uma parede de 12 km. */
-  const EXAGERO = { nacional: 12, perto: 1.5, queda: 0.5 };
+     30× no enquadramento nacional (a 12× a serra mal aparecia), caindo com o zoom na
+     potência 0,55 (a 16× já é 6×), nunca abaixo de 1,5×: de perto a Serra do Mar a 30×
+     viraria uma parede de 30 km, e o Pão de Açúcar tem de parecer o Pão de Açúcar. */
+  const EXAGERO = { nacional: 30, perto: 1.5, queda: 0.55 };
   const exageroDoZoom = () => Math.max(EXAGERO.perto, Math.min(EXAGERO.nacional,
     EXAGERO.nacional * Math.pow(zRel(), -EXAGERO.queda)));
   const C_TERRA = 2 * Math.PI * 6371008.8;   // a circunferência que a biblioteca usa
@@ -2134,7 +2135,112 @@
     const k = i * m.nlon + j;
     return (A[k] * (1 - fu) + A[k + 1] * fu) * (1 - fv) + (A[k + m.nlon] * (1 - fu) + A[k + m.nlon + 1] * fu) * fv;
   }
-  const altEm = (wx, wy) => altLonLat(wx * 360 - 180, latDeY(wy));
+  /* O relevo fino de perto. A grade embutida tem 3,7 km por célula: serra grande aparece, o
+     Pão de Açúcar (400 m de largura) não existe nela. De perto, com a vista 3D ligada, os
+     ladrilhos Terrarium da AWS (SRTM de 30 m no Brasil, sem chave, com CORS) entram no lugar —
+     é a segunda parte da página que sai à rede, opcional como o satélite: sem rede (ou por
+     file:// sem internet) a falha cai calada na grade embutida. Passam pela mesma regra da
+     grade (mar em 0 e compressão acima do teto), para o relevo não dar degrau na troca.
+     A rede de rios precisa ler a MESMA altitude que o terreno, senão afunda nos vales e flutua
+     nas encostas: um mosaico de FINO_LADO² ladrilhos em volta do centro (`FINO.atlas`, em
+     coordenada de mundo) vai para uma segunda textura do shader e é o que o `altEm` da CPU lê.
+     Onde um ladrilho ainda não chegou, o mosaico guarda a grade embutida reamostrada, então
+     CPU e GPU nunca discordam. Fora do mosaico vale a grade. */
+  const FINO_URL = 'https://elevation-tiles-prod.s3.amazonaws.com/terrarium/';
+  const FINO_ZMIN = 10, FINO_ZMAX = 12, FINO_LADO = 8, FINO_PX = 256;
+  const FINO = { cache: new Map(), atlas: null, z: 0, x0: 0, y0: 0, ver: 0, gera: 0, sujo: false, tex: null, verTex: -1, gl: null };
+  function pedeFino(z, x, y) {
+    const k = z + '/' + x + '/' + y;
+    if (FINO.cache.has(k)) return FINO.cache.get(k);
+    if (z < FINO_ZMIN || z > FINO_ZMAX) return Promise.resolve(null);
+    const pr = (async () => {
+      try {
+        const r = await fetch(FINO_URL + k + '.png', { mode: 'cors', credentials: 'omit' });
+        if (!r.ok) return null;
+        const bm = await createImageBitmap(await r.blob(), { premultiplyAlpha: 'none', colorSpaceConversion: 'none' });
+        const cv = document.createElement('canvas');
+        cv.width = cv.height = FINO_PX;
+        const cx = cv.getContext('2d', { willReadFrequently: true });
+        cx.drawImage(bm, 0, 0);
+        const d = cx.getImageData(0, 0, FINO_PX, FINO_PX).data, N = FINO_PX;
+        const cru = new Float32Array(N * N), h = new Float32Array(N * N);
+        for (let i = 0; i < cru.length; i++) cru[i] = d[4 * i] * 256 + d[4 * i + 1] + d[4 * i + 2] / 256 - 32768;
+        /* A AWS reamostrou com oscilação: no mar junto à costa sobram pixels soltos de 2 a 4 km
+           (o z10 da Barra da Tijuca tem um de 2.948 m, o z11 um de 4.109 m), que viravam agulhas
+           no 3D. Agulha é o pixel 200 m acima do TERCEIRO vizinho mais alto: a borda de um
+           penhasco (o Pão de Açúcar, o Dois Irmãos) tem vizinhos altos de sobra e fica; a agulha,
+           que tem no máximo dois vizinhos do mesmo defeito, vira a mediana 3 × 3. */
+        const viz = new Float32Array(9);
+        const passo = (de, para) => {
+          for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+            let v = de[r * N + c], k = 0;
+            for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++)
+              viz[k++] = dr || dc ? de[Math.min(N - 1, Math.max(0, r + dr)) * N + Math.min(N - 1, Math.max(0, c + dc))] : -1e9;
+            viz.sort();   // o próprio pixel (-1e9) fica no começo; viz[6] é o terceiro vizinho mais alto
+            if (v > viz[6] + 200) { viz[0] = v; viz.sort(); v = viz[4]; }
+            para[r * N + c] = v;
+          }
+        };
+        // duas passadas: na borda do ladrilho a agulha se espelha no vizinho repetido e só cai na segunda
+        passo(cru, h); passo(h, cru);
+        for (let i = 0; i < h.length; i++) {
+          const v = Math.max(0, cru[i]);
+          h[i] = v > RELEVO_META.teto ? RELEVO_META.teto + (v - RELEVO_META.teto) * RELEVO_META.fator : v;
+        }
+        return h;
+      } catch (e) { return null; }
+    })();
+    FINO.cache.set(k, pr);
+    if (FINO.cache.size > 400) FINO.cache.delete(FINO.cache.keys().next().value);
+    return pr;
+  }
+  /* copia um ladrilho (o fino, ou a grade reamostrada) para a sua casa no mosaico */
+  function poeNoMosaico(i, j, h) {
+    const A = FINO.atlas, L = FINO_LADO * FINO_PX, n = 2 ** FINO.z;
+    for (let r = 0; r < FINO_PX; r++) {
+      const o = (j * FINO_PX + r) * L + i * FINO_PX;
+      if (h) { A.set(h.subarray(r * FINO_PX, (r + 1) * FINO_PX), o); continue; }
+      const lat = latDeY((FINO.y0 + j + (r + 0.5) / FINO_PX) / n);
+      for (let c = 0; c < FINO_PX; c++)
+        A[o + c] = altLonLat((FINO.x0 + i + (c + 0.5) / FINO_PX) / n * 360 - 180, lat);
+    }
+  }
+  /* refaz o mosaico quando a câmera para em outro lugar; chamado no moveend e ao ligar o relevo */
+  function atualizaFino() {
+    // o nível que a biblioteca usa para o terreno no centro (`transform.tileZoom`): o mesmo ladrilho
+    const z = Math.min(FINO_ZMAX, Math.floor(map.getZoom()));
+    if (!REL.ativo || z < FINO_ZMIN) {
+      if (FINO.atlas) { FINO.atlas = null; FINO.gera++; FINO.ver++; map.triggerRepaint(); }
+      return;
+    }
+    const c = map.getCenter(), n = 2 ** z;
+    const x0 = Math.floor(projX(c.lng) * n) - FINO_LADO / 2, y0 = Math.floor(merc(c.lat) * n) - FINO_LADO / 2;
+    if (FINO.atlas && FINO.z === z && FINO.x0 === x0 && FINO.y0 === y0) return;
+    Object.assign(FINO, { z, x0, y0, atlas: new Float32Array((FINO_LADO * FINO_PX) ** 2) });
+    const vez = ++FINO.gera;
+    FINO.ver++;
+    for (let j = 0; j < FINO_LADO; j++) for (let i = 0; i < FINO_LADO; i++) {
+      poeNoMosaico(i, j, null);
+      pedeFino(z, x0 + i, y0 + j).then(h => {
+        if (!h || vez !== FINO.gera || !FINO.atlas) return;
+        poeNoMosaico(i, j, h);
+        // as chegadas se juntam: uma subida da textura por quadro, não uma por ladrilho
+        if (!FINO.sujo) { FINO.sujo = true; requestAnimationFrame(() => { FINO.ver++; FINO.sujo = false; map.triggerRepaint(); }); }
+      });
+    }
+    map.triggerRepaint();
+  }
+  /* a altitude no mosaico fino (bilinear entre centros de pixel, como o LINEAR da textura), ou null */
+  function altFina(wx, wy) {
+    if (!FINO.atlas) return null;
+    const L = FINO_LADO * FINO_PX, n = 2 ** FINO.z;
+    const u = (wx * n - FINO.x0) * FINO_PX - 0.5, v = (wy * n - FINO.y0) * FINO_PX - 0.5;
+    if (!(u >= -0.5 && v >= -0.5 && u <= L - 0.5 && v <= L - 0.5)) return null;
+    const uc = Math.max(0, Math.min(L - 1.001, u)), vc = Math.max(0, Math.min(L - 1.001, v));
+    const j = uc | 0, i = vc | 0, fu = uc - j, fv = vc - i, A = FINO.atlas, k = i * L + j;
+    return (A[k] * (1 - fu) + A[k + 1] * fu) * (1 - fv) + (A[k + L] * (1 - fu) + A[k + L + 1] * fu) * fv;
+  }
+  const altEm = (wx, wy) => altFina(wx, wy) ?? altLonLat(wx * 360 - 180, latDeY(wy));
   /* o z de mundo de um ponto: 0 com o relevo desligado */
   const zMundo = (wx, wy) => REL.ativo
     ? (altEm(wx, wy) * REL.exag - REL.elev) * Math.cosh(2 * Math.PI * (0.5 - wy)) / C_TERRA : 0;
@@ -2179,7 +2285,23 @@
     for (const p of pedacos) { tot.set(p, q); q += p.length; }
     return tot.buffer;
   }
-  const LADO_DEM = 256, ZMAX_DEM = 7;   // a z7 o pixel do ladrilho (~1,2 km) já é mais fino que a grade
+  /* a z7 o pixel do ladrilho (~1,2 km) já é mais fino que a grade; do z10 ao FINO_ZMAX o
+     ladrilho vem da rede (`pedeFino`) e, se ela falhar, da grade como antes */
+  const LADO_DEM = 256, ZMAX_DEM = 7;
+  async function ladrilhoDem(z, x, y) {
+    if (z >= FINO_ZMIN) {
+      const h = await pedeFino(z, x, y);
+      if (h) {
+        const rgb = new Uint8Array(LADO_DEM * LADO_DEM * 3);
+        for (let k = 0; k < h.length; k++) {
+          const v = Math.round((h[k] + 32768) * 256);
+          rgb[3 * k] = v >> 16; rgb[3 * k + 1] = (v >> 8) & 255; rgb[3 * k + 2] = v & 255;
+        }
+        return pngRGB(LADO_DEM, LADO_DEM, rgb);
+      }
+    }
+    return ladrilhoRelevo(z, x, y);
+  }
   function ladrilhoRelevo(z, x, y) {
     const n = 2 ** z, rgb = new Uint8Array(LADO_DEM * LADO_DEM * 3);
     for (let j = 0; j < LADO_DEM; j++) {
@@ -2207,14 +2329,14 @@
       if (!protocoloRelevo) {
         maplibregl.addProtocol('relevo', async p => {
           const [z, x, y] = p.url.slice('relevo://'.length).split('/').map(Number);
-          return { data: ladrilhoRelevo(z, x, y) };
+          return { data: await ladrilhoDem(z, x, y) };
         });
         protocoloRelevo = true;
       }
       /* duas fontes com os mesmos ladrilhos: a biblioteca pede (e avisa no console) que o
          sombreamento não divida a fonte com o terreno, que ela reamostra por conta própria */
       const dem = { type: 'raster-dem', tiles: ['relevo://{z}/{x}/{y}'], tileSize: LADO_DEM,
-                    encoding: 'terrarium', maxzoom: ZMAX_DEM };
+                    encoding: 'terrarium', maxzoom: FINO_ZMAX };
       map.addSource('relevo', dem);
       map.addSource('relevo-sombra', { ...dem });
       // logo acima da terra: por baixo do satélite, do véu e da rede
@@ -2222,13 +2344,22 @@
                    map.getLayer('sat') ? 'sat' : 'veu-sat');
       REL.exag = exageroDoZoom();
       map.setTerrain({ source: 'relevo', exaggeration: REL.exag });
+      /* A biblioteca pede o terreno um nível abaixo da tela (deltaZoom 1, ladrilho de 1.024 px).
+         Com o teto de zoom da página (~11,2) isso parava no z10, 150 m por pixel, e o Pão de
+         Açúcar virava um calombo. No mesmo nível da tela é o z11, ~75 m. O mosaico da rede
+         (`atualizaFino`) usa o mesmo nível: mexer aqui sem mexer lá descola a rede do chão. */
+      const tsc = map.terrain && map.terrain.sourceCache;
+      // o próprio setTerrain já guardou o par ladrilho da tela → ladrilho do terreno com o delta antigo
+      if (tsc && tsc.sourceCache) { tsc.deltaZoom = 0; tsc.sourceCache.tileSize = 512; tsc._sourceTileCache = {}; }
       REL.ativo = true;
+      atualizaFino();
     } else {
       REL.ativo = false;
       map.setTerrain(null);
       if (map.getLayer('sombra')) map.removeLayer('sombra');
       for (const f of ['relevo', 'relevo-sombra']) if (map.getSource(f)) map.removeSource(f);
       REL.elev = 0; REL.exag = 0;
+      atualizaFino();
     }
     map.triggerRepaint();
   }
@@ -2253,6 +2384,7 @@
     if (!REL.ativo || !map.terrain) return;
     map.terrain.exaggeration = exageroDoZoom();
   });
+  map.on('moveend', atualizaFino);
 
   /* A matriz que leva o mundo [0,1] ao espaço de recorte, a mesma com que a
      biblioteca desenha. É o que reprojeta o resto da página (acerto, marcadores,
@@ -2617,22 +2749,29 @@
      (exagero, altitude do centro em m, ligado); desligado, o z é 0 e nada muda no plano. */
   const ALT_GLSL = `
 uniform highp sampler2D uAlt; uniform vec4 uAltCaixa; uniform vec3 uAltK;
+uniform highp sampler2D uAltF; uniform vec4 uFinoCaixa;
 float zDe(vec2 p) {
   if (uAltK.z < .5) return 0.;
   const float PI = 3.14159265;
-  float lat = degrees(atan(sinh(PI * (1. - 2. * p.y))));
-  vec2 t = vec2((p.x * 360. - 180. - uAltCaixa.x) * uAltCaixa.z, (lat - uAltCaixa.y) * uAltCaixa.w);
-  float h = (t.x < 0. || t.y < 0. || t.x > 1. || t.y > 1.) ? 0. : texture(uAlt, t).r;
+  vec2 f = (p - uFinoCaixa.xy) * uFinoCaixa.zw;
+  float h;
+  if (uFinoCaixa.z > 0. && f.x >= 0. && f.y >= 0. && f.x <= 1. && f.y <= 1.) h = texture(uAltF, f).r;
+  else {
+    float lat = degrees(atan(sinh(PI * (1. - 2. * p.y))));
+    vec2 t = vec2((p.x * 360. - 180. - uAltCaixa.x) * uAltCaixa.z, (lat - uAltCaixa.y) * uAltCaixa.w);
+    h = (t.x < 0. || t.y < 0. || t.x > 1. || t.y > 1.) ? 0. : texture(uAlt, t).r;
+  }
   return (h * uAltK.x - uAltK.y) * cosh(2. * PI * (.5 - p.y)) / ${C_TERRA.toFixed(1)};
 }`;
-  const UNIF_ALT = ['uAlt', 'uAltCaixa', 'uAltK'];
-  function criaTexAlt(gl) {
-    const m = RELEVO_META, t = gl.createTexture();
+  const UNIF_ALT = ['uAlt', 'uAltCaixa', 'uAltK', 'uAltF', 'uFinoCaixa'];
+  function criaTexAlt(gl, fino) {
+    const m = RELEVO_META, t = gl.createTexture(), L = FINO_LADO * FINO_PX;
     gl.bindTexture(gl.TEXTURE_2D, t);
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
     gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R16F, m.nlon, m.nlat, 0, gl.RED, gl.FLOAT, REL.alt);
+    if (fino) gl.texImage2D(gl.TEXTURE_2D, 0, gl.R16F, L, L, 0, gl.RED, gl.FLOAT, FINO.atlas);
+    else gl.texImage2D(gl.TEXTURE_2D, 0, gl.R16F, m.nlon, m.nlat, 0, gl.RED, gl.FLOAT, REL.alt);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
@@ -2646,11 +2785,25 @@ float zDe(vec2 p) {
     gl.activeTexture(gl.TEXTURE2);
     gl.bindTexture(gl.TEXTURE_2D, on ? camada.texAlt : null);
     gl.uniform1i(u.uAlt, 2);
+    /* o mosaico fino na unidade 3, uma textura só para as duas camadas (o contexto é o da
+       biblioteca, o mesmo): 16 MB que sobem de novo quando a versão do mosaico muda */
+    const fino = on && !!FINO.atlas;
+    if (fino && (FINO.verTex !== FINO.ver || FINO.gl !== gl)) {
+      if (FINO.tex && FINO.gl === gl) gl.deleteTexture(FINO.tex);
+      gl.activeTexture(gl.TEXTURE3);
+      FINO.tex = criaTexAlt(gl, true);
+      FINO.verTex = FINO.ver; FINO.gl = gl;
+    }
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_2D, fino ? FINO.tex : null);
+    gl.uniform1i(u.uAltF, 3);
     gl.activeTexture(gl.TEXTURE0);
     if (on) {
       const m = RELEVO_META;
       gl.uniform4f(u.uAltCaixa, m.lonO, m.latS, 1 / (m.nlon * m.passo), 1 / (m.nlat * m.passo));
     }
+    const n = 2 ** FINO.z;
+    gl.uniform4f(u.uFinoCaixa, FINO.x0 / n, FINO.y0 / n, fino ? n / FINO_LADO : 0, n / FINO_LADO);
     gl.uniform3f(u.uAltK, REL.exag, REL.elev, on ? 1 : 0);
   }
 
@@ -4796,7 +4949,7 @@ void main() {
   /* O WebGL pode ser tirado da página (o iOS descarta o de uma aba em segundo
      plano). A biblioteca refaz o contexto dela; os recursos das nossas duas
      camadas morreram junto e são recriados aqui, dos mesmos dados. */
-  canvasMapa.addEventListener('webglcontextlost', () => { RIOS.perdido = true; PONTOS.perdido = true; });
+  canvasMapa.addEventListener('webglcontextlost', () => { RIOS.perdido = true; PONTOS.perdido = true; FINO.tex = null; FINO.verTex = -1; });
   map.on('webglcontextrestored', () => {
     if (!RIOS.perdido) return;
     const gl = map.painter.context.gl;
