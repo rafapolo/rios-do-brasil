@@ -185,7 +185,7 @@ Todos os JSON intermediários são gitignored. Os HTML gerados são versionados 
   calada na grade. Os z10/z11 da AWS trazem agulhas de 2–4 km no mar perto da costa (reamostragem): o pixel 200 m
   acima do 3º vizinho mais alto vira a mediana 3 × 3, em duas passadas; filtro mais simples (desvio da mediana)
   come a borda do Pão de Açúcar. A rede de rios lê a MESMA altitude por um mosaico de 8 × 8 ladrilhos em volta do
-  centro (`FINO.atlas`, `atualizaFino` no `moveend`), segunda textura do shader (`uAltF`, unidade 3) e fonte do
+  centro (`FINO.atlas`, `atualizaFino`), refeito também DURANTE o movimento (no `move`, quando o centro anda mais de um ladrilho, copiando o que já tinha e usando o ladrilho já baixado de `FINO.prontos`; só no `moveend` a rede ficava na grade de 3,7 km enquanto a biblioteca já desenhava o chão fino, e flutuava até 500 m), segunda textura do shader (`uAltF`, unidade 3) e fonte do
   `altEm` da CPU; onde o ladrilho não chegou, o mosaico guarda a grade reamostrada. **O nível do mosaico tem de ser
   o do terreno da biblioteca**, que por padrão pede um nível abaixo da tela (`deltaZoom` 1): a página o força a 0
   logo depois do `setTerrain` (e limpa o `_sourceTileCache` que o próprio `setTerrain` já encheu), senão o teto de
@@ -196,7 +196,8 @@ Todos os JSON intermediários são gitignored. Os HTML gerados são versionados 
   Por software (`POR_SOFTWARE`) não há relevo. A sonda expõe `relevo()`, `ligaRelevo`, `desligaRelevo`, `altEm`
   (só a grade), `altMundo` (o que a rede lê, com o mosaico fino) e `fino()`.
 - **Os limites da câmera do mapa moram em dois lugares só, e nenhum deles é literal solto.**
-  O teto de zoom é `ZOOM_MAX` (hoje 180 × o enquadramento nacional, ~13 m/px; a 240 o córrego pequeno vira escada), traduzido em
+  O teto de zoom é `ZOOM_MAX` (hoje 180 × o enquadramento nacional, ~13 m/px; a 240 o córrego pequeno vira escada) no plano e
+  `ZOOM_MAX_3D` (2 × isso, um nível a mais) na vista 3D; o que vale agora é `tetoZoom`, trocado pelo `define3D`, traduzido em
   `limitesDeZoom()` para o zoom da biblioteca (`512·2^zoom` = `vista.k`). O limite de
   arrasto é `prender()`, ligado ao `transformCameraUpdate` da biblioteca (o `maxBounds` prende a
   BORDA da tela e não serve com a vista inclinada): ele impede que o
