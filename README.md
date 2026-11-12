@@ -131,6 +131,8 @@ UHE Itá, com +70% por década, que é o enchimento do reservatório.
 
 ## De onde vem cada número
 
+13 conjuntos de dados de 8 instituições: ANA, Aneel, MapBiomas, Ministério das Cidades (SNIS), IBGE, Natural Earth, NOAA e EOX.
+
 | Camada | Fonte |
 |---|---|
 | Rede de drenagem, área de drenagem, topologia | [Base Hidrográfica Ottocodificada 2017 (1:5.000)](https://dadosabertos.ana.gov.br), ANA |
@@ -138,6 +140,8 @@ UHE Itá, com +70% por década, que é o enchimento do reservatório.
 | Séries históricas (`series.html`) | [`anagovbr/hidro-dados-estacoes-convencionais`](https://github.com/anagovbr/hidro-dados-estacoes-convencionais) (1901–2023) fundido com o SOAP `HidroSerieHistorica` (até 2026-05) |
 | Superfície de água (`series.html`) | [MapBiomas](https://mapbiomas.org), classe 33, por UF, 1985–2021 |
 | Perda na distribuição (`series.html`) | SNIS, índice IN049 por município, 2006–2022 |
+| Outorgas de captação e lançamento | SNIRH, ANA (federais e estaduais vigentes); `br_ana_outorgas` no lake |
+| Esgoto e ETEs | Atlas Esgotos, ANA; `br_ana_atlas_esgotos.municipio` no lake |
 | Barragens (modo rio livre) | [SNISB](https://www.snisb.gov.br), camada `IG/SNISB` do SNIRH, e empreendimentos hidrelétricos da Aneel (`SPR/Aproveitamento_Hidreletrico_AHE`), só os com potência fiscalizada |
 | Reservatórios | Sistema de Acompanhamento de Reservatórios (SAR), ANA |
 | Contorno dos estados | `br_geobr_mapas` / IBGE |
