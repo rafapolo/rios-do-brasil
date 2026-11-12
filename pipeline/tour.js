@@ -1,5 +1,5 @@
   /* ---------- tour ----------
-     Um passeio de ~2 minutos por fatos conferidos no banco (design/tour.json, com as notas de
+     Um passeio de ~3 minutos por fatos conferidos no banco (design/tour.json, com as notas de
      verificação em design/tour.md). Mora dentro da IIFE porque ele dirige a página pelos mesmos
      pontos de entrada do leitor: aplicaModo, os interruptores de camada, define3D, realcar e a
      câmera da biblioteca. Esc e "✕ esc" param e devolvem tudo como estava; ?tour=1 abre um
@@ -88,8 +88,8 @@
       let alto = 0;
       $('tour-baixo').style.minHeight = '';
       cap.style.visibility = 'hidden';
-      for (const c of ROTEIRO) {
-        kick.textContent = txt(c, 'kicker'); lin.textContent = txt(c, 'frase'); fon.textContent = txt(c, 'fonte');
+      for (const c of ROTEIRO) for (const l of [c, ...passosDe(c).filter(p => p.frase).map(p => ({ ...c, ...p }))]) {
+        kick.textContent = txt(l, 'kicker'); lin.textContent = txt(l, 'frase'); fon.textContent = txt(l, 'fonte');
         alto = Math.max(alto, $('tour-baixo').offsetHeight);
       }
       cap.style.visibility = '';
@@ -128,29 +128,48 @@
 
     /* ---- painéis em uso ----
        Na cena `painel` o tour mostra a hud (no celular sobe o painel de cima da legenda) e aperta os
-       botões de verdade, um a um, com um aro que pisca: "modo:outorga", "camada:estacoes". */
+       botões de verdade, um a um, com um aro que pisca: "modo:outorga", "camada:estacoes". Um passo
+       também pode ser um objeto { acao, kicker, frase (e _en), desfaz }: a legenda troca no clique e
+       o tempo da cena se reparte entre os passos depois de `painel_inicio_ms` (a frase da cena fica
+       sozinha até lá); com `desfaz`, o mesmo botão é apertado de novo antes do passo seguinte, para
+       ver a chave ligar e desligar. */
+    const passosDe = c => (c.painel || []).map(p => typeof p === 'string' ? { acao: p } : p);
     const ALVO_PAINEL = { 'modo': v => document.querySelector('.modo[data-modo="' + v + '"]'),
-      'camada': v => document.getElementById(CAMADAS[v]) };
+      'camada': v => document.getElementById(v === '3d' ? 'bt3d' : CAMADAS[v]) };
     function painelAberto(on, nome) {
       document.body.classList.toggle('tour-painel', on);
       if (!ehCelular()) return;
       if (on) abrirPainel(nome || 'modo'); else fecharPainel();
     }
     function usaPainel(c, i, dur) {
-      const passos = c.painel;
+      const passos = passosDe(c), n = passos.length;
+      const narrado = passos.some(p => p.frase), ini = (c.painel_inicio_ms || 0) / RAPIDO;
+      const quando = k => narrado ? ini + (dur - ini) * k / n : dur * (k + 1) / (n + 1) - 300 / RAPIDO;
+      const vivo = () => ativo && cenaAtual === i;
+      const aperta = async (b, ms) => {
+        b.classList.add('tour-toque');
+        await espera(ms / RAPIDO);
+        if (!vivo()) { b.classList.remove('tour-toque'); return false; }
+        b.click();
+        return true;
+      };
       passos.forEach((p, k) => {
-        const [tipo, v] = p.split(':');
-        espera(dur * (k + 1) / (passos.length + 1) - 300 / RAPIDO).then(async () => {
-          if (!ativo || cenaAtual !== i) return;
+        const [tipo, v] = p.acao.split(':');
+        espera(quando(k)).then(async () => {
+          if (!vivo()) return;
           if (ehCelular()) abrirPainel(tipo === 'modo' ? 'modo' : 'camadas');
           const b = ALVO_PAINEL[tipo](v);
           if (!b) return;
-          b.classList.add('tour-toque');
-          await espera(600 / RAPIDO);
-          if (!ativo || cenaAtual !== i) { b.classList.remove('tour-toque'); return; }
-          b.click();
+          if (!await aperta(b, 600)) return;
+          if (p.frase) { escreveLegenda({ ...c, ...p }); $('tour-cap').classList.add('on'); if (som) som.legenda(); }
           await espera(500 / RAPIDO);
           b.classList.remove('tour-toque');
+          if (!p.desfaz) return;
+          // desliga (ou religa) um pouco antes do próximo passo
+          await espera(quando(k + 1) - quando(k) - 1800 / RAPIDO);
+          if (!vivo()) return;
+          if (ehCelular()) abrirPainel('camadas');
+          if (await aperta(b, 400)) { await espera(300 / RAPIDO); b.classList.remove('tour-toque'); }
         }).catch(() => {});
       });
     }
@@ -216,8 +235,11 @@
 
     /* câmera → som: velocidade em px de tela, de zoom e de giro por segundo (0 a 1) */
     let ult = null, vel = 0, prox = { forca: 0, perto: 0, pan: 0 }, proxEm = 0;
+    let somModo = null;
     function sigaCamera() {
       if (!som) return;
+      // o timbre segue o modo do mapa: troca de cena e cliques na cena dos modos
+      if (modo !== somModo) { somModo = modo; if (som.modo) som.modo(modo); }
       const agora = performance.now(), c = map.getCenter(), z = map.getZoom(), b = map.getBearing();
       if (ult) {
         const dt = Math.max(0.001, (agora - ult.t) / 1000);
@@ -257,7 +279,7 @@
       medeJanela();
       requestAnimationFrame(() => $('tour').classList.add('on'));
       TOTAL = ROTEIRO.reduce((s, c) => s + c.duracao_ms, 0) / RAPIDO;
-      inicio = performance.now(); ult = null; vel = 0;
+      inicio = performance.now(); ult = null; vel = 0; somModo = null;
       define3D(true, { animar: false, manterCamera: true });
       map.setMaxPitch(PITCH_MAX);
       if (congelado) return;     // enquadramento estático (ferramenta de ajuste das câmeras): sem relógio
@@ -351,8 +373,8 @@
     }
     function marcaSomConvite() {
       $('tour-convite-sub').textContent = som && som.ligado()
-        ? (EN ? '♪ 2 minutes, with sound: turn the volume up' : '♪ 2 minutos, com som: ligue o volume')
-        : (EN ? '2 minutes, no sound (you turned it off before)' : '2 minutos, sem som (você o desligou antes)');
+        ? (EN ? '♪ 3 minutes, with sound: turn the volume up' : '♪ 3 minutos, com som: ligue o volume')
+        : (EN ? '3 minutes, no sound (you turned it off before)' : '3 minutos, sem som (você o desligou antes)');
     }
     convite.addEventListener('click', e => {
       if (e.target.closest('button')) iniciar(); else fechaConvite();   // fora do botão: fica só o mapa
@@ -396,7 +418,7 @@
         $('tour-cap').lang = 'en';
         const b = $('tour-convite').querySelector('button span');
         b.firstChild.textContent = 'Press to start';
-        $('tour-convite').setAttribute('aria-label', '2-minute tour');
+        $('tour-convite').setAttribute('aria-label', '3-minute tour');
         $('tour-parar').setAttribute('aria-label', 'Stop the tour and return to the map');
       }
       if (q0.get('tour') !== '1' && !EN) return;

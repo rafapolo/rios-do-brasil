@@ -11,6 +11,8 @@
      colchão     três triângulos desafinados num acorde de cluster aberto, filtro pelo zoom
      gotas       senos com glissando para cima (o "plic" da gota), em eco, nas notas da escala
      sinos       FM de decaimento longo; cascata descendo a escala, como ondas num remanso
+   Cada modo do mapa tem um timbre (TIMBRES, trocado por modo()): escala, acorde do colchão, forma
+   de onda do colchão, brilho do filtro e a razão da FM dos sinos. A vazão é a base de tudo abaixo.
    Escala própria: hexatônica lídia aberta sobre mi (0 2 4 6 7 9, a quarta aumentada dá o
    brilho de superfície d'água), 72 bpm. Cada cena muda a raiz do bordão e do colchão.
    Saída sempre com rampa (entrada e saída), para não estalar. O AudioContext só nasce dentro
@@ -18,7 +20,18 @@
    localStorage. */
 (() => {
   const CHAVE = 'rios-tour-som';
-  const ESCALA = [0, 2, 4, 6, 7, 9];
+  /* um timbre por modo do mapa: a vazão é clara (lídia), o esgoto turvo (frígio, segunda menor no
+     colchão), a indústria metálica (tons inteiros, trítono, dente de serra abafado), a outorga tensa
+     (menor), a tendência suspensa (quartas, dórico) e o rio livre aberto (maior, com a sétima) */
+  const TIMBRES = {
+    vazao:     { escala: [0, 2, 4, 6, 7, 9], acorde: [0, 2, 7],  onda: 'triangle', brilho: 1,    fm: 3.51 },
+    esgoto:    { escala: [0, 1, 3, 5, 7, 8], acorde: [0, 1, 7],  onda: 'triangle', brilho: 0.5,  fm: 1.41 },
+    industria: { escala: [0, 2, 4, 6, 8, 10], acorde: [0, 6, 10], onda: 'sawtooth', brilho: 0.45, fm: 2.76 },
+    outorga:   { escala: [0, 2, 3, 5, 7, 8], acorde: [0, 3, 7],  onda: 'triangle', brilho: 0.8,  fm: 3.01 },
+    tendencia: { escala: [0, 2, 3, 5, 7, 9], acorde: [0, 5, 10], onda: 'sine',     brilho: 0.9,  fm: 4.2 },
+    livre:     { escala: [0, 2, 4, 7, 9, 11], acorde: [0, 4, 7], onda: 'triangle', brilho: 1.25, fm: 3.99 },
+  };
+  let timbre = TIMBRES.vazao, ESCALA = timbre.escala;
   const MI = 82.41;                      // mi 2
   const BPM = 72, BATIDA = 60 / BPM, PASSO = BATIDA / 2;
   // raiz de cada cena, em semitons sobre o mi (fora da escala de propósito: o tour modula)
@@ -138,10 +151,10 @@
     // colchão: acorde aberto (raiz, 2ª, 5ª), três triângulos desafinados cada
     const cg2 = ctx.createGain(); cg2.gain.value = 0;
     const cf = ctx.createBiquadFilter(); cf.type = 'lowpass'; cf.frequency.value = 700; cf.Q.value = 0.4;
-    const oscs = [0, 2, 7].flatMap(semi => [-7, 0, 6].map(det => {
-      const o = ctx.createOscillator(); o.type = 'triangle'; o.detune.value = det; o.start();
+    const oscs = [0, 1, 2].flatMap(k => [-7, 0, 6].map(det => {
+      const o = ctx.createOscillator(); o.type = timbre.onda; o.detune.value = det; o.start();
       const g = ctx.createGain(); g.gain.value = 0.33; o.connect(g); g.connect(cg2);
-      return { o, semi };
+      return { o, k };
     }));
     cg2.connect(cf); cf.connect(bus);
     const ce = ctx.createGain(); ce.gain.value = 0.6; cf.connect(ce); ce.connect(sala);
@@ -154,7 +167,7 @@
     bordao.o1.frequency.setTargetAtTime(hz(raiz), t, k);
     bordao.o2.frequency.setTargetAtTime(hz(raiz, 1), t, k);
     bordao.o3.frequency.setTargetAtTime(hz(raiz + 7), t, k);
-    colchao.oscs.forEach(c => c.o.frequency.setTargetAtTime(hz(raiz + c.semi, 2), t, k));
+    colchao.oscs.forEach(c => c.o.frequency.setTargetAtTime(hz(raiz + timbre.acorde[c.k], 2), t, k));
   }
 
   // ---------- vozes curtas ----------
@@ -175,7 +188,7 @@
   // sino de água: FM com modulador inarmônico que morre antes da portadora
   function sino(t, f, v, pan, dur = 2.2) {
     const c = ctx.createOscillator(); c.type = 'sine'; c.frequency.value = f;
-    const m = ctx.createOscillator(); m.type = 'sine'; m.frequency.value = f * 3.51;
+    const m = ctx.createOscillator(); m.type = 'sine'; m.frequency.value = f * timbre.fm;
     const mg = ctx.createGain();
     mg.gain.setValueAtTime(f * 1.6, t); mg.gain.exponentialRampToValueAtTime(f * 0.02, t + dur * 0.5);
     m.connect(mg); mg.connect(c.frequency);
@@ -262,7 +275,7 @@
     rumor.g.gain.setTargetAtTime(0.01 + 0.1 * f, t, 0.6);                           // o rumor cresce e abre
     rumor.f.frequency.setTargetAtTime(90 + 260 * f, t, 0.6);
     sala.gain.setTargetAtTime(0.2 + (cam.pitch / 70) * 0.35, t, 0.3);
-    colchao.f.frequency.setTargetAtTime(lim(500 * 2 ** (cam.zoom / 3.2), 380, 2600), t, 0.3);
+    colchao.f.frequency.setTargetAtTime(lim(500 * 2 ** (cam.zoom / 3.2), 380, 2600) * timbre.brilho, t, 0.3);
   }
 
   // o bordão segue a vazão do rio da cena
@@ -304,6 +317,20 @@
     fala = performance.now() + 2500;
   }
 
+  // troca de modo do mapa: muda o timbre e marca a troca com um sino na tônica da escala nova
+  function modo(m) {
+    const novo = TIMBRES[m];
+    if (!novo || novo === timbre) return;
+    timbre = novo; ESCALA = novo.escala;
+    if (!ctx) return;
+    colchao.oscs.forEach(c => { c.o.type = novo.onda; });
+    afinar(0.6);
+    camera(cam);
+    if (!tocando) return;
+    const t = ctx.currentTime + 0.05;
+    sino(t, hz(raiz + novo.acorde[1], 3), 0.6, -0.3, 2.4);
+    sino(t + PASSO, hz(raiz + novo.acorde[2], 3), 0.5, 0.3, 2.8);
+  }
   function legenda() {
     if (!tocando || !ctx) return;
     if (performance.now() > fala - 400) cascata(ctx.currentTime + 0.25);
@@ -351,6 +378,6 @@
     return Math.sqrt(q / d.length);
   }
 
-  window.SomRio = { iniciar, cena, legenda, camera, parar, alternar, nivel,
+  window.SomRio = { iniciar, cena, legenda, camera, modo, timbre: () => Object.keys(TIMBRES).find(k => TIMBRES[k] === timbre), parar, alternar, nivel,
     ligado: () => ligado, criado: () => !!ctx, estado: () => (ctx ? ctx.state : 'nenhum') };
 })();

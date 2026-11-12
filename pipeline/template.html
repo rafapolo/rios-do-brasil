@@ -6,6 +6,25 @@
      a gaveta de baixo. -->
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Os rios do Brasil por vazão</title>
+<!-- favicon embutido (as ondas do modo Vazão): a página tem de abrir por file:// sem pedir nada à rede -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg%20xmlns%3D%22http%3A//www.w3.org/2000/svg%22%20viewBox%3D%220%200%2032%2032%22%3E%3Crect%20width%3D%2232%22%20height%3D%2232%22%20rx%3D%227%22%20fill%3D%22%230d366b%22/%3E%3Cg%20fill%3D%22none%22%20stroke%3D%22%239ec5f4%22%20stroke-linecap%3D%22round%22%3E%3Cpath%20d%3D%22M5%2010q2.75-2.6%205.5%200t5.5%200t5.5%200t5.5%200%22%20stroke-width%3D%221.6%22/%3E%3Cpath%20d%3D%22M5%2016.5q2.75-2.6%205.5%200t5.5%200t5.5%200t5.5%200%22%20stroke-width%3D%222.6%22%20stroke%3D%22%236da7ec%22/%3E%3Cpath%20d%3D%22M5%2023q2.75-2.6%205.5%200t5.5%200t5.5%200t5.5%200%22%20stroke-width%3D%223.6%22%20stroke%3D%22%23cde2fb%22/%3E%3C/g%3E%3C/svg%3E">
+<meta name="description" content="462.539 trechos de rio desenhados pela água que passa em cada um, cruzados com esgoto, licenças de captação, barragens e tendência da vazão. Com um tour de 3 minutos.">
+<meta name="theme-color" content="#0d366b">
+<meta property="og:type" content="website">
+<meta property="og:locale" content="pt_BR">
+<meta property="og:locale:alternate" content="en_US">
+<meta property="og:site_name" content="Rios do Brasil">
+<meta property="og:url" content="https://rafapolo.github.io/rios-do-brasil/">
+<meta property="og:title" content="Os rios do Brasil por vazão">
+<meta property="og:description" content="462.539 trechos de rio desenhados pela água que passa em cada um, cruzados com esgoto, licenças de captação, barragens e tendência da vazão. Com um tour de 3 minutos.">
+<meta property="og:image" content="https://rafapolo.github.io/rios-do-brasil/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="Rede de rios do Norte e Nordeste do Brasil em azul, mais grossa e clara onde a vazão é maior, com estações em laranja">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Os rios do Brasil por vazão">
+<meta name="twitter:description" content="462.539 trechos de rio desenhados pela água que passa em cada um, cruzados com esgoto, licenças de captação, barragens e tendência da vazão. Com um tour de 3 minutos.">
+<meta name="twitter:image" content="https://rafapolo.github.io/rios-do-brasil/og.jpg">
 <style>
   /* JetBrains Mono (SIL OFL 1.1), subconjunto variável embutido — a face de
      leitura de instrumento: número, código de estação, rótulo, eixo. */
@@ -915,14 +934,15 @@
   #tour-convite[hidden] { display: none; }
   #tour-convite button {
     display: inline-flex; align-items: center; gap: 14px; text-align: left; cursor: pointer;
-    font: 700 1.25rem var(--sans); color: #fff; background: var(--ramp-5); min-height: 64px;
-    border: 2px solid var(--ramp-2); border-radius: 999px; padding: 14px 30px 14px 24px;
+    font: 700 1.25rem var(--sans); color: #fff; background: #0d366b; min-height: 64px;
+    border: 2px solid #3987e5; border-radius: 999px; padding: 14px 30px 14px 24px;
     box-shadow: 0 12px 40px rgba(0, 0, 0, .5); letter-spacing: 0; text-transform: none;
   }
   #tour-convite button::before {
     content: ""; flex: none; border-left: 14px solid #fff; border-top: 9px solid transparent; border-bottom: 9px solid transparent;
   }
-  #tour-convite button:hover { background: var(--ramp-4); }
+  /* azul escuro fixo, nos dois temas: a rampa se inverte no escuro e o texto branco sumia no azul claro */
+  #tour-convite button:hover { background: #184f95; }
   #tour-convite small { display: block; font: 500 0.8rem var(--sans); opacity: .85; margin-top: 3px; }
   /* durante o tour só ficam o mapa, as faixas e o crédito do satélite (a CC BY pede o crédito à vista) */
   body.touring .hud, body.touring .busca, body.touring .busca-lista, body.touring .zoom,
@@ -1005,7 +1025,7 @@
     <svg class="ico-abrir" viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="4.5" width="17" height="15" rx="1.5"/><path d="M3.5 9.5h17M3.5 14.5h17M9.5 9.5v10"/></svg>
     <span class="rot-abrir">Tabela e método</span>
   </button>
-  <button class="abrir" id="btTour" title="Passeio de 2 minutos, com som" aria-label="Tour de 2 minutos">▶ Tour</button>
+  <button class="abrir" id="btTour" title="Passeio de 3 minutos, com som" aria-label="Tour de 3 minutos">▶ Tour</button>
 </div>
 
 <div class="hud" id="hud">
@@ -1178,7 +1198,7 @@
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3.5c3 3.8 5.2 6.6 5.2 9.6a5.2 5.2 0 0 1-10.4 0c0-3 2.2-5.8 5.2-9.6z"/></svg>
     <span>Ficha</span>
   </button>
-  <button type="button" id="btTourBarra" aria-label="Tour de 2 minutos, com som">
+  <button type="button" id="btTourBarra" aria-label="Tour de 3 minutos, com som">
     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z"/></svg>
     <span>Tour</span>
   </button>
@@ -1365,8 +1385,8 @@
     <div id="tour-cap" role="status" aria-live="polite"><span id="tour-kicker"></span><span id="tour-line"></span><span id="tour-fonte"></span></div>
   </div>
 </div>
-<div id="tour-convite" hidden role="dialog" aria-modal="true" aria-label="Tour de 2 minutos">
-  <button type="button"><span>Aperte para começar<small id="tour-convite-sub">♪ 2 minutos, com som: ligue o volume</small></span></button>
+<div id="tour-convite" hidden role="dialog" aria-modal="true" aria-label="Tour de 3 minutos">
+  <button type="button"><span>Aperte para começar<small id="tour-convite-sub">♪ 3 minutos, com som: ligue o volume</small></span></button>
 </div>
 
 <script id="roteiro" type="application/json">/*__ROTEIRO__*/</script>

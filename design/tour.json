@@ -24,8 +24,8 @@
     "realce": "Rio Amazonas"
   },
   {
-    "id": "paineis",
-    "duracao_ms": 11000,
+    "id": "modos",
+    "duracao_ms": 27000,
     "modo": "vazao",
     "camadas": [
       "fluxo"
@@ -39,20 +39,156 @@
       "pitch": 0,
       "bearing": 0
     },
-    "kicker": "Os painéis",
-    "kicker_en": "The panels",
-    "frase": "Tudo muda nos painéis: o modo troca o que a cor mede, as camadas ligam estações e reservatórios, e a legenda diz como ler.",
-    "frase_en": "Everything changes in the panels: the mode switches what the color measures, the layers turn on stations and reservoirs, and the legend says how to read it.",
+    "kicker": "Seis modos",
+    "kicker_en": "Six modes",
+    "frase": "O modo troca o que a cor mede. Um por um:",
+    "frase_en": "The mode changes what the color measures. One by one:",
     "fonte": "Rios do Brasil",
     "fonte_en": "Rios do Brasil",
+    "realce": "Rio Amazonas",
+    "painel_inicio_ms": 2500,
     "painel": [
-      "modo:outorga",
-      "modo:livre",
-      "camada:estacoes",
-      "camada:reservatorios",
-      "modo:vazao"
+      {
+        "acao": "modo:vazao",
+        "kicker": "Modo Vazão",
+        "kicker_en": "Flow mode",
+        "frase": "A cor e a espessura seguem a vazão média: medida onde há estação, estimada no resto da rede.",
+        "frase_en": "Color and width follow the mean flow: measured where there is a gauge, estimated across the rest of the network."
+      },
+      {
+        "acao": "modo:esgoto",
+        "kicker": "Modo Esgoto",
+        "kicker_en": "Sewage mode",
+        "frase": "Quanto da água do rio é esgoto licenciado, somado rio acima. A cor desbota rio abaixo, conforme a água dilui.",
+        "frase_en": "How much of the river's water is permitted sewage, added up from upstream. The color fades downstream as the water dilutes it."
+      },
+      {
+        "acao": "modo:industria",
+        "kicker": "Modo Indústria",
+        "kicker_en": "Industry mode",
+        "frase": "A mesma conta, para efluente industrial, de mineração e de termelétrica.",
+        "frase_en": "The same math, for industrial, mining and thermal power plant effluent."
+      },
+      {
+        "acao": "modo:outorga",
+        "kicker": "Modo Outorga",
+        "kicker_en": "Permits mode",
+        "frase": "Quanto do rio já está prometido em licença de retirada. Em 2.558 trechos, a licença iguala ou passa a vazão.",
+        "frase_en": "How much of the river is already promised in withdrawal permits. In 2,558 reaches, permits match or exceed the flow."
+      },
+      {
+        "acao": "modo:tendencia",
+        "kicker": "Modo Tendência",
+        "kicker_en": "Trend mode",
+        "frase": "Se a vazão sobe ou cai, em % por década, nas estações que passam nos testes, estendida aos rios que elas medem.",
+        "frase_en": "Whether flow is rising or falling, in % per decade, at the stations that pass the tests, extended to the rivers they gauge."
+      },
+      {
+        "acao": "modo:livre",
+        "kicker": "Modo Rio livre",
+        "kicker_en": "Free river mode",
+        "frase": "Cada barragem corta a rede; a cor diz o tamanho do pedaço de rio que segue ligado sem muro no caminho.",
+        "frase_en": "Every dam cuts the network; the color shows how big a piece of river stays connected with no wall in the way."
+      }
+    ]
+  },
+  {
+    "id": "camadas",
+    "duracao_ms": 27000,
+    "modo": "vazao",
+    "camadas": [
+      "fluxo"
     ],
-    "realce": "Rio Amazonas"
+    "camera": {
+      "centro": [
+        -46.5,
+        -22.5
+      ],
+      "zoom": 5.6,
+      "pitch": 30,
+      "bearing": 0
+    },
+    "kicker": "As camadas",
+    "kicker_en": "The layers",
+    "frase": "As chaves ligam e desligam camadas por cima da cor.",
+    "frase_en": "The switches turn layers on and off over the color.",
+    "fonte": "Rios do Brasil",
+    "fonte_en": "Rios do Brasil",
+    "painel_inicio_ms": 2500,
+    "painel": [
+      {
+        "acao": "camada:estacoes",
+        "desfaz": true,
+        "kicker": "Estações",
+        "kicker_en": "Stations",
+        "frase": "1.851 estações fluviométricas da ANA com série longa, cada uma com o regime mês a mês.",
+        "frase_en": "1,851 ANA river gauging stations with long records, each with its month-by-month regime."
+      },
+      {
+        "acao": "camada:reservatorios",
+        "desfaz": true,
+        "kicker": "Reservatórios",
+        "kicker_en": "Reservoirs",
+        "frase": "168 reservatórios do sistema elétrico, com 22 anos de operação diária.",
+        "frase_en": "168 power-grid reservoirs, with 22 years of daily operation."
+      },
+      {
+        "acao": "camada:etes",
+        "desfaz": true,
+        "kicker": "Tratamento de esgoto",
+        "kicker_en": "Sewage treatment",
+        "frase": "As estações de tratamento de esgoto do Atlas Esgotos da ANA.",
+        "frase_en": "The sewage treatment plants from ANA's Sewage Atlas."
+      },
+      {
+        "acao": "camada:fluxo",
+        "desfaz": true,
+        "kicker": "Fluxo animado",
+        "kicker_en": "Animated flow",
+        "frase": "As partículas correm no sentido real da água. Desligado, sobra o mapa parado.",
+        "frase_en": "The particles run in the water's real direction. Turned off, the map stands still."
+      },
+      {
+        "acao": "camada:3d",
+        "desfaz": true,
+        "kicker": "Vista 3D",
+        "kicker_en": "3D view",
+        "frase": "Inclina e gira o mapa, com o relevo por baixo. Desligada, a vista volta a ser de cima.",
+        "frase_en": "Tilts and turns the map, with the terrain underneath. Turned off, the view goes back to top-down."
+      },
+      {
+        "acao": "camada:satelite",
+        "desfaz": true,
+        "kicker": "Imagem de satélite",
+        "kicker_en": "Satellite image",
+        "frase": "O mosaico de 2016 por baixo da rede, para conferir no chão o que o mapa diz.",
+        "frase_en": "The 2016 mosaic under the network, to check on the ground what the map says."
+      }
+    ]
+  },
+  {
+    "id": "pao-de-acucar",
+    "duracao_ms": 11000,
+    "modo": "vazao",
+    "camadas": [
+      "fluxo",
+      "satelite"
+    ],
+    "camera": {
+      "centro": [
+        -43.163,
+        -22.938
+      ],
+      "zoom": 13,
+      "pitch": 60,
+      "bearing": -15
+    },
+    "kicker": "3D com satélite",
+    "kicker_en": "3D with satellite",
+    "frase": "As duas juntas, de perto: o Pão de Açúcar e a entrada da Baía de Guanabara, no Rio de Janeiro.",
+    "frase_en": "Both together, up close: Sugarloaf Mountain and the mouth of Guanabara Bay, in Rio de Janeiro.",
+    "fonte": "EOxCloudless 2016 (Sentinel-2) e relevo SRTM",
+    "fonte_en": "EOxCloudless 2016 (Sentinel-2) and SRTM terrain"
   },
   {
     "id": "velho-chico",
@@ -294,10 +430,34 @@
       "pitch": 35,
       "bearing": 0
     },
-    "kicker": "Rio abaixo",
-    "kicker_en": "Downstream",
-    "frase": "O Tietê deságua no Paraná, que atravessa a Argentina até o Rio da Prata. Já em território argentino, o esgoto licenciado da bacia ainda soma 0,5% da vazão do Paraná: 17,5 mil m³/s.",
-    "frase_en": "The Tietê flows into the Paraná, which crosses Argentina to the Río de la Plata. Already in Argentina, the basin's permitted sewage still adds up to 0.5% of the Paraná's flow: 17,500 m³/s.",
+    "kicker": "Rio abaixo, até a Argentina",
+    "kicker_en": "Downstream, all the way to Argentina",
+    "frase": "O esgoto de São Paulo não fica em São Paulo: o Tietê deságua no Paraná, que entra na Argentina. Lá, o esgoto licenciado da bacia ainda soma cerca de 86 m³/s, o dobro do que vimos em Barueri.",
+    "frase_en": "São Paulo's sewage doesn't stay in São Paulo: the Tietê flows into the Paraná, which enters Argentina. There, the basin's permitted sewage still adds up to about 86 m³/s, twice what we saw at Barueri.",
+    "fonte": "ANA — outorgas e rede hidrográfica",
+    "fonte_en": "ANA — permits and river network",
+    "realce": "Rio Paraná"
+  },
+  {
+    "id": "milei",
+    "duracao_ms": 9000,
+    "modo": "esgoto",
+    "camadas": [
+      "fluxo"
+    ],
+    "camera": {
+      "centro": [
+        -59.9,
+        -29.9
+      ],
+      "zoom": 6.8,
+      "pitch": 45,
+      "bearing": -15
+    },
+    "kicker": "Pergunta séria",
+    "kicker_en": "A serious question",
+    "frase": "O Paraná termina no Rio da Prata, de onde Buenos Aires tira a água da torneira. Diluído uma parte em 200, mas está lá. Será que o Milei está bebendo?",
+    "frase_en": "The Paraná ends in the Río de la Plata, where Buenos Aires gets its tap water. Diluted one part in 200, but it's there. Is Milei drinking it?",
     "fonte": "ANA — outorgas e rede hidrográfica",
     "fonte_en": "ANA — permits and river network",
     "realce": "Rio Paraná"

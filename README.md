@@ -45,9 +45,9 @@ ela vem pronta na topologia da base da ANA.
   550 m de qualquer rio desenhado e não cortam nada — barram córregos que o mapa não mostra,
   ou ficam fora do leito. A ficha da barragem traz uso, fase, altura, reservatório e risco,
   e diz quando o SNISB não a classificou, que é o caso de quase metade
-- **Tour de 2 minutos, com música** — botão "Tour" (na coluna de baixo no desktop, na barra no
+- **Tour de 3 minutos, com música** (`?tour=en` para legendas em inglês) — botão "Tour" (na coluna de baixo no desktop, na barra no
   celular) ou o endereço `/tour/` (`?tour=1` na página do mapa: pede um toque, porque o navegador só
-  libera o som depois de um gesto). Quatorze cenas em faixas (uma delas mostra os painéis em uso) de cinema, cada uma com um fato conferido
+  libera o som depois de um gesto). Dezessete cenas em faixas de cinema (duas mostram os painéis em uso: cada modo explicado e cada camada ligando e desligando; uma voa em 3D com satélite em volta do Pão de Açúcar), cada uma com um fato conferido
   no banco: o Amazonas leva 85% da água que chega ao litoral, o São Francisco tem cem vezes menos
   água, Sobradinho quase vazio, 773 mil km de rio sem barragem, o Paranapanema em degraus, o
   Piranhas-Açu com mais licença que rio, o Taperoá seco em 7 de cada 10 dias, os 26 rios do Oeste

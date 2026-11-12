@@ -80,3 +80,11 @@ Convenções: m³/s = vazão média; "trecho" = trecho da BHO; vazão do mapa = 
 ## 12. (cena `tiete-prata`) O Tietê chega à Argentina
 - Cálculo: o grupo "Rio Paraná" da rede (95 trechos, PR/MS) desce até 29,6°S, 59,6°O, em território argentino; ali a vazão do mapa é 17.510 m³/s e a fração de esgoto licenciado acumulada a montante (`esg`) é 0,49%, ou seja ~86 m³/s. O Tietê é afluente do Paraná. Ordem de grandeza: o Paraná médio na região é ~17 mil m³/s.
 - Cuidados: a fração é da bacia inteira (inclui todo o esgoto licenciado a montante, não só o do Tietê) e é licença, não medição no rio; por isso a frase diz "o esgoto licenciado da bacia". O mapa só desenha o Paraná até 29,6°S: o Rio da Prata aparece na frase, não na tela. Conferida uma só vez (pelo próprio acúmulo da página); falta uma segunda via independente (por exemplo, somar as outorgas de esgoto da bacia no banco).
+
+## Cenas de 2026-11-12: modos, camadas, Pão de Açúcar e Milei
+Roteiro agora com 17 cenas, 198 s. A cena `paineis` virou duas cenas narradas: cada passo do `painel` é um objeto com a própria legenda, e a de camadas liga e desliga cada chave (`desfaz`).
+- **`modos`**: as frases resumem a nota de cada modo (`NOTA_MODO` no template). O único número, 2.558 trechos com licença ≥ vazão, é o da síntese (cena 17) e do README.
+- **`camadas`**: 1.851 estações e 168 reservatórios com 22 anos de operação diária, como no README e no cabeçalho do mapa (`nEst`, `nRes`). A frase das ETEs não tem número.
+- **`pao-de-acucar`**: sem número. Satélite EOxCloudless 2016 e relevo fino SRTM (Terrarium da AWS), os dois pedidos à rede. O enquadramento esbarra no teto de zoom do 3D (`ZOOM_MAX_3D`).
+- **`tiete-prata`** (frase nova): ~86 m³/s = 0,49% × 17.510 m³/s, como na seção 12 acima. "O dobro de Barueri": 86 / 40,7 = 2,1 (seção 10). A fração continua sendo da bacia inteira, e a frase diz "o esgoto licenciado da bacia".
+- **`milei`**: "uma parte em 200" = 0,49% arredondado (1/204). Que Buenos Aires tira água para abastecimento do Rio da Prata é fato conhecido (as estações de tratamento da AySA captam ali), mas não foi conferido no banco: está fora dos dados do projeto. A pergunta é piada, não afirmação.

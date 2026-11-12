@@ -77,14 +77,20 @@ describe("tour", () => {
     expect(antes.camadas.split(",")[0], "o fluxo deste teste começa ligado").toBe("true");
     // amostra, a cada quadro, a cena, o fluxo, a 3D e os pixels do canvas do fluxo
     await roda(pg, `() => {
-      window.__v = { cenas: new Set(), fluxo: new Set(), d3: new Set(), tinta: 0, legendas: new Set(), ativoVisto: false, hudNaCena1: new Set(), hudFora: new Set() };
+      window.__v = { cenas: new Set(), fluxo: new Set(), d3: new Set(), tinta: 0, legendas: new Set(), ativoVisto: false, hudNaCena1: new Set(), hudFora: new Set(), timbres: new Set() };
+      const ROT = JSON.parse(document.getElementById('roteiro').textContent);
+      // as cenas de painel mostram a hud; a das camadas desliga e religa o fluxo e o 3D de propósito
+      const comPainel = i => !!ROT[i].painel, chaves = i => ROT[i].id === 'camadas';
       const t = () => {
         const T = window.tour; if (T.ativo()) {
           const v = window.__v; v.ativoVisto = true; v.cenas.add(T.cena());
-          v.fluxo.add(document.getElementById('btFluxo').getAttribute('aria-pressed'));
-          v.d3.add(document.getElementById('bt3d').getAttribute('aria-pressed'));
+          if (!chaves(T.cena())) {
+            v.fluxo.add(document.getElementById('btFluxo').getAttribute('aria-pressed'));
+            v.d3.add(document.getElementById('bt3d').getAttribute('aria-pressed'));
+          }
+          v.timbres.add(window.SomRio.timbre());
           const hv = getComputedStyle(document.getElementById('hud')).visibility;
-          if (T.cena() === 1) v.hudNaCena1.add(hv); else if (T.cena() > 1) v.hudFora.add(hv);
+          if (comPainel(T.cena())) v.hudNaCena1.add(hv); else if (T.cena() > 0) v.hudFora.add(hv);
           v.legendas.add(document.getElementById('tour-line').textContent);
           const c = document.getElementById('cvFluxo'), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
           let n = 0; for (let i = 3; i < d.length; i += 4 * 7) if (d[i]) n++; if (n > 0) v.tinta++;
@@ -98,18 +104,20 @@ describe("tour", () => {
     await espera(pg, `window.tour.ativo()`, 5000);
     expect(await roda(pg, `() => document.body.classList.contains('touring')`)).toBe(true);
     expect(await roda(pg, `() => window.SomRio.criado()`)).toBe(true);
-    // a hud e a barra somem; a faixa de legenda e o botão de som ficam
-    expect(await pg.locator("#hud").isVisible()).toBe(false);
+    // a barra some; a faixa de legenda e o botão de som ficam (a hud some fora das cenas de painel: ver hudFora abaixo)
+    expect(await pg.locator(".busca").isVisible()).toBe(false);
     expect(await pg.locator("#tour-som").isVisible()).toBe(true);
     await espera(pg, `!window.tour.ativo()`);
     const v = await roda<any>(pg, `() => ({ cenas: [...window.__v.cenas], fluxo: [...window.__v.fluxo], d3: [...window.__v.d3],
-      tinta: window.__v.tinta, hudNaCena1: [...window.__v.hudNaCena1], hudFora: [...window.__v.hudFora], legendas: window.__v.legendas.size, total: window.tour.total() })`);
+      tinta: window.__v.tinta, hudNaCena1: [...window.__v.hudNaCena1], hudFora: [...window.__v.hudFora], legendas: window.__v.legendas.size, total: window.tour.total(), timbres: [...window.__v.timbres] })`);
     expect(v.cenas.length, "todas as cenas passaram").toBe(v.total);
-    expect(v.total).toBe(14);
-    expect(v.legendas, "uma legenda por cena").toBeGreaterThanOrEqual(13);
-    expect(v.hudNaCena1, "na cena dos painéis a hud aparece").toContain("visible");
+    expect(v.total).toBe(17);
+    // 17 cenas, mais as 12 legendas dos passos de modos e camadas
+    expect(v.legendas, "uma legenda por cena e por passo").toBeGreaterThanOrEqual(25);
+    expect(v.hudNaCena1, "nas cenas de painel a hud aparece").toContain("visible");
     expect(v.hudFora, "nas outras cenas a hud some").toEqual(["hidden"]);
-    expect(v.fluxo, "o fluxo animado fica ligado em TODAS as cenas").toEqual(["true"]);
+    expect(v.fluxo, "o fluxo animado fica ligado em todas as cenas fora a das camadas").toEqual(["true"]);
+    expect(v.timbres.sort(), "o som troca de timbre com cada modo").toEqual(["esgoto", "industria", "livre", "outorga", "tendencia", "vazao"]);
     expect(v.d3, "a vista 3D liga com o tour").toEqual(["true"]);
     expect(v.tinta, "partículas do fluxo no canvas durante o tour").toBeGreaterThan(10);
     await pg.waitForTimeout(500);
@@ -138,10 +146,12 @@ describe("tour", () => {
     const ls = await roda<string[]>(pg, `() => [...window.__l].filter(x => x !== '|')`);
     const roteiro = JSON.parse(await Bun.file(join(RAIZ, "design", "tour.json")).text());
     const esperadas = roteiro.map((c: any) => c.kicker_en + "|" + c.frase_en);
+    const passos = roteiro.flatMap((c: any) => (c.painel || []).filter((p: any) => p.frase).map((p: any) => p.kicker_en + "|" + p.frase_en));
     expect(roteiro.every((c: any) => c.kicker_en && c.frase_en && c.fonte_en), "toda cena tem a versão em inglês").toBe(true);
     // a 20× uma cena curta pode cair entre dois quadros amostrados (como no teste do ?tour=1)
-    expect(esperadas.filter((e: string) => ls.includes(e)).length, "a legenda em inglês de cada cena aparece").toBeGreaterThanOrEqual(13);
-    expect(ls.filter(x => !esperadas.includes(x)), "nenhuma legenda em português").toEqual([]);
+    expect(esperadas.filter((e: string) => ls.includes(e)).length, "a legenda em inglês de cada cena aparece").toBeGreaterThanOrEqual(15);
+    expect(roteiro.every((c: any) => (c.painel || []).every((p: any) => typeof p === "string" || (p.kicker_en && p.frase_en))), "todo passo narrado tem inglês").toBe(true);
+    expect(ls.filter(x => !esperadas.includes(x) && !passos.includes(x)), "nenhuma legenda em português").toEqual([]);
     expect(erros).toEqual([]);
     await fecha();
   }, LENTO);
@@ -224,9 +234,9 @@ describe("tour", () => {
     expect(await pg.locator("#tour-convite").isVisible()).toBe(false);
     expect(await roda(pg, `() => window.__audios`)).toBe(0);
     await pg.click("#btTour");
-    await espera(pg, `window.tour.cena() >= 2`);
+    await espera(pg, `window.tour.cena() >= 4`);
     await pg.waitForTimeout(150);
-    // a câmera já está na cena (a cena 2 é a do São Francisco: zoom 5,6, inclinação 35), sem animação a caminho
+    // a câmera já está na cena (a cena 4 é a do São Francisco: zoom 5,6, inclinação 35), sem animação a caminho
     const c = await roda<any>(pg, `() => { const m = window.__testes.map; return { z: m.getZoom(), p: m.getPitch(), mov: m.isMoving() }; }`);
     expect(c.p).toBeCloseTo(35, 0);
     expect(c.mov, "com movimento reduzido não há voo").toBe(false);
@@ -243,7 +253,7 @@ describe("tour", () => {
         await new Promise((f) => setTimeout(f, 700));
         const c = document.getElementById('cvFluxo'), d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
         let px = 0; for (let k = 3; k < d.length; k += 4) if (d[k]) px++;
-        out.push({ i, nome, px, fluxo: document.getElementById('btFluxo').getAttribute('aria-pressed') });
+        out.push({ i, nome, px, realce: !!JSON.parse(document.getElementById('roteiro').textContent)[i].realce, fluxo: document.getElementById('btFluxo').getAttribute('aria-pressed') });
       }
       return out;
     }`);
@@ -251,7 +261,7 @@ describe("tour", () => {
     for (const c of r) {
       expect(c.fluxo, `cena ${c.i}: fluxo ligado`).toBe("true");
       expect(c.px, `cena ${c.i} (${c.nome}): partículas do fluxo`).toBeGreaterThan(40);
-      if (c.i < 13) expect(c.nome, `cena ${c.i}: o rio do realce foi achado`).toBeTruthy();
+      if (c.realce) expect(c.nome, `cena ${c.i}: o rio do realce foi achado`).toBeTruthy();
     }
     // os rios certos: Formoso é o da Bahia, e Piranhas-Açu o do Rio Grande do Norte/Paraíba
     const achados = await roda<any>(pg, `() => ({ f: window.tour.acha('Rio Formoso', [-45, -14], 7), p: window.tour.acha('Rio Piranhas ou Açu', [-37.4, -6.2], 7) })`);
@@ -276,7 +286,8 @@ describe("tour", () => {
     expect(await pg.locator("#hud").isVisible()).toBe(true);
     const hb = await roda<any>(pg, `() => ({ h: document.getElementById('hud').getBoundingClientRect().bottom, l: document.getElementById('tour-baixo').getBoundingClientRect().top })`);
     expect(hb.h).toBeLessThanOrEqual(hb.l + 1);
-    await espera(pg, `window.tour.cena() >= 3`);
+    // depois das duas cenas de painel (modos e camadas) e da do Pão de Açúcar
+    await espera(pg, `window.tour.cena() >= 4`);
     await pg.waitForTimeout(900);
     expect(await pg.locator("#barraBaixo").isVisible()).toBe(false);
     expect(await pg.locator("#hud").isVisible()).toBe(false);

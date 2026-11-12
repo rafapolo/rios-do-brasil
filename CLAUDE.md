@@ -160,7 +160,7 @@ Todos os JSON intermediários são gitignored. Os HTML gerados são versionados 
   conferidos no banco (`design/tour.md`): só as câmeras (centro, zoom, pitch, bearing) se ajustam**, olhando
   prints (`window.tour.mostra(i)` põe a cena i parada, sem relógio). Os zooms são de desktop 1280 × 800 (janela livre
   de 1280 × 544 entre as faixas) e o tour desconta o que falta em tela menor. O fluxo animado é ligado em todas as
-  cenas. O realce acha o rio pelo nome EXATO perto da cena (curso mais longo; em cena larga, o de maior vazão):
+  cenas, menos durante a de camadas, que liga e desliga cada chave. Um passo do `painel` pode ser objeto `{ acao, kicker, frase, kicker_en, frase_en, desfaz }`, com legenda própria. O `SomRio` troca de timbre a cada modo (`TIMBRES`, `modo()`). O realce acha o rio pelo nome EXATO perto da cena (curso mais longo; em cena larga, o de maior vazão):
   há dezenas de "Rio Formoso". O Paranapanema vem em 3 pedaços na BHO e o Taperoá em 1 de 7 km, é assim mesmo.
   O satélite das cenas Sobradinho e Pantanal pede ladrilhos à rede (opcional, como no resto da página).
 - **A vista 3D é uma camada a pedido** (`#bt3d`, `define3D(on, {animar, manterCamera})`, exposta na
