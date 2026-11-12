@@ -121,6 +121,31 @@ describe("tour", () => {
     await fecha();
   }, LENTO);
 
+  test("?tour=en: convite e legendas em inglês, uma por cena, e o tour=en sai do endereço", async () => {
+    const { pg, erros, fecha } = await abre(copiaSondada() + "?tour=en&rapido=20");
+    const convite = pg.locator("#tour-convite");
+    await convite.waitFor({ state: "visible" });
+    expect(await convite.innerText()).toContain("Press to start");
+    expect(pg.url()).not.toContain("tour=en");
+    await roda(pg, `() => {
+      window.__l = new Set();
+      const t = () => { if (window.tour.ativo()) window.__l.add(document.getElementById('tour-kicker').textContent + '|' + document.getElementById('tour-line').textContent); requestAnimationFrame(t); }; t();
+    }`);
+    await pg.click("#tour-convite button");
+    await espera(pg, `window.tour.ativo()`, 5000);
+    expect(await roda(pg, `() => document.getElementById('tour-cap').lang`)).toBe("en");
+    await espera(pg, `!window.tour.ativo()`);
+    const ls = await roda<string[]>(pg, `() => [...window.__l].filter(x => x !== '|')`);
+    const roteiro = JSON.parse(await Bun.file(join(RAIZ, "design", "tour.json")).text());
+    const esperadas = roteiro.map((c: any) => c.kicker_en + "|" + c.frase_en);
+    expect(roteiro.every((c: any) => c.kicker_en && c.frase_en && c.fonte_en), "toda cena tem a versão em inglês").toBe(true);
+    // a 20× uma cena curta pode cair entre dois quadros amostrados (como no teste do ?tour=1)
+    expect(esperadas.filter((e: string) => ls.includes(e)).length, "a legenda em inglês de cada cena aparece").toBeGreaterThanOrEqual(13);
+    expect(ls.filter(x => !esperadas.includes(x)), "nenhuma legenda em português").toEqual([]);
+    expect(erros).toEqual([]);
+    await fecha();
+  }, LENTO);
+
   test("Esc para no meio e devolve modo, camadas, câmera e 3D como estavam (fluxo desligado ou ligado); '✕ esc' também", async () => {
     const { pg, fecha } = await abre(copiaSondada() + "?rapido=4");
     // 1) abertura limpa: fluxo e 3D desligados voltam desligados

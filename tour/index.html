@@ -18,7 +18,7 @@
 <p>Abrindo o tour dos rios do Brasil… <a href="../index.html?tour=1">Se não abrir, toque aqui.</a></p>
 <script>
   var extra = new URLSearchParams(location.search);
-  extra.set('tour', '1');
+  if (extra.get('tour') !== 'en') extra.set('tour', '1');   // /tour/?tour=en segue em inglês
   location.replace('../index.html?' + extra.toString());
 </script>
 </body>

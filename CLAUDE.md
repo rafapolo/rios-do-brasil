@@ -156,7 +156,7 @@ Todos os JSON intermediários são gitignored. Os HTML gerados são versionados 
   velocidade e a proximidade de rio). Abre pelo botão Tour (`#btTour` no desktop, `#btTourBarra` no celular), por
   `/tour/` (`tour/index.html` só redireciona para `../index.html?tour=1`; o nome do arquivo vai no endereço
   porque por file:// `../` é pasta) ou por `?tour=1` (convite "Aperte para começar": o AudioContext só nasce
-  dentro do clique). `?rapido=N` divide o relógio por N (a suíte usa 20). **Os números e frases do roteiro foram
+  dentro do clique). `?tour=en` faz o mesmo com a legenda em inglês (`kicker_en`, `frase_en`, `fonte_en` no roteiro; toda frase nova precisa da versão em inglês). `?rapido=N` divide o relógio por N (a suíte usa 20). **Os números e frases do roteiro foram
   conferidos no banco (`design/tour.md`): só as câmeras (centro, zoom, pitch, bearing) se ajustam**, olhando
   prints (`window.tour.mostra(i)` põe a cena i parada, sem relógio). Os zooms são de desktop 1280 × 800 (janela livre
   de 1280 × 544 entre as faixas) e o tour desconta o que falta em tela menor. O fluxo animado é ligado em todas as

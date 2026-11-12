@@ -16,8 +16,11 @@
       "bearing": 0
     },
     "kicker": "O Brasil em água",
+    "kicker_en": "Brazil in water",
     "frase": "Só o Amazonas leva 198 mil m³/s ao mar: 85% da água que desemboca no litoral brasileiro. Cada traço é um rio; a espessura, a vazão.",
+    "frase_en": "The Amazon alone carries 198,000 m³/s to the sea: 85% of the water that reaches Brazil's coast. Each line is a river; its width, the flow.",
     "fonte": "ANA — Base Hidrográfica e séries de vazão",
+    "fonte_en": "ANA — Hydrographic Base and flow series",
     "realce": "Rio Amazonas"
   },
   {
@@ -37,8 +40,11 @@
       "bearing": 0
     },
     "kicker": "Os painéis",
+    "kicker_en": "The panels",
     "frase": "Tudo muda nos painéis: o modo troca o que a cor mede, as camadas ligam estações e reservatórios, e a legenda diz como ler.",
+    "frase_en": "Everything changes in the panels: the mode switches what the color measures, the layers turn on stations and reservoirs, and the legend says how to read it.",
     "fonte": "Rios do Brasil",
+    "fonte_en": "Rios do Brasil",
     "painel": [
       "modo:outorga",
       "modo:livre",
@@ -66,8 +72,11 @@
       "bearing": -20
     },
     "kicker": "Velho Chico, 1%",
+    "kicker_en": "Velho Chico, 1%",
     "frase": "O São Francisco chega ao mar com 1,6 mil m³/s: cem vezes menos água que o Amazonas, num rio que sustenta o Nordeste.",
+    "frase_en": "The São Francisco reaches the sea with 1,600 m³/s: a hundred times less water than the Amazon, in a river that sustains the Northeast.",
     "fonte": "ANA — estações fluviométricas",
+    "fonte_en": "ANA — river gauging stations",
     "realce": "Rio São Francisco"
   },
   {
@@ -89,8 +98,11 @@
       "bearing": 30
     },
     "kicker": "Lago quase vazio",
+    "kicker_en": "A nearly empty lake",
     "frase": "Entre 2015 e 2018, Sobradinho passou 364 dias com menos de 10% do volume útil. A água solta ao rio caiu de 2 mil para 677 m³/s.",
+    "frase_en": "Between 2015 and 2018, Sobradinho spent 364 days below 10% of its usable volume. The water released to the river fell from 2,000 to 677 m³/s.",
     "fonte": "ANA — Sistema de Acompanhamento de Reservatórios",
+    "fonte_en": "ANA — Reservoir Monitoring System",
     "realce": "Sobradinho"
   },
   {
@@ -110,8 +122,11 @@
       "bearing": 0
     },
     "kicker": "Rio sem muro",
+    "kicker_en": "A river without walls",
     "frase": "No Amazonas e afluentes, 773 mil km de rio correm ligados, sem uma barragem no caminho: o maior pedaço contínuo da rede.",
+    "frase_en": "In the Amazon and its tributaries, 773,000 km of river flow connected, without a single dam in the way: the largest continuous piece of the network.",
     "fonte": "ANA (SNISB) e Aneel",
+    "fonte_en": "ANA (SNISB) and Aneel",
     "realce": "Rio Amazonas"
   },
   {
@@ -131,8 +146,11 @@
       "bearing": -8
     },
     "kicker": "Rio em degraus",
+    "kicker_en": "A river in steps",
     "frase": "O Paranapanema tem 11 usinas hidrelétricas em cerca de 900 km: uma barragem a cada 80 km, o rio picado em reservatórios.",
+    "frase_en": "The Paranapanema has 11 hydroelectric plants in about 900 km: one dam every 80 km, the river chopped into reservoirs.",
     "fonte": "Aneel (SIGA) e ANA (SNISB)",
+    "fonte_en": "Aneel (SIGA) and ANA (SNISB)",
     "realce": "Rio Paranapanema"
   },
   {
@@ -152,8 +170,11 @@
       "bearing": -30
     },
     "kicker": "Mais licença que rio",
+    "kicker_en": "More permits than river",
     "frase": "No Piranhas-Açu (RN), as licenças de captação somam 38 m³/s, 2,2 vezes a vazão média do rio: 17 m³/s.",
+    "frase_en": "On the Piranhas-Açu (RN), water withdrawal permits add up to 38 m³/s, 2.2 times the river's mean flow: 17 m³/s.",
     "fonte": "ANA — outorgas (SNIRH)",
+    "fonte_en": "ANA — water use permits (SNIRH)",
     "realce": "Rio Piranhas ou Açu"
   },
   {
@@ -174,8 +195,11 @@
       "bearing": 20
     },
     "kicker": "Rio de poças",
+    "kicker_en": "A river of pools",
     "frase": "No Taperoá, em Poço de Pedras (PB), o leito ficou seco em 7 de cada 10 dias desde 1970. No semiárido, o rio é intermitente.",
+    "frase_en": "On the Taperoá, at Poço de Pedras (PB), the bed has been dry 7 days out of 10 since 1970. In the semi-arid, the river is intermittent.",
     "fonte": "ANA — estação fluviométrica",
+    "fonte_en": "ANA — river gauging station",
     "realce": "Rio Taperoá"
   },
   {
@@ -196,8 +220,11 @@
       "bearing": 15
     },
     "kicker": "26 de 26 caindo",
+    "kicker_en": "26 of 26 falling",
     "frase": "No Oeste da Bahia, todos os 26 rios medidos perdem água. O Formoso baixou de 94 para 47 m³/s, da primeira à última década.",
+    "frase_en": "In western Bahia, all 26 gauged rivers are losing water. The Formoso fell from 94 to 47 m³/s, from the first decade to the last.",
     "fonte": "ANA — estações fluviométricas",
+    "fonte_en": "ANA — river gauging stations",
     "realce": "Rio Formoso"
   },
   {
@@ -218,8 +245,11 @@
       "bearing": -15
     },
     "kicker": "Pantanal encolhe",
+    "kicker_en": "The Pantanal shrinks",
     "frase": "Corumbá perdeu 61% da superfície coberta por água entre 1985–89 e 2017–21, vista de satélite. Os anos 1980 foram de cheia.",
+    "frase_en": "Corumbá lost 61% of its water-covered surface between 1985–89 and 2017–21, seen by satellite. The 1980s were flood years.",
     "fonte": "MapBiomas — superfície de água",
+    "fonte_en": "MapBiomas — water surface",
     "realce": "Rio Paraguai"
   },
   {
@@ -240,8 +270,11 @@
       "bearing": 20
     },
     "kicker": "Rio de esgoto",
+    "kicker_en": "A river of sewage",
     "frase": "Em Barueri, o esgoto licenciado soma 41 m³/s: 56% da vazão natural do Tietê. Os pontos são estações de tratamento.",
+    "frase_en": "At Barueri, permitted sewage adds up to 41 m³/s: 56% of the Tietê's natural flow. The dots are treatment plants.",
     "fonte": "ANA — outorgas e Atlas Esgotos",
+    "fonte_en": "ANA — permits and Sewage Atlas",
     "realce": "Rio Tietê"
   },
   {
@@ -262,8 +295,11 @@
       "bearing": 0
     },
     "kicker": "Rio abaixo",
+    "kicker_en": "Downstream",
     "frase": "O Tietê deságua no Paraná, que atravessa a Argentina até o Rio da Prata. Já em território argentino, o esgoto licenciado da bacia ainda soma 0,5% da vazão do Paraná: 17,5 mil m³/s.",
+    "frase_en": "The Tietê flows into the Paraná, which crosses Argentina to the Río de la Plata. Already in Argentina, the basin's permitted sewage still adds up to 0.5% of the Paraná's flow: 17,500 m³/s.",
     "fonte": "ANA — outorgas e rede hidrográfica",
+    "fonte_en": "ANA — permits and river network",
     "realce": "Rio Paraná"
   },
   {
@@ -283,8 +319,11 @@
       "bearing": 0
     },
     "kicker": "Água que não chega",
+    "kicker_en": "Water that never arrives",
     "frase": "No município típico do Acre, 78 de cada 100 litros tratados se perdem antes da torneira. Em São Paulo, cerca de 24.",
+    "frase_en": "In the typical town in Acre, 78 of every 100 liters of treated water are lost before the tap. In São Paulo, about 24.",
     "fonte": "SNIS, 2022",
+    "fonte_en": "SNIS, 2022",
     "realce": "Rio Acre"
   },
   {
@@ -306,7 +345,10 @@
       "bearing": -20
     },
     "kicker": "Quanto sobra de rio",
+    "kicker_en": "How much river is left",
     "frase": "São 462.539 trechos de rio. Em 2.558, a licença de retirada já iguala ou passa a água que corre.",
-    "fonte": "ANA — rede hidrográfica e outorgas"
+    "frase_en": "There are 462,539 river reaches. In 2,558 of them, withdrawal permits already match or exceed the water that flows.",
+    "fonte": "ANA — rede hidrográfica e outorgas",
+    "fonte_en": "ANA — river network and permits"
   }
 ]

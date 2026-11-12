@@ -3,7 +3,8 @@
      verificação em design/tour.md). Mora dentro da IIFE porque ele dirige a página pelos mesmos
      pontos de entrada do leitor: aplicaModo, os interruptores de camada, define3D, realcar e a
      câmera da biblioteca. Esc e "✕ esc" param e devolvem tudo como estava; ?tour=1 abre um
-     convite (o navegador só libera o som depois de um gesto); ?rapido=N acelera o relógio do
+     convite (o navegador só libera o som depois de um gesto); ?tour=en faz o mesmo com a legenda
+     em inglês (kicker_en, frase_en e fonte_en do roteiro); ?rapido=N acelera o relógio do
      tour N vezes (para a suíte). O som é o SomRio (som_tour.js), que segue a câmera. */
   const TOUR = (() => {
     const $ = id => document.getElementById(id);
@@ -11,6 +12,10 @@
     const CAMADAS = { fluxo: 'btFluxo', estacoes: 'btEst', reservatorios: 'btRes', satelite: 'btSat', etes: 'btEtes' };
     const q0 = new URLSearchParams(BUSCA0);
     const RAPIDO = Math.min(60, Math.max(1, parseFloat(q0.get('rapido')) || 1));
+    /* a língua da legenda vale para a visita inteira: o ?tour=en sai do endereço, mas o botão Tour
+       aberto depois segue em inglês */
+    const EN = q0.get('tour') === 'en';
+    const txt = (c, k) => (EN && c[k + '_en']) || c[k] || '';
     const som = window.SomRio || null;
     const lim = (v, a, b) => Math.max(a, Math.min(b, v));
 
@@ -84,7 +89,7 @@
       $('tour-baixo').style.minHeight = '';
       cap.style.visibility = 'hidden';
       for (const c of ROTEIRO) {
-        kick.textContent = c.kicker; lin.textContent = c.frase; fon.textContent = c.fonte || '';
+        kick.textContent = txt(c, 'kicker'); lin.textContent = txt(c, 'frase'); fon.textContent = txt(c, 'fonte');
         alto = Math.max(alto, $('tour-baixo').offsetHeight);
       }
       cap.style.visibility = '';
@@ -161,9 +166,9 @@
 
     /* ---- legenda ---- */
     function escreveLegenda(c) {
-      $('tour-kicker').textContent = c.kicker || '';
-      $('tour-line').textContent = c.frase;
-      $('tour-fonte').textContent = c.fonte || '';
+      $('tour-kicker').textContent = txt(c, 'kicker');
+      $('tour-line').textContent = txt(c, 'frase');
+      $('tour-fonte').textContent = txt(c, 'fonte');
     }
 
     function progresso() {
@@ -346,8 +351,8 @@
     }
     function marcaSomConvite() {
       $('tour-convite-sub').textContent = som && som.ligado()
-        ? '♪ 2 minutos, com som: ligue o volume'
-        : '2 minutos, sem som (você o desligou antes)';
+        ? (EN ? '♪ 2 minutes, with sound: turn the volume up' : '♪ 2 minutos, com som: ligue o volume')
+        : (EN ? '2 minutes, no sound (you turned it off before)' : '2 minutos, sem som (você o desligou antes)');
     }
     convite.addEventListener('click', e => {
       if (e.target.closest('button')) iniciar(); else fechaConvite();   // fora do botão: fica só o mapa
@@ -385,9 +390,16 @@
       if (PAD.bottom + PAD.top !== antes) map.easeTo({ padding: PAD, duration: 0 });
     }
 
-    /* ?tour=1 só vale uma vez: sai do endereço, para o recarregar abrir o mapa */
+    /* ?tour=1 (ou =en) só vale uma vez: sai do endereço, para o recarregar abrir o mapa */
     function entrada() {
-      if (q0.get('tour') !== '1') return;
+      if (EN) {
+        $('tour-cap').lang = 'en';
+        const b = $('tour-convite').querySelector('button span');
+        b.firstChild.textContent = 'Press to start';
+        $('tour-convite').setAttribute('aria-label', '2-minute tour');
+        $('tour-parar').setAttribute('aria-label', 'Stop the tour and return to the map');
+      }
+      if (q0.get('tour') !== '1' && !EN) return;
       try {
         const u = new URL(location.href);
         u.searchParams.delete('tour');
